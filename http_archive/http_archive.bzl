@@ -9,7 +9,7 @@ _FLAGS = {
 
 def _type(ctx: "context") -> str.type:
     typ = value_or(ctx.attrs.type, "tar.gz")
-    if typ not in _FLAGS.keys():
+    if typ not in _FLAGS:
         fail("unsupported `type`: {}".format(typ))
     return typ
 
