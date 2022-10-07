@@ -9,6 +9,7 @@ load(
 load("@prelude//cxx:headers.bzl", "cxx_get_regular_cxx_headers_layout")
 load(
     "@prelude//cxx:omnibus.bzl",
+    "all_deps",
     "create_omnibus_libraries",
     "get_excluded",
     "get_omnibus_graph",
@@ -23,6 +24,7 @@ load(
     "LinkArgs",
     "LinkInfosTSet",
     "LinkStyle",
+    "Linkage",
 )
 load(
     "@prelude//linking:linkable_graph.bzl",
@@ -295,10 +297,28 @@ def convert_python_library_to_executable(
 
         executable_info, _, _ = cxx_executable(ctx, impl_params)
 
+        linkable_graph = create_linkable_graph(
+            ctx,
+            deps = deps,
+        )
+
+        # Add any shared only libs into the par
+        nodes = linkable_graph.nodes.traverse()
+        node_map = {}
+        native_libs = {}
+        shared_only = []
+        for node in filter(None, nodes):
+            if node.linkable:
+                node_map[node.label] = node.linkable
+                if node.linkable.preferred_linkage == Linkage("shared"):
+                    shared_only.append(node.label)
+        for label in all_deps(node_map, shared_only):
+            for name, shared_lib in node_map[label].shared_libs.items():
+                native_libs[name] = shared_lib
+
         # TODO expect(len(executable_info.runtime_files) == 0, "OH NO THERE ARE RUNTIME FILES")
         artifacts = dict(extension_info.artifacts)
         artifacts["runtime/bin/{}".format(ctx.attrs.executable_name)] = executable_info.binary
-        native_libs = {}
         for libs in extension_info.shared_libraries.traverse():
             for name, shared_lib in libs.libraries.items():
                 native_libs[name] = shared_lib.lib
