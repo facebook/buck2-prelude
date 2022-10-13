@@ -589,7 +589,7 @@ extra_attributes = struct(
     remote_file = {
         "sha1": attrs.option(attrs.string()),
         "sha256": attrs.option(attrs.string()),
-        "_unzip_tool": attrs.exec_dep(providers = [RunInfo], default = "fbsource//xplat/buck2/tools/zip:unzip"),
+        "_unzip_tool": attrs.exec_dep(providers = [RunInfo], default = "prelude//zip_file:unzip"),
     },
     sh_binary = {
         "resources": attrs.list(attrs.source(allow_directory = True), default = []),
