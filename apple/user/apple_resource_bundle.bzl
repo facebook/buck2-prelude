@@ -7,7 +7,9 @@ load(":resource_group_map.bzl", "resource_group_map_attr")
 
 def _get_apple_resources_toolchain_attr():
     # FIXME: prelude// should be standalone (not refer to fbcode//)
-    return attrs.toolchain_dep(default = "fbcode//buck2/platform/toolchain:apple-resources", providers = [AppleToolchainInfo])
+    return attrs.toolchain_dep(
+        # default = "fbcode//buck2/platform/toolchain:apple-resources", 
+        providers = [AppleToolchainInfo])
 
 def _impl(ctx: "context") -> ["provider"]:
     resource_output = get_apple_bundle_resource_part_list(ctx)
