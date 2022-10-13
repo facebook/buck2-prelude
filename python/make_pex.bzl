@@ -98,11 +98,11 @@ def make_pex(
         if symlink_tree_path == None:
             fail("Must have a symlink_tree_path for inplace packaging")
 
-        modules = cmd_args(python_toolchain.make_pex_modules)
+        modules = cmd_args(python_toolchain.make_pex_modules[RunInfo])
         modules.add(modules_args)
         ctx.actions.run(modules, category = "par", identifier = "modules")
 
-        bootstrap = cmd_args(python_toolchain.make_pex_inplace)
+        bootstrap = cmd_args(python_toolchain.make_pex_inplace[RunInfo])
         bootstrap.add(bootstrap_args)
         ctx.actions.run(bootstrap, category = "par", identifier = "bootstrap")
 
