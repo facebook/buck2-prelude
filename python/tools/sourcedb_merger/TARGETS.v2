@@ -1,0 +1,38 @@
+prelude = native
+
+prelude.python_bootstrap_library(
+    name = "library-internal",
+    srcs = [
+        "inputs.py",
+        "legacy_outputs.py",
+        "outputs.py",
+    ],
+)
+
+prelude.python_library(
+    name = "library",
+    srcs = [
+        "inputs.py",
+        "legacy_outputs.py",
+        "outputs.py",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "merge",
+    main = "merge.py",
+    deps = [
+        ":library-internal",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "legacy_merge",
+    main = "legacy_merge.py",
+    deps = [
+        ":library-internal",
+    ],
+    visibility = ["PUBLIC"],
+)
