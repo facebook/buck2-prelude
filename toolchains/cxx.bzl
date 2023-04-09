@@ -72,23 +72,23 @@ def _system_cxx_toolchain_impl(ctx):
                 bolt_msdk = None,
             ),
             cxx_compiler_info = CxxCompilerInfo(
-                compiler = RunInfo(args = ["clang++"]),
+                compiler = RunInfo(args = [ctx.attrs.cxx_compiler]),
                 preprocessor_flags = [],
                 compiler_flags = [],
                 compiler_type = "clang",  # one of CxxToolProviderType
             ),
             c_compiler_info = CCompilerInfo(
-                compiler = RunInfo(args = ["clang"]),
+                compiler = RunInfo(args = [ctx.attrs.compiler]),
                 preprocessor_flags = [],
                 compiler_flags = [],
                 compiler_type = "clang",  # one of CxxToolProviderType
             ),
             as_compiler_info = CCompilerInfo(
-                compiler = RunInfo(args = ["clang"]),
+                compiler = RunInfo(args = [ctx.attrs.compiler]),
                 compiler_type = "clang",  # one of CxxToolProviderType
             ),
             asm_compiler_info = CCompilerInfo(
-                compiler = RunInfo(args = ["clang"]),
+                compiler = RunInfo(args = [ctx.attrs.compiler]),
                 compiler_type = "clang",  # one of CxxToolProviderType
             ),
             header_mode = HeaderMode("symlink_tree_only"),
@@ -101,6 +101,8 @@ system_cxx_toolchain = rule(
     impl = _system_cxx_toolchain_impl,
     attrs = {
         "link_style": attrs.string(default = "shared"),
+        "compiler": attrs.string(default = "clang"),
+        "cxx_compiler": attrs.string(default = "clang++"),
         "make_comp_db": attrs.default_only(attrs.dep(providers = [RunInfo], default = "prelude//cxx/tools:make_comp_db")),
     },
     is_toolchain_rule = True,
