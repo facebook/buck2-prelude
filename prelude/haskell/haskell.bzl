@@ -59,14 +59,17 @@ load(
 load(
     "@prelude//haskell:compile.bzl",
     "CompileResultInfo",
-    "HaskellLibraryInfo",
-    "HaskellLibraryProvider",
     "compile",
     "target_metadata",
 )
 load(
     "@prelude//haskell:haskell_haddock.bzl",
     "haskell_haddock_lib",
+)
+load(
+    "@prelude//haskell:library_info.bzl",
+    "HaskellLibraryInfo",
+    "HaskellLibraryProvider",
 )
 load(
     "@prelude//haskell:link_info.bzl",
