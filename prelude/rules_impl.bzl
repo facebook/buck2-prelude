@@ -26,7 +26,7 @@ load("@prelude//go:go_exported_library.bzl", "go_exported_library_impl")
 load("@prelude//go:go_library.bzl", "go_library_impl")
 load("@prelude//go:go_test.bzl", "go_test_impl")
 load("@prelude//haskell:compile.bzl", "HaskellLibraryProvider")
-load("@prelude//haskell:haskell.bzl", "haskell_binary_impl", "haskell_library_impl", "haskell_prebuilt_library_impl")
+load("@prelude//haskell:haskell.bzl", "haskell_binary_impl", "haskell_library_impl", "haskell_prebuilt_library_impl", "haskell_toolchain_library_impl")
 load("@prelude//haskell:haskell_ghci.bzl", "haskell_ghci_impl")
 load("@prelude//haskell:haskell_haddock.bzl", "haskell_haddock_impl")
 load("@prelude//haskell:haskell_ide.bzl", "haskell_ide_impl")
@@ -177,6 +177,7 @@ extra_implemented_rules = struct(
     haskell_haddock = haskell_haddock_impl,
     haskell_ide = haskell_ide_impl,
     haskell_prebuilt_library = haskell_prebuilt_library_impl,
+    haskell_toolchain_library = haskell_toolchain_library_impl,
 
     #lua
     cxx_lua_extension = cxx_lua_extension_impl,

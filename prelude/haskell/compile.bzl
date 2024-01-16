@@ -18,6 +18,7 @@ load(
 load(
     "@prelude//haskell:toolchain.bzl",
     "HaskellToolchainInfo",
+    "HaskellToolchainLibrary",
 )
 load(
     "@prelude//haskell:util.bzl",
@@ -189,6 +190,8 @@ def compile_args(
         suffix: str = "") -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
+    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
+
     compile_cmd = cmd_args()
     compile_cmd.add(haskell_toolchain.compiler_flags)
 
@@ -198,6 +201,7 @@ def compile_args(
 
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
+    compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
 
     if enable_profiling:
         compile_args.add("-prof")

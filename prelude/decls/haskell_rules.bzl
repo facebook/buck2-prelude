@@ -183,6 +183,16 @@ haskell_library = prelude_rule(
     ),
 )
 
+haskell_toolchain_library = prelude_rule(
+    name = "haskell_toolchain_library",
+    docs  = """
+       Declare a library available as part of the GHC toolchain.
+    """,
+    attrs = {
+    },
+)
+
+
 haskell_prebuilt_library = prelude_rule(
     name = "haskell_prebuilt_library",
     docs = """
@@ -255,4 +265,5 @@ haskell_rules = struct(
     haskell_ide = haskell_ide,
     haskell_library = haskell_library,
     haskell_prebuilt_library = haskell_prebuilt_library,
+    haskell_toolchain_library = haskell_toolchain_library,
 )

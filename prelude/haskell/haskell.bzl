@@ -63,6 +63,7 @@ load(
 load(
     "@prelude//haskell:toolchain.bzl",
     "HaskellToolchainInfo",
+    "HaskellToolchainLibrary",
 )
 load(
     "@prelude//haskell:util.bzl",
@@ -162,6 +163,11 @@ def _attr_preferred_linkage(ctx: AnalysisContext) -> Linkage:
         preferred_linkage = "static"
 
     return Linkage(preferred_linkage)
+
+# --
+
+def haskell_toolchain_library_impl(ctx: AnalysisContext):
+    return [DefaultInfo(), HaskellToolchainLibrary(name = ctx.attrs.name)]
 
 # --
 
@@ -538,11 +544,14 @@ def _build_haskell_lib(
 
     objfiles = _srcs_to_objfiles(ctx, compiled.objects, osuf)
 
+    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
+
     if link_style == LinkStyle("shared"):
         lib = ctx.actions.declare_output(lib_short_path)
         link = cmd_args(haskell_toolchain.linker)
         link.add(haskell_toolchain.linker_flags)
         link.add(ctx.attrs.linker_flags)
+        link.add(cmd_args(toolchain_libs, prepend="-package"))
         link.add("-o", lib.as_output())
         link.add(
             get_shared_library_flags(linker_info.type),
