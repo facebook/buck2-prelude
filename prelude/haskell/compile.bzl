@@ -201,6 +201,7 @@ def compile_args(
 
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
+    compile_args.add("-hide-all-packages")
     compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
 
     if enable_profiling:

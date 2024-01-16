@@ -551,6 +551,7 @@ def _build_haskell_lib(
         link = cmd_args(haskell_toolchain.linker)
         link.add(haskell_toolchain.linker_flags)
         link.add(ctx.attrs.linker_flags)
+        link.add("-hide-all-packages")
         link.add(cmd_args(toolchain_libs, prepend="-package"))
         link.add("-o", lib.as_output())
         link.add(
