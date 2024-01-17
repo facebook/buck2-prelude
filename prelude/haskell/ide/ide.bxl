@@ -5,7 +5,7 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
-load("@prelude//haskell:compile.bzl", "HaskellLibraryProvider")
+load("@prelude//haskell:library_info.bzl", "HaskellLibraryProvider")
 load("@prelude//haskell:link_info.bzl", "HaskellLinkInfo")
 load("@prelude//haskell:toolchain.bzl", "HaskellToolchainInfo", "HaskellToolchainLibrary")
 load("@prelude//haskell:util.bzl", "is_haskell_src", "srcs_to_pairs")
