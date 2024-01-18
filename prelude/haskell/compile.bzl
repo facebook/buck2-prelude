@@ -26,12 +26,15 @@ load(
     "get_artifact_suffix",
     "is_haskell_src",
     "output_extensions",
+    "src_to_module_name",
     "srcs_to_pairs",
 )
 load(
     "@prelude//linking:link_info.bzl",
     "LinkStyle",
 )
+load("@prelude//:paths.bzl", "paths")
+load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_traversal")
 
 # The type of the return value of the `_compile()` function.
 CompileResultInfo = record(
@@ -90,6 +93,92 @@ PackagesInfo = record(
     packagedb_args = cmd_args,
     transitive_deps = field(list[HaskellLibraryInfo]),
 )
+
+_Module = record(
+    source = field(Artifact),
+    interface = field(Artifact),
+    object = field(Artifact),
+    stub_dir = field(Artifact),
+)
+
+
+def _strip_prefix(p, path_prefix):
+    if p.startswith(path_prefix):
+        return p[len(path_prefix):]
+    else:
+        return p
+
+def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_style: LinkStyle, enable_profiling: bool, suffix: str) -> dict[str, _Module]:
+    modules = {}
+
+    osuf, hisuf = output_extensions(link_style, enable_profiling)
+
+    for src in sources:
+        if not is_haskell_src(src.short_path):
+            continue
+
+        module_name = src_to_module_name(src.short_path)
+        interface_path = paths.replace_extension(src.short_path, "." + hisuf)
+        interface = ctx.actions.declare_output(interface_path)
+        object_path = paths.replace_extension(src.short_path, "." + osuf)
+        object = ctx.actions.declare_output(object_path)
+        stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
+        modules[module_name] = _Module(source = src, interface = interface, object = object, stub_dir = stub_dir)
+
+    return modules
+
+def _ghc_depends(ctx: AnalysisContext, *, filename: str, sources: list[Artifact], link_style: LinkStyle, enable_profiling: bool) -> Artifact:
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
+
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+    packages_info = get_packages_info(
+        ctx,
+        link_style,
+        specify_pkg_version = False,
+        enable_profiling = enable_profiling,
+    )
+
+    dep_file = ctx.actions.declare_output(filename)
+    osuf, hisuf = output_extensions(link_style, enable_profiling)
+    # note, hisuf = "<word>_hi", so -dep-suffix should be set to "<word>_"
+    # note, `-outputdir ''`
+    dep_args = cmd_args(haskell_toolchain.compiler, "-M", "-outputdir", "", "-dep-suffix", hisuf[:-2], "-dep-makefile", dep_file.as_output())
+    #dep_args.add("-osuf", osuf, "-hisuf", hisuf)
+    dep_args.add("-hide-all-packages")
+    dep_args.add("-package", "base")
+    dep_args.add(cmd_args(toolchain_libs, prepend="-package"))
+    dep_args.add(packages_info.exposed_package_args)
+    dep_args.add(packages_info.packagedb_args)
+
+    dep_args.add(ctx.attrs.compiler_flags)
+    dep_args.add(sources)
+    ctx.actions.run(dep_args, category = "ghc_depends", identifier = filename)
+
+    return dep_file
+
+def _parse_depends(depends: str, path_prefix: str) -> dict[str, list[str]]:
+    graph = {}
+
+    for line in depends.splitlines():
+        if line.startswith("#"):
+            continue
+
+        k, v = line.strip().split(" : ", 1)
+        vs = v.split(" ")
+
+        module_name = src_to_module_name(k)
+        deps = [
+            src_to_module_name(_strip_prefix(v, path_prefix).lstrip("/"))
+            for v in vs
+            if not is_haskell_src(v)
+        ]
+
+        graph.setdefault(module_name, []).extend(deps)
+
+    return graph
 
 def _attr_deps_haskell_link_infos(ctx: AnalysisContext) -> list[HaskellLinkInfo]:
     return filter(
@@ -282,20 +371,116 @@ def compile_args(
         args_for_file = compile_args,
     )
 
-# Compile all the context's sources.
-def compile(
+def __compile_args(
         ctx: AnalysisContext,
+        module: _Module,
         link_style: LinkStyle,
         enable_profiling: bool,
-        pkgname: str | None = None) -> CompileResultInfo:
+        outputs: dict[Artifact, Artifact],
+        pkgname = None,
+        suffix: str = "") -> CompileArgsInfo:
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
+
+    compile_cmd = cmd_args()
+    compile_cmd.add(haskell_toolchain.compiler_flags)
+
+    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
+    # be parsed when inside an argsfile.
+    compile_cmd.add(ctx.attrs.compiler_flags)
+
+    compile_args = cmd_args()
+    compile_args.add("-no-link", "-i", "-c")
+    compile_args.add("-hide-all-packages")
+    compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
+
+    if enable_profiling:
+        compile_args.add("-prof")
+
+    if link_style == LinkStyle("shared"):
+        compile_args.add("-dynamic", "-fPIC")
+    elif link_style == LinkStyle("static_pic"):
+        compile_args.add("-fPIC", "-fexternal-dynamic-refs")
+
+    osuf, hisuf = output_extensions(link_style, enable_profiling)
+    compile_args.add("-osuf", osuf, "-hisuf", hisuf)
+
+    if getattr(ctx.attrs, "main", None) != None:
+        compile_args.add(["-main-is", ctx.attrs.main])
+
+    #artifact_suffix = get_artifact_suffix(link_style, enable_profiling, suffix)
+
+    object = outputs[module.object]
+    hi = outputs[module.interface]
+    stubs = outputs[module.stub_dir]
+
+    compile_args.add("-ohi", cmd_args(hi.as_output()))
+    compile_args.add("-o", cmd_args(object.as_output()))
+    compile_args.add("-stubdir", stubs.as_output())
+
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+    packages_info = get_packages_info(
+        ctx,
+        link_style,
+        specify_pkg_version = False,
+        enable_profiling = enable_profiling,
+    )
+
+    compile_args.add(packages_info.exposed_package_args)
+    compile_args.add(packages_info.packagedb_args)
+
+    # Add args from preprocess-able inputs.
+    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
+    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
+    pre_args = pre.set.project_as_args("args")
+    compile_args.add(cmd_args(pre_args, format = "-optP={}"))
+
+    if pkgname:
+        compile_args.add(["-this-unit-id", pkgname])
+
+    srcs = cmd_args(module.source)
+    for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
+        # hs-boot files aren't expected to be an argument to compiler but does need
+        # to be included in the directory of the associated src file
+        if not is_haskell_src(path):
+            srcs.hidden(src)
+
+    producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags
+
+    return CompileArgsInfo(
+        result = CompileResultInfo(
+            objects = object,
+            hi = hi,
+            stubs = stubs,
+            producing_indices = producing_indices,
+        ),
+        srcs = srcs,
+        args_for_cmd = compile_cmd,
+        args_for_file = compile_args,
+    )
+
+
+def _compile_module(
+    ctx: AnalysisContext,
+    *,
+    link_style: LinkStyle,
+    enable_profiling: bool,
+    module_name: str,
+    modules: dict[str, _Module],
+    dep_file: Artifact,
+    graph: dict[str, list[str]],
+    outputs: dict[Artifact, Artifact],
+    artifact_suffix: str,
+    pkgname: str | None = None,
+) -> None:
+    module = modules[module_name]
+
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     compile_cmd = cmd_args(haskell_toolchain.compiler)
 
-    args = compile_args(ctx, link_style, enable_profiling, pkgname)
-
-    compile_cmd.add(args.args_for_cmd)
-
-    artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
+    args = __compile_args(ctx, module, link_style, enable_profiling, outputs, pkgname)
 
     if args.args_for_file:
         if haskell_toolchain.use_argsfile:
@@ -310,11 +495,91 @@ def compile(
             compile_cmd.add(args.args_for_file)
             compile_cmd.add(args.srcs)
 
+    compile_cmd.add(args.args_for_cmd)
+
+    compile_cmd.add(cmd_args(dep_file, format = "-i{}").parent())
+
+    for dep_name in breadth_first_traversal(graph, [module_name])[1:]:
+        dep = modules[dep_name]
+        compile_cmd.hidden(dep.interface, dep.object)
+
+    ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name, no_outputs_cleanup = True)
+
+
+
+# Compile all the context's sources.
+def compile(
+        ctx: AnalysisContext,
+        link_style: LinkStyle,
+        enable_profiling: bool,
+        pkgname: str | None = None) -> CompileResultInfo:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
+
+    dep_name = ctx.attrs.name + artifact_suffix + ".depends"
+    dep_file = _ghc_depends(ctx, filename = dep_name, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling)
+
+    modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
+
+    def do_compile(ctx, artifacts, outputs, dep_file=dep_file, modules=modules):
+        graph = _parse_depends(artifacts[dep_file].read_string(), _strip_prefix(str(ctx.label.path), str(ctx.label.cell_root)))
+
+        for module_name in post_order_traversal(graph):
+            _compile_module(
+                ctx,
+                link_style = link_style,
+                enable_profiling = enable_profiling,
+                module_name = module_name,
+                modules = modules,
+                graph = graph,
+                outputs = outputs,
+                dep_file=dep_file,
+                artifact_suffix = artifact_suffix,
+                pkgname = pkgname,
+            )
+
+    interfaces = [module.interface for module in modules.values()]
+    objects = [module.object for module in modules.values()]
+    stub_dirs = [module.stub_dir for module in modules.values()]
+
+    ctx.actions.dynamic_output(
+        dynamic = [dep_file],
+        inputs = ctx.attrs.srcs,
+        outputs = interfaces + objects + stub_dirs,
+        f = do_compile)
+
+    object_dir = ctx.actions.declare_output("objects-" + artifact_suffix, dir=True)
+
+    ctx.actions.copied_dir(object_dir.as_output(), {
+        a.short_path : a for a in objects
+    })
+
+    hi_dir = ctx.actions.declare_output("hi-" + artifact_suffix, dir=True)
+
+    ctx.actions.copied_dir(hi_dir.as_output(), {
+        a.short_path : a for a in interfaces
+    })
+
+    stubs_dir = ctx.actions.declare_output("stubs-" + artifact_suffix, dir=True)
+
+    # collect the stubs from all modules into the stubs_dir
     ctx.actions.run(
-        compile_cmd,
-        category = "haskell_compile_" + artifact_suffix.replace("-", "_"),
-        no_outputs_cleanup = True,
+        cmd_args([
+            "bash", "-c",
+            """set -ex
+            mkdir -p \"$0\"
+            for stub; do
+              find \"$stub\" -mindepth 1 -maxdepth 1 -exec cp -r -t \"$0\" '{}' ';'
+            done""",
+            stubs_dir.as_output(),
+            stub_dirs
+        ]),
+        category = "haskell_stubs",
+        identifier = artifact_suffix
     )
 
-    return args.result
+    return CompileResultInfo(
+        objects = object_dir,
+        hi = hi_dir,
+        stubs = stubs_dir,
+        producing_indices = False,
+    )
