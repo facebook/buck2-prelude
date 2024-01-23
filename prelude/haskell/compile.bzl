@@ -128,7 +128,7 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
     return modules
 
-def _ghc_depends(ctx: AnalysisContext, *, filename: str, sources: list[Artifact], link_style: LinkStyle, enable_profiling: bool) -> Artifact:
+def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
@@ -137,17 +137,25 @@ def _ghc_depends(ctx: AnalysisContext, *, filename: str, sources: list[Artifact]
     # library dependency.
     packages_info = get_packages_info(
         ctx,
-        link_style,
+        LinkStyle("shared"),
         specify_pkg_version = False,
-        enable_profiling = enable_profiling,
+        enable_profiling = False,
     )
 
-    dep_file = ctx.actions.declare_output(filename)
-    osuf, hisuf = output_extensions(link_style, enable_profiling)
-    # note, hisuf = "<word>_hi", so -dep-suffix should be set to "<word>_"
-    # note, `-outputdir ''`
-    dep_args = cmd_args(haskell_toolchain.compiler, "-M", "-outputdir", "", "-dep-suffix", hisuf[:-2], "-dep-makefile", dep_file.as_output())
-    #dep_args.add("-osuf", osuf, "-hisuf", hisuf)
+    dep_file = ctx.actions.declare_output(ctx.attrs.name + ".depends")
+
+    # The object and interface file paths are depending on the real module name
+    # as inferred by GHC, not the source file path; currently this requires the
+    # module name to correspond to the source file path as otherwise GHC will
+    # not be able to find the created object or interface files in the search
+    # path.
+    #
+    # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
+
+    # Note: `-outputdir ''` removes the prefix directory of all targets:
+    #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
+    dep_args = cmd_args(haskell_toolchain.compiler, "-M", "-outputdir", "", "-dep-makefile", dep_file.as_output())
+
     dep_args.add("-hide-all-packages")
     dep_args.add("-package", "base")
     dep_args.add(cmd_args(toolchain_libs, prepend="-package"))
@@ -156,7 +164,7 @@ def _ghc_depends(ctx: AnalysisContext, *, filename: str, sources: list[Artifact]
 
     dep_args.add(ctx.attrs.compiler_flags)
     dep_args.add(sources)
-    ctx.actions.run(dep_args, category = "ghc_depends", identifier = filename)
+    ctx.actions.run(dep_args, category = "ghc_depends")
 
     return dep_file
 
@@ -520,11 +528,9 @@ def compile(
         ctx: AnalysisContext,
         link_style: LinkStyle,
         enable_profiling: bool,
+        dep_file: Artifact,
         pkgname: str | None = None) -> CompileResultInfo:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
-
-    dep_name = ctx.attrs.name + artifact_suffix + ".depends"
-    dep_file = _ghc_depends(ctx, filename = dep_name, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling)
 
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 

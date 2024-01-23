@@ -48,6 +48,7 @@ load(
     "HaskellLibraryInfo",
     "HaskellLibraryProvider",
     "compile",
+    "ghc_depends",
 )
 load(
     "@prelude//haskell:haskell_haddock.bzl",
@@ -509,6 +510,7 @@ def _build_haskell_lib(
         nlis: list[MergedLinkInfo],  # native link infos from all deps
         link_style: LinkStyle,
         enable_profiling: bool,
+        dep_file: Artifact,
         # The non-profiling artifacts are also needed to build the package for
         # profiling, so it should be passed when `enable_profiling` is True.
         non_profiling_hlib: [HaskellLibBuildOutput, None] = None) -> HaskellLibBuildOutput:
@@ -524,6 +526,7 @@ def _build_haskell_lib(
         ctx,
         link_style,
         enable_profiling = enable_profiling,
+        dep_file = dep_file,
         pkgname = pkgname,
     )
     solibs = {}
@@ -697,6 +700,8 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     libname = repr(ctx.label.path).replace("//", "_").replace("/", "_") + "_" + ctx.label.name
     pkgname = libname.replace("_", "-")
 
+    dep_file = ghc_depends(ctx, sources = ctx.attrs.srcs)
+
     # The non-profiling library is also needed to build the package with
     # profiling enabled, so we need to keep track of it for each link style.
     non_profiling_hlib = {}
@@ -715,6 +720,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
                 nlis = nlis,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
+                dep_file = dep_file,
                 non_profiling_hlib = non_profiling_hlib.get(link_style),
             )
             if not enable_profiling:
@@ -919,10 +925,13 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     if enable_profiling and link_style == LinkStyle("shared"):
         link_style = LinkStyle("static")
 
+    dep_file = ghc_depends(ctx, sources = ctx.attrs.srcs)
+
     compiled = compile(
         ctx,
         link_style,
         enable_profiling = enable_profiling,
+        dep_file = dep_file,
     )
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
