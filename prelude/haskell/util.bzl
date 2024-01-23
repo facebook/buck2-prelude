@@ -53,8 +53,7 @@ def _link_style_extensions(link_style: LinkStyle) -> (str, str):
     if link_style == LinkStyle("shared"):
         return ("dyn_o", "dyn_hi")
     elif link_style == LinkStyle("static_pic"):
-        # FIXME conflicts with "static" LinkStyle
-        return ("pico", "pichi")  # is this right?
+        return ("o", "hi")  # is this right?
     elif link_style == LinkStyle("static"):
         return ("o", "hi")
     fail("unknown LinkStyle")

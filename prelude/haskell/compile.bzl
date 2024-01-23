@@ -99,6 +99,7 @@ _Module = record(
     interface = field(Artifact),
     object = field(Artifact),
     stub_dir = field(Artifact),
+    prefix_dir = field(str),
 )
 
 
@@ -119,11 +120,11 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
         module_name = src_to_module_name(src.short_path)
         interface_path = paths.replace_extension(src.short_path, "." + hisuf)
-        interface = ctx.actions.declare_output(interface_path)
+        interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
         object_path = paths.replace_extension(src.short_path, "." + osuf)
-        object = ctx.actions.declare_output(object_path)
+        object = ctx.actions.declare_output("mod-" + suffix, object_path)
         stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
-        modules[module_name] = _Module(source = src, interface = interface, object = object, stub_dir = stub_dir)
+        modules[module_name] = _Module(source = src, interface = interface, object = object, stub_dir = stub_dir, prefix_dir = "mod-" + suffix)
 
     return modules
 
@@ -497,7 +498,14 @@ def _compile_module(
 
     compile_cmd.add(args.args_for_cmd)
 
-    compile_cmd.add(cmd_args(dep_file, format = "-i{}").parent())
+    compile_cmd.add(
+        cmd_args(
+            cmd_args(dep_file, format = "-i{}").parent(),
+            "/",
+            module.prefix_dir,
+            delimiter=""
+        )
+    )
 
     for dep_name in breadth_first_traversal(graph, [module_name])[1:]:
         dep = modules[dep_name]
