@@ -156,9 +156,11 @@ def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
     #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
     dep_args = cmd_args(haskell_toolchain.compiler, "-M", "-outputdir", "", "-dep-makefile", dep_file.as_output())
 
+    package_flag = _package_flag(haskell_toolchain)
+
     dep_args.add("-hide-all-packages")
-    dep_args.add("-package", "base")
-    dep_args.add(cmd_args(toolchain_libs, prepend="-package"))
+    dep_args.add(package_flag, "base")
+    dep_args.add(cmd_args(toolchain_libs, prepend=package_flag))
     dep_args.add(packages_info.exposed_package_args)
     dep_args.add(packages_info.packagedb_args)
 
