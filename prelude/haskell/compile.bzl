@@ -572,17 +572,19 @@ def compile(
     # collect the stubs from all modules into the stubs_dir
     ctx.actions.run(
         cmd_args([
-            "bash", "-c",
-            """set -ex
+            "bash", "-exuc",
+            """\
             mkdir -p \"$0\"
             for stub; do
               find \"$stub\" -mindepth 1 -maxdepth 1 -exec cp -r -t \"$0\" '{}' ';'
-            done""",
+            done
+            """,
             stubs_dir.as_output(),
             stub_dirs
         ]),
         category = "haskell_stubs",
-        identifier = artifact_suffix
+        identifier = artifact_suffix,
+        local_only = True,
     )
 
     return CompileResultInfo(
