@@ -280,22 +280,13 @@ def get_packages_info(
         transitive_deps = libs.values(),
     )
 
-def compile_args(
+
+def _common_compile_args(
         ctx: AnalysisContext,
         link_style: LinkStyle,
         enable_profiling: bool,
-        pkgname = None,
-        suffix: str = "") -> CompileArgsInfo:
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
+        pkgname: str | None) -> cmd_args:
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
-
-    compile_cmd = cmd_args()
-    compile_cmd.add(haskell_toolchain.compiler_flags)
-
-    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
-    # be parsed when inside an argsfile.
-    compile_cmd.add(ctx.attrs.compiler_flags)
 
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
@@ -312,6 +303,46 @@ def compile_args(
 
     osuf, hisuf = output_extensions(link_style, enable_profiling)
     compile_args.add("-osuf", osuf, "-hisuf", hisuf)
+
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+    packages_info = get_packages_info(
+        ctx,
+        link_style,
+        specify_pkg_version = False,
+        enable_profiling = enable_profiling,
+    )
+
+    compile_args.add(packages_info.exposed_package_args)
+    compile_args.add(packages_info.packagedb_args)
+
+    # Add args from preprocess-able inputs.
+    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
+    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
+    pre_args = pre.set.project_as_args("args")
+    compile_args.add(cmd_args(pre_args, format = "-optP={}"))
+
+    if pkgname:
+        compile_args.add(["-this-unit-id", pkgname])
+
+    return compile_args
+
+def compile_args(
+        ctx: AnalysisContext,
+        link_style: LinkStyle,
+        enable_profiling: bool,
+        pkgname = None,
+        suffix: str = "") -> CompileArgsInfo:
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    compile_cmd = cmd_args()
+    compile_cmd.add(haskell_toolchain.compiler_flags)
+
+    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
+    # be parsed when inside an argsfile.
+    compile_cmd.add(ctx.attrs.compiler_flags)
+
+    compile_args = _common_compile_args(ctx, link_style, enable_profiling, pkgname)
 
     if getattr(ctx.attrs, "main", None) != None:
         compile_args.add(["-main-is", ctx.attrs.main])
@@ -336,27 +367,6 @@ def compile_args(
         stubs.as_output(),
     )
 
-    # Add -package-db and -package/-expose-package flags for each Haskell
-    # library dependency.
-    packages_info = get_packages_info(
-        ctx,
-        link_style,
-        specify_pkg_version = False,
-        enable_profiling = enable_profiling,
-    )
-
-    compile_args.add(packages_info.exposed_package_args)
-    compile_args.add(packages_info.packagedb_args)
-
-    # Add args from preprocess-able inputs.
-    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
-    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
-    pre_args = pre.set.project_as_args("args")
-    compile_args.add(cmd_args(pre_args, format = "-optP={}"))
-
-    if pkgname:
-        compile_args.add(["-this-unit-id", pkgname])
-
     srcs = cmd_args()
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
         # hs-boot files aren't expected to be an argument to compiler but does need
@@ -380,17 +390,14 @@ def compile_args(
         args_for_file = compile_args,
     )
 
-def __compile_args(
+def _compile_module_args(
         ctx: AnalysisContext,
         module: _Module,
         link_style: LinkStyle,
         enable_profiling: bool,
         outputs: dict[Artifact, Artifact],
-        pkgname = None,
-        suffix: str = "") -> CompileArgsInfo:
+        pkgname = None) -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
-    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     compile_cmd = cmd_args()
     compile_cmd.add(haskell_toolchain.compiler_flags)
@@ -398,27 +405,9 @@ def __compile_args(
     # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
     # be parsed when inside an argsfile.
     compile_cmd.add(ctx.attrs.compiler_flags)
+    compile_cmd.add("-c")
 
-    compile_args = cmd_args()
-    compile_args.add("-no-link", "-i", "-c")
-    compile_args.add("-hide-all-packages")
-    compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
-
-    if enable_profiling:
-        compile_args.add("-prof")
-
-    if link_style == LinkStyle("shared"):
-        compile_args.add("-dynamic", "-fPIC")
-    elif link_style == LinkStyle("static_pic"):
-        compile_args.add("-fPIC", "-fexternal-dynamic-refs")
-
-    osuf, hisuf = output_extensions(link_style, enable_profiling)
-    compile_args.add("-osuf", osuf, "-hisuf", hisuf)
-
-    if getattr(ctx.attrs, "main", None) != None:
-        compile_args.add(["-main-is", ctx.attrs.main])
-
-    #artifact_suffix = get_artifact_suffix(link_style, enable_profiling, suffix)
+    compile_args = _common_compile_args(ctx, link_style, enable_profiling, pkgname)
 
     object = outputs[module.object]
     hi = outputs[module.interface]
@@ -427,27 +416,6 @@ def __compile_args(
     compile_args.add("-ohi", cmd_args(hi.as_output()))
     compile_args.add("-o", cmd_args(object.as_output()))
     compile_args.add("-stubdir", stubs.as_output())
-
-    # Add -package-db and -package/-expose-package flags for each Haskell
-    # library dependency.
-    packages_info = get_packages_info(
-        ctx,
-        link_style,
-        specify_pkg_version = False,
-        enable_profiling = enable_profiling,
-    )
-
-    compile_args.add(packages_info.exposed_package_args)
-    compile_args.add(packages_info.packagedb_args)
-
-    # Add args from preprocess-able inputs.
-    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
-    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
-    pre_args = pre.set.project_as_args("args")
-    compile_args.add(cmd_args(pre_args, format = "-optP={}"))
-
-    if pkgname:
-        compile_args.add(["-this-unit-id", pkgname])
 
     srcs = cmd_args(module.source)
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
@@ -489,7 +457,7 @@ def _compile_module(
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     compile_cmd = cmd_args(haskell_toolchain.compiler)
 
-    args = __compile_args(ctx, module, link_style, enable_profiling, outputs, pkgname)
+    args = _compile_module_args(ctx, module, link_style, enable_profiling, outputs, pkgname)
 
     if args.args_for_file:
         if haskell_toolchain.use_argsfile:
