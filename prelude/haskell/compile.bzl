@@ -171,8 +171,16 @@ def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
 
     return dep_file
 
-def _parse_depends(depends: str, path_prefix: str) -> dict[str, list[str]]:
+def _parse_depends(depends: str, path_prefix: str) -> tuple:
+    """
+    Returns a tuple of two items:
+
+    1. the module dependency graph as a dict[str, list[str]]
+    2. a mapping from module name inferred from the source path to the real module name as a dict[str, str]
+       (only mismatching module names are added to the mapping)
+    """
     graph = {}
+    mapping = {}
 
     for line in depends.splitlines():
         if line.startswith("#"):
@@ -182,15 +190,33 @@ def _parse_depends(depends: str, path_prefix: str) -> dict[str, list[str]]:
         vs = v.split(" ")
 
         module_name = src_to_module_name(k)
+
         deps = [
-            src_to_module_name(_strip_prefix(path_prefix, v).lstrip("/"))
+            src_to_module_name(v)
             for v in vs
             if not is_haskell_src(v)
         ]
 
         graph.setdefault(module_name, []).extend(deps)
 
-    return graph
+        ext = paths.split_extension(k)[1]
+
+        if ext != ".o": continue
+
+        sources = filter(is_haskell_src, vs)
+
+        if not sources: continue
+
+        if len(sources) != 1: fail("one object file must correspond to exactly one haskell source")
+
+        hs_file = sources[0]
+
+        hs_module_name = src_to_module_name(_strip_prefix(path_prefix, hs_file).lstrip("/"))
+
+        if hs_module_name != module_name:
+            mapping[hs_module_name] = module_name
+
+    return (graph, mapping)
 
 def _attr_deps_haskell_link_infos(ctx: AnalysisContext) -> list[HaskellLinkInfo]:
     return filter(
@@ -506,7 +532,9 @@ def compile(
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
     def do_compile(ctx, artifacts, outputs, dep_file=dep_file, modules=modules):
-        graph = _parse_depends(artifacts[dep_file].read_string(), _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)))
+        graph, module_map = _parse_depends(artifacts[dep_file].read_string(), _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)))
+
+        mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
 
         for module_name in post_order_traversal(graph):
             _compile_module(
@@ -514,7 +542,7 @@ def compile(
                 link_style = link_style,
                 enable_profiling = enable_profiling,
                 module_name = module_name,
-                modules = modules,
+                modules = mapped_modules,
                 graph = graph,
                 outputs = outputs,
                 dep_file=dep_file,
