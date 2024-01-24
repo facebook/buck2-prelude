@@ -936,8 +936,12 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
+    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
+
     output = ctx.actions.declare_output(ctx.attrs.name)
     link = cmd_args(haskell_toolchain.compiler)
+    link.add("-hide-all-packages")
+    link.add(cmd_args(toolchain_libs, prepend="-package"))
     link.add("-o", output.as_output())
     link.add(haskell_toolchain.linker_flags)
     link.add(ctx.attrs.linker_flags)
