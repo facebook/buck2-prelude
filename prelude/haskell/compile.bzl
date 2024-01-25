@@ -35,6 +35,7 @@ load(
 )
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_traversal")
+load("@prelude//utils:strings.bzl", "strip_prefix")
 
 # The type of the return value of the `_compile()` function.
 CompileResultInfo = record(
@@ -103,11 +104,11 @@ _Module = record(
 )
 
 
-def _strip_prefix(p, path_prefix):
-    if p.startswith(path_prefix):
-        return p[len(path_prefix):]
-    else:
-        return p
+def _strip_prefix(prefix, s):
+    stripped = strip_prefix(prefix, s)
+
+    return stripped if stripped != None else s
+
 
 def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_style: LinkStyle, enable_profiling: bool, suffix: str) -> dict[str, _Module]:
     modules = {}
@@ -182,7 +183,7 @@ def _parse_depends(depends: str, path_prefix: str) -> dict[str, list[str]]:
 
         module_name = src_to_module_name(k)
         deps = [
-            src_to_module_name(_strip_prefix(v, path_prefix).lstrip("/"))
+            src_to_module_name(_strip_prefix(path_prefix, v).lstrip("/"))
             for v in vs
             if not is_haskell_src(v)
         ]
@@ -505,7 +506,7 @@ def compile(
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
     def do_compile(ctx, artifacts, outputs, dep_file=dep_file, modules=modules):
-        graph = _parse_depends(artifacts[dep_file].read_string(), _strip_prefix(str(ctx.label.path), str(ctx.label.cell_root)))
+        graph = _parse_depends(artifacts[dep_file].read_string(), _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)))
 
         for module_name in post_order_traversal(graph):
             _compile_module(
