@@ -490,7 +490,7 @@ def _compile_module(
         dep = modules[dep_name]
         compile_cmd.hidden(dep.interface, dep.object)
 
-    ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name, no_outputs_cleanup = True)
+    ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name)
 
 
 
