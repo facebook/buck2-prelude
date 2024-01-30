@@ -157,7 +157,7 @@ def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
 
     # Note: `-outputdir '.'` removes the prefix directory of all targets:
     #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
-    dep_args = cmd_args(haskell_toolchain.compiler, "-M", "-outputdir", ".", "-dep-makefile", dep_file.as_output())
+    dep_args = cmd_args(haskell_toolchain.compiler, "-M", "-outputdir", ".", "-dep-json", dep_file.as_output())
 
     package_flag = _package_flag(haskell_toolchain)
 
@@ -191,7 +191,7 @@ def uses_th(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
 
     return th_file
 
-def _parse_depends(depends: str, path_prefix: str) -> tuple:
+def _parse_depends(depends: dict[str, list[str]], path_prefix: str) -> tuple:
     """
     Returns a tuple of two items:
 
@@ -202,13 +202,7 @@ def _parse_depends(depends: str, path_prefix: str) -> tuple:
     graph = {}
     mapping = {}
 
-    for line in depends.splitlines():
-        if line.startswith("#"):
-            continue
-
-        k, v = line.strip().split(" : ", 1)
-        vs = v.split(" ")
-
+    for k, vs in depends.items():
         module_name = src_to_module_name(k)
 
         deps = [
@@ -570,7 +564,7 @@ def compile(
 
     def do_compile(ctx, artifacts, outputs, dep_file=dep_file, th_file=th_file, modules=modules):
         path_prefix = _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path))
-        graph, module_map = _parse_depends(artifacts[dep_file].read_string(), path_prefix)
+        graph, module_map = _parse_depends(artifacts[dep_file].read_json(), path_prefix)
         th_modules = _parse_th(artifacts[th_file].read_string(), path_prefix)
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
