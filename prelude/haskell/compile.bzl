@@ -153,9 +153,9 @@ def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
     #
     # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
 
-    # Note: `-outputdir ''` removes the prefix directory of all targets:
+    # Note: `-outputdir '.'` removes the prefix directory of all targets:
     #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
-    dep_args = cmd_args(haskell_toolchain.compiler, "-M", "-outputdir", "", "-dep-makefile", dep_file.as_output())
+    dep_args = cmd_args(haskell_toolchain.compiler, "-M", "-outputdir", ".", "-dep-makefile", dep_file.as_output())
 
     package_flag = _package_flag(haskell_toolchain)
 
