@@ -376,13 +376,18 @@ def _srcs_to_objfiles(
             objfiles.add(cmd_args([odir, "/", paths.replace_extension(src, "." + osuf)], delimiter = ""))
     return objfiles
 
+# Script to generate a GHC package-db entry for a new package.
+#
+# Sets --force so that ghc-pkg does not check for .hi, .so, ... files.
+# This way package actions can be scheduled before actual build actions,
+# don't lie on the critical path for a build, and don't form a bottleneck.
 _REGISTER_PACKAGE = """\
 set -eu
 GHC_PKG=$1
 DB=$2
 PKGCONF=$3
 "$GHC_PKG" init "$DB"
-"$GHC_PKG" register --package-conf "$DB" --no-expand-pkgroot "$PKGCONF"
+"$GHC_PKG" register --package-conf "$DB" --no-expand-pkgroot "$PKGCONF" --force
 """
 
 # Create a package
@@ -476,7 +481,7 @@ def _make_package(
             haskell_toolchain.packager,
             db.as_output(),
             pkg_conf,
-        ]).hidden(hi.values()).hidden(lib.values()),  # needs hi, because ghc-pkg checks that the .hi files exist
+        ]),
         category = "haskell_package_" + artifact_suffix.replace("-", "_"),
         env = {"GHC_PACKAGE_PATH": ghc_package_path},
     )
