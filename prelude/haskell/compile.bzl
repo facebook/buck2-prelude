@@ -91,6 +91,7 @@ HaskellLibraryInfo = record(
 
 PackagesInfo = record(
     exposed_package_args = cmd_args,
+    exposed_package_args_thin = cmd_args,
     packagedb_args = cmd_args,
     transitive_deps = field(list[HaskellLibraryInfo]),
 )
@@ -162,7 +163,7 @@ def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
     dep_args.add("-hide-all-packages")
     dep_args.add(package_flag, "base")
     dep_args.add(cmd_args(toolchain_libs, prepend=package_flag))
-    dep_args.add(packages_info.exposed_package_args)
+    dep_args.add(cmd_args(packages_info.exposed_package_args_thin))
     dep_args.add(packages_info.packagedb_args)
 
     dep_args.add(ctx.attrs.compiler_flags)
@@ -269,6 +270,7 @@ def get_packages_info(
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
     exposed_package_args = cmd_args([package_flag, "base"])
+    exposed_package_args_thin = cmd_args([package_flag, "base"])
 
     packagedb_args = cmd_args()
 
@@ -302,9 +304,11 @@ def get_packages_info(
             pkg_name += "-{}".format(lib.version)
 
         exposed_package_args.add(package_flag, pkg_name)
+        exposed_package_args_thin.add(package_flag, pkg_name)
 
     return PackagesInfo(
         exposed_package_args = exposed_package_args,
+        exposed_package_args_thin = exposed_package_args_thin,
         packagedb_args = packagedb_args,
         transitive_deps = libs.values(),
     )
