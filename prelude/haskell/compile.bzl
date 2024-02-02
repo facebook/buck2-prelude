@@ -93,6 +93,7 @@ PackagesInfo = record(
     exposed_package_args = cmd_args,
     exposed_package_args_thin = cmd_args,
     packagedb_args = cmd_args,
+    packagedb_args_thin = cmd_args,
     transitive_deps = field(list[HaskellLibraryInfo]),
 )
 
@@ -164,7 +165,7 @@ def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
     dep_args.add(package_flag, "base")
     dep_args.add(cmd_args(toolchain_libs, prepend=package_flag))
     dep_args.add(cmd_args(packages_info.exposed_package_args_thin))
-    dep_args.add(packages_info.packagedb_args)
+    dep_args.add(packages_info.packagedb_args_thin)
 
     dep_args.add(ctx.attrs.compiler_flags)
     dep_args.add(sources)
@@ -273,6 +274,7 @@ def get_packages_info(
     exposed_package_args_thin = cmd_args([package_flag, "base"])
 
     packagedb_args = cmd_args()
+    packagedb_args_thin = cmd_args()
 
     for lib in libs.values():
         exposed_package_args.hidden(lib.import_dirs.values())
@@ -290,6 +292,7 @@ def get_packages_info(
         # These we need to add for all the packages/dependencies, i.e.
         # direct and transitive (e.g. `fbcode-common-hs-util-hs-array`)
         packagedb_args.add("-package-db", lib.db)
+        packagedb_args_thin.add("-package-db", lib.db)
 
     haskell_direct_deps_lib_infos = _attr_deps_haskell_lib_infos(
         ctx,
@@ -310,6 +313,7 @@ def get_packages_info(
         exposed_package_args = exposed_package_args,
         exposed_package_args_thin = exposed_package_args_thin,
         packagedb_args = packagedb_args,
+        packagedb_args_thin = packagedb_args_thin,
         transitive_deps = libs.values(),
     )
 
