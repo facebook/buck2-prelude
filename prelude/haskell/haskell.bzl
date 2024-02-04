@@ -38,6 +38,11 @@ load(
     "is_link_group_shlib",
 )
 load(
+    "@prelude//cxx:linker.bzl",
+    "LINKERS",
+    "get_shared_library_flags",
+)
+load(
     "@prelude//cxx:preprocessor.bzl",
     "CPreprocessor",
     "CPreprocessorArgs",
