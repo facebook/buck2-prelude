@@ -572,7 +572,6 @@ def _build_haskell_lib(
         )
 
         link.add(objfiles)
-        link.hidden(compiled.stubs)
 
         infos = get_link_args_for_strategy(
             ctx,
@@ -950,8 +949,6 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     link.add("-o", output.as_output())
     link.add(haskell_toolchain.linker_flags)
     link.add(ctx.attrs.linker_flags)
-
-    link.hidden(compiled.stubs)
 
     osuf, _hisuf = output_extensions(link_style, enable_profiling)
 
