@@ -276,7 +276,6 @@ def get_packages_info(
 
     for lib in libs.values():
         exposed_package_artifacts.hidden(lib.import_dirs.values())
-        exposed_package_artifacts.hidden(lib.stub_dirs)
 
         # libs of dependencies might be needed at compile time if
         # we're using Template Haskell:
