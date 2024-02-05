@@ -270,7 +270,7 @@ def get_packages_info(
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
-    exposed_package_artifacts = cmd_args([package_flag, "base"])
+    exposed_package_artifacts = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
 
     packagedb_args = cmd_args()
@@ -306,7 +306,6 @@ def get_packages_info(
         if (specify_pkg_version):
             pkg_name += "-{}".format(lib.version)
 
-        exposed_package_artifacts.add(package_flag, pkg_name)
         exposed_package_args.add(package_flag, pkg_name)
 
     return PackagesInfo(
@@ -350,6 +349,7 @@ def _common_compile_args(
         enable_profiling = enable_profiling,
     )
 
+    compile_args.add(packages_info.exposed_package_args)
     compile_args.add(packages_info.exposed_package_artifacts)
     compile_args.add(packages_info.packagedb_args)
 
