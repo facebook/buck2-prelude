@@ -173,6 +173,34 @@ def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
 
     return dep_file
 
+def uses_th(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
+    """Determine which of the given modules use Template Haskell.
+
+    Template Haskell compilation requires additional inputs. We can avoid these
+    inputs if Template Haskell is not used.
+
+    Ideally, GHC would expose this information in the generated depends file.
+    Until it does so, we use this workaround.
+    """
+    th_file = ctx.actions.declare_output(ctx.attrs.name + ".th")
+
+    script = """\
+touch "$1"
+for file in "${@:2}"; do
+    grep -q "$file" \\
+        -e '{-# LANGUAGE TemplateHaskell #-}' \\
+        -e '{-# LANGUAGE TemplateHaskellQuotes #-}' \\
+        -e '{-# LANGUAGE QuasiQuotes #-}' \\
+    && echo "$file" >> "$1" || true
+done
+"""
+    ctx.actions.run(
+        cmd_args("sh", "-c", script, "", th_file.as_output(), sources),
+        category = "haskell_th",
+    )
+
+    return th_file
+
 def _parse_depends(depends: str, path_prefix: str) -> tuple:
     """
     Returns a tuple of two items:
