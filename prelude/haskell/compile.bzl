@@ -248,6 +248,16 @@ def _parse_depends(depends: str, path_prefix: str) -> tuple:
 
     return (graph, mapping)
 
+def _parse_th(th_file: str, path_prefix: str) -> list[str]:
+    """Returns the list of modules that use Template Haskell."""
+    result = []
+
+    for line in th_file.splitlines():
+        module_name = src_to_module_name(_strip_prefix(path_prefix, line.strip()).lstrip("/"))
+        result.append(module_name)
+
+    return result
+
 def _attr_deps_haskell_link_infos(ctx: AnalysisContext) -> list[HaskellLinkInfo]:
     return filter(
         None,
