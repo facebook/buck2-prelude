@@ -567,13 +567,17 @@ def compile(
         link_style: LinkStyle,
         enable_profiling: bool,
         dep_file: Artifact,
+        th_file: Artifact,
         pkgname: str | None = None) -> CompileResultInfo:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
-    def do_compile(ctx, artifacts, outputs, dep_file=dep_file, modules=modules):
-        graph, module_map = _parse_depends(artifacts[dep_file].read_string(), _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)))
+    def do_compile(ctx, artifacts, outputs, dep_file=dep_file, th_file=th_file, modules=modules):
+        path_prefix = _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path))
+        graph, module_map = _parse_depends(artifacts[dep_file].read_string(), path_prefix)
+        th_modules = _parse_th(artifacts[th_file].read_string(), path_prefix)
+        print("TH MODULES", th_modules, "OF", graph.keys())
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
 
@@ -596,7 +600,7 @@ def compile(
     stub_dirs = [module.stub_dir for module in modules.values()]
 
     ctx.actions.dynamic_output(
-        dynamic = [dep_file],
+        dynamic = [dep_file, th_file],
         inputs = ctx.attrs.srcs,
         outputs = interfaces + objects + stub_dirs,
         f = do_compile)
