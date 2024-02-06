@@ -195,7 +195,7 @@ for file in "${@:2}"; do
 done
 """
     ctx.actions.run(
-        cmd_args("sh", "-c", script, "", th_file.as_output(), sources),
+        cmd_args("bash", "-c", script, "", th_file.as_output(), sources),
         category = "haskell_th",
     )
 
