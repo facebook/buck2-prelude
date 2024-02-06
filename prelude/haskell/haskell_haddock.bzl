@@ -34,6 +34,7 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
         ctx,
         link_style,
         enable_profiling = False,
+        enable_th = True,
         suffix = "-haddock",
         pkgname = pkgname,
     )

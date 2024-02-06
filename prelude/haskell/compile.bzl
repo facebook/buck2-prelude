@@ -353,6 +353,7 @@ def _common_compile_args(
         ctx: AnalysisContext,
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_th: bool,
         pkgname: str | None) -> cmd_args:
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
@@ -383,8 +384,9 @@ def _common_compile_args(
 
     compile_args.add(packages_info.exposed_package_args)
     compile_args.add(packages_info.exposed_package_imports)
-    compile_args.add(packages_info.exposed_package_libs)
     compile_args.add(packages_info.packagedb_args)
+    if enable_th:
+        compile_args.add(packages_info.exposed_package_libs)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
@@ -401,6 +403,7 @@ def compile_args(
         ctx: AnalysisContext,
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_th: bool,
         pkgname = None,
         suffix: str = "") -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -412,7 +415,7 @@ def compile_args(
     # be parsed when inside an argsfile.
     compile_cmd.add(ctx.attrs.compiler_flags)
 
-    compile_args = _common_compile_args(ctx, link_style, enable_profiling, pkgname)
+    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname)
 
     if getattr(ctx.attrs, "main", None) != None:
         compile_args.add(["-main-is", ctx.attrs.main])
@@ -465,6 +468,7 @@ def _compile_module_args(
         module: _Module,
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_th: bool,
         outputs: dict[Artifact, Artifact],
         pkgname = None) -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -477,7 +481,7 @@ def _compile_module_args(
     compile_cmd.add(ctx.attrs.compiler_flags)
     compile_cmd.add("-c")
 
-    compile_args = _common_compile_args(ctx, link_style, enable_profiling, pkgname)
+    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname)
 
     object = outputs[module.object]
     hi = outputs[module.interface]
@@ -514,6 +518,7 @@ def _compile_module(
     *,
     link_style: LinkStyle,
     enable_profiling: bool,
+    enable_th: bool,
     module_name: str,
     modules: dict[str, _Module],
     dep_file: Artifact,
@@ -527,7 +532,7 @@ def _compile_module(
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     compile_cmd = cmd_args(haskell_toolchain.compiler)
 
-    args = _compile_module_args(ctx, module, link_style, enable_profiling, outputs, pkgname)
+    args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, pkgname)
 
     if args.args_for_file:
         if haskell_toolchain.use_argsfile:
@@ -582,10 +587,12 @@ def compile(
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
 
         for module_name in post_order_traversal(graph):
+            print("TH ENABLE", module_name, module_name in th_modules)
             _compile_module(
                 ctx,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
+                enable_th = module_name in th_modules,
                 module_name = module_name,
                 modules = mapped_modules,
                 graph = graph,
