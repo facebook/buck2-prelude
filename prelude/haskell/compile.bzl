@@ -582,12 +582,10 @@ def compile(
         path_prefix = _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path))
         graph, module_map = _parse_depends(artifacts[dep_file].read_string(), path_prefix)
         th_modules = _parse_th(artifacts[th_file].read_string(), path_prefix)
-        print("TH MODULES", th_modules, "OF", graph.keys())
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
 
         for module_name in post_order_traversal(graph):
-            print("TH ENABLE", module_name, module_name in th_modules)
             _compile_module(
                 ctx,
                 link_style = link_style,
