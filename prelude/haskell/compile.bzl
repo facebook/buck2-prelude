@@ -184,18 +184,8 @@ def uses_th(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
     """
     th_file = ctx.actions.declare_output(ctx.attrs.name + ".th")
 
-    script = """\
-touch "$1"
-for file in "${@:2}"; do
-    grep -q "$file" \\
-        -e '{-# LANGUAGE TemplateHaskell #-}' \\
-        -e '{-# LANGUAGE TemplateHaskellQuotes #-}' \\
-        -e '{-# LANGUAGE QuasiQuotes #-}' \\
-    && echo "$file" >> "$1" || true
-done
-"""
     ctx.actions.run(
-        cmd_args("bash", "-c", script, "", th_file.as_output(), sources),
+        cmd_args(ctx.attrs._detect_th_extension[RunInfo], "--output", th_file.as_output(), sources),
         category = "haskell_th",
     )
 

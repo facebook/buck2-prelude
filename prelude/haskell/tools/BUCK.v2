@@ -5,3 +5,9 @@ prelude.python_bootstrap_binary(
     main = "script_template_processor.py",
     visibility = ["PUBLIC"],
 )
+
+prelude.python_bootstrap_binary(
+    name = "detect_th_extension",
+    main = "detect_th_extension.py",
+    visibility = ["PUBLIC"],
+)
