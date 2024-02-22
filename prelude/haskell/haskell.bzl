@@ -519,6 +519,7 @@ def _build_haskell_lib(
         nlis: list[MergedLinkInfo],  # native link infos from all deps
         link_style: LinkStyle,
         enable_profiling: bool,
+        md_file: Artifact,
         dep_file: Artifact,
         th_file: Artifact,
         # The non-profiling artifacts are also needed to build the package for
@@ -536,6 +537,7 @@ def _build_haskell_lib(
         ctx,
         link_style,
         enable_profiling = enable_profiling,
+        md_file = md_file,
         dep_file = dep_file,
         th_file = th_file,
         pkgname = pkgname,
@@ -732,6 +734,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
                 nlis = nlis,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
+                md_file = md_file,
                 dep_file = dep_file,
                 th_file = th_file,
                 non_profiling_hlib = non_profiling_hlib.get(link_style),
@@ -846,7 +849,6 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     providers = [
         DefaultInfo(
             default_outputs = default_output,
-            other_outputs = [md_file],
             sub_targets = sub_targets,
         ),
         HaskellLibraryProvider(
@@ -947,6 +949,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         ctx,
         link_style,
         enable_profiling = enable_profiling,
+        md_file = md_file,
         dep_file = dep_file,
         th_file = th_file,
     )
@@ -1123,7 +1126,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         run.hidden(symlink_dir)
 
     providers = [
-        DefaultInfo(default_output = output, other_outputs = [md_file]),
+        DefaultInfo(default_output = output),
         RunInfo(args = run),
     ]
 
