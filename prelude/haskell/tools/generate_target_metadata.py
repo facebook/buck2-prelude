@@ -94,8 +94,6 @@ def uses_th(filename):
 
 
 def run_ghc_depends(ghc, ghc_args, sources):
-    result = {}
-
     with tempfile.TemporaryDirectory() as dname:
         fname = os.path.join(dname, "depends")
         args = [
@@ -103,21 +101,12 @@ def run_ghc_depends(ghc, ghc_args, sources):
             # Note: `-outputdir '.'` removes the prefix of all targets:
             #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
             "-outputdir", ".",
-            "-dep-makefile", fname,
+            "-dep-json", fname,
         ] + ghc_args + sources
         subprocess.run(args, check=True)
 
         with open(fname) as f:
-            for line in f:
-                if line.startswith("#"):
-                    continue
-
-                k, v = line.strip().split(" : ", 1)
-                vs = v.split(" ")
-
-                result.setdefault(k, []).extend(vs)
-
-    return result
+            return json.load(f)
 
 
 def interpret_ghc_depends(ghc_depends, source_prefix):
@@ -125,6 +114,10 @@ def interpret_ghc_depends(ghc_depends, source_prefix):
     mapping = {}
 
     for k, vs in ghc_depends.items():
+        # remove lead `./` caused by using `-outputdir '.'`.
+        k = strip_prefix_("./", k)
+        vs = [strip_prefix_("./", v) for v in vs]
+
         module_name = src_to_module_name(k)
         intdeps = parse_module_deps(vs)
 
