@@ -182,121 +182,6 @@ def target_metadata(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifac
 
     return md_file
 
-def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
-    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
-
-    # Add -package-db and -package/-expose-package flags for each Haskell
-    # library dependency.
-    packages_info = get_packages_info(
-        ctx,
-        LinkStyle("shared"),
-        specify_pkg_version = False,
-        enable_profiling = False,
-    )
-
-    dep_file = ctx.actions.declare_output(ctx.attrs.name + ".depends")
-
-    # The object and interface file paths are depending on the real module name
-    # as inferred by GHC, not the source file path; currently this requires the
-    # module name to correspond to the source file path as otherwise GHC will
-    # not be able to find the created object or interface files in the search
-    # path.
-    #
-    # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
-
-    # Note: `-outputdir '.'` removes the prefix directory of all targets:
-    #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
-    dep_args = cmd_args(haskell_toolchain.compiler, "-M", "-outputdir", ".", "-dep-json", dep_file.as_output())
-
-    package_flag = _package_flag(haskell_toolchain)
-
-    dep_args.add("-hide-all-packages")
-    dep_args.add(package_flag, "base")
-    dep_args.add(cmd_args(toolchain_libs, prepend=package_flag))
-    dep_args.add(cmd_args(packages_info.exposed_package_args))
-    dep_args.add(packages_info.packagedb_args)
-
-    dep_args.add(ctx.attrs.compiler_flags)
-    dep_args.add(sources)
-    ctx.actions.run(dep_args, category = "ghc_depends")
-
-    return dep_file
-
-def uses_th(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
-    """Determine which of the given modules use Template Haskell.
-
-    Template Haskell compilation requires additional inputs. We can avoid these
-    inputs if Template Haskell is not used.
-
-    Ideally, GHC would expose this information in the generated depends file.
-    Until it does so, we use this workaround.
-    """
-    th_file = ctx.actions.declare_output(ctx.attrs.name + ".th")
-
-    ctx.actions.run(
-        cmd_args(ctx.attrs._detect_th_extension[RunInfo], "--output", th_file.as_output(), sources),
-        category = "haskell_th",
-    )
-
-    return th_file
-
-def _parse_depends(depends: dict[str, list[str]], path_prefix: str) -> tuple:
-    """
-    Returns a tuple of two items:
-
-    1. the module dependency graph as a dict[str, list[str]]
-    2. a mapping from module name inferred from the source path to the real module name as a dict[str, str]
-       (only mismatching module names are added to the mapping)
-    """
-    graph = {}
-    mapping = {}
-
-    for k, vs in depends.items():
-        # remove leading `./` caused by using `-outputdir '.'`
-        k = _strip_prefix("./", k)
-        vs = [_strip_prefix("./", v) for v in vs]
-
-        module_name = src_to_module_name(k)
-
-        deps = [
-            src_to_module_name(v)
-            for v in vs
-            if not is_haskell_src(v)
-        ]
-
-        graph.setdefault(module_name, []).extend(deps)
-
-        ext = paths.split_extension(k)[1]
-
-        if ext != ".o": continue
-
-        sources = filter(is_haskell_src, vs)
-
-        if not sources: continue
-
-        if len(sources) != 1: fail("one object file must correspond to exactly one haskell source")
-
-        hs_file = sources[0]
-
-        hs_module_name = src_to_module_name(_strip_prefix(path_prefix, hs_file).lstrip("/"))
-
-        if hs_module_name != module_name:
-            mapping[hs_module_name] = module_name
-
-    return (graph, mapping)
-
-def _parse_th(th_file: str, path_prefix: str) -> list[str]:
-    """Returns the list of modules that use Template Haskell."""
-    result = []
-
-    for line in th_file.splitlines():
-        module_name = src_to_module_name(_strip_prefix(path_prefix, line.strip()).lstrip("/"))
-        result.append(module_name)
-
-    return result
-
 def _attr_deps_haskell_link_infos(ctx: AnalysisContext) -> list[HaskellLinkInfo]:
     return filter(
         None,
@@ -611,14 +496,12 @@ def compile(
         link_style: LinkStyle,
         enable_profiling: bool,
         md_file: Artifact,
-        dep_file: Artifact,
-        th_file: Artifact,
         pkgname: str | None = None) -> CompileResultInfo:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
-    def do_compile(ctx, artifacts, outputs, md_file=md_file, dep_file=dep_file, th_file=th_file, modules=modules):
+    def do_compile(ctx, artifacts, outputs, md_file=md_file, modules=modules):
         md = artifacts[md_file].read_json()
         th_modules = md["th_modules"]
         graph = md["module_graph"]
@@ -646,7 +529,7 @@ def compile(
     stub_dirs = [module.stub_dir for module in modules.values()]
 
     ctx.actions.dynamic_output(
-        dynamic = [md_file, dep_file, th_file],
+        dynamic = [md_file],
         inputs = ctx.attrs.srcs,
         outputs = interfaces + objects + stub_dirs,
         f = do_compile)

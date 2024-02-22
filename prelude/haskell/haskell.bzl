@@ -51,8 +51,6 @@ load(
     "HaskellLibraryProvider",
     "compile",
     "target_metadata",
-    "ghc_depends",
-    "uses_th",
 )
 load(
     "@prelude//haskell:haskell_haddock.bzl",
@@ -520,8 +518,6 @@ def _build_haskell_lib(
         link_style: LinkStyle,
         enable_profiling: bool,
         md_file: Artifact,
-        dep_file: Artifact,
-        th_file: Artifact,
         # The non-profiling artifacts are also needed to build the package for
         # profiling, so it should be passed when `enable_profiling` is True.
         non_profiling_hlib: [HaskellLibBuildOutput, None] = None) -> HaskellLibBuildOutput:
@@ -538,8 +534,6 @@ def _build_haskell_lib(
         link_style,
         enable_profiling = enable_profiling,
         md_file = md_file,
-        dep_file = dep_file,
-        th_file = th_file,
         pkgname = pkgname,
     )
     solibs = {}
@@ -713,8 +707,6 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     pkgname = libname.replace("_", "-")
 
     md_file = target_metadata(ctx, sources = ctx.attrs.srcs)
-    dep_file = ghc_depends(ctx, sources = ctx.attrs.srcs)
-    th_file = uses_th(ctx, sources = ctx.attrs.srcs)
 
     # The non-profiling library is also needed to build the package with
     # profiling enabled, so we need to keep track of it for each link style.
@@ -735,8 +727,6 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
                 link_style = link_style,
                 enable_profiling = enable_profiling,
                 md_file = md_file,
-                dep_file = dep_file,
-                th_file = th_file,
                 non_profiling_hlib = non_profiling_hlib.get(link_style),
             )
             if not enable_profiling:
@@ -942,16 +932,12 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         link_style = LinkStyle("static")
 
     md_file = target_metadata(ctx, sources = ctx.attrs.srcs)
-    dep_file = ghc_depends(ctx, sources = ctx.attrs.srcs)
-    th_file = uses_th(ctx, sources = ctx.attrs.srcs)
 
     compiled = compile(
         ctx,
         link_style,
         enable_profiling = enable_profiling,
         md_file = md_file,
-        dep_file = dep_file,
-        th_file = th_file,
     )
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
