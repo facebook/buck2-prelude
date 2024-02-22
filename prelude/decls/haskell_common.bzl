@@ -42,10 +42,6 @@ def _exported_linker_flags_arg():
 
 def _scripts_arg():
     return {
-        "_detect_th_extension": attrs.dep(
-            providers = [RunInfo],
-            default = "prelude//haskell/tools:detect_th_extension",
-        ),
         "_generate_target_metadata": attrs.dep(
             providers = [RunInfo],
             default = "prelude//haskell/tools:generate_target_metadata",
