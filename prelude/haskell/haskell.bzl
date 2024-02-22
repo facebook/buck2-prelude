@@ -50,6 +50,7 @@ load(
     "HaskellLibraryInfo",
     "HaskellLibraryProvider",
     "compile",
+    "target_metadata",
     "ghc_depends",
     "uses_th",
 )
@@ -709,6 +710,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     libname = repr(ctx.label.path).replace("//", "_").replace("/", "_") + "_" + ctx.label.name
     pkgname = libname.replace("_", "-")
 
+    md_file = target_metadata(ctx, sources = ctx.attrs.srcs)
     dep_file = ghc_depends(ctx, sources = ctx.attrs.srcs)
     th_file = uses_th(ctx, sources = ctx.attrs.srcs)
 
@@ -844,6 +846,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     providers = [
         DefaultInfo(
             default_outputs = default_output,
+            other_outputs = [md_file],
             sub_targets = sub_targets,
         ),
         HaskellLibraryProvider(
@@ -936,6 +939,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     if enable_profiling and link_style == LinkStyle("shared"):
         link_style = LinkStyle("static")
 
+    md_file = target_metadata(ctx, sources = ctx.attrs.srcs)
     dep_file = ghc_depends(ctx, sources = ctx.attrs.srcs)
     th_file = uses_th(ctx, sources = ctx.attrs.srcs)
 
@@ -1119,7 +1123,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         run.hidden(symlink_dir)
 
     providers = [
-        DefaultInfo(default_output = output),
+        DefaultInfo(default_output = output, other_outputs = [md_file]),
         RunInfo(args = run),
     ]
 

@@ -131,6 +131,57 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
     return modules
 
+def target_metadata(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
+    md_file = ctx.actions.declare_output(ctx.attrs.name + ".md.json")
+    md_gen = ctx.attrs._generate_target_metadata[RunInfo]
+
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+    toolchain_libs = [
+        dep[HaskellToolchainLibrary].name
+        for dep in ctx.attrs.deps
+        if HaskellToolchainLibrary in dep
+    ]
+
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+    packages_info = get_packages_info(
+        ctx,
+        LinkStyle("shared"),
+        specify_pkg_version = False,
+        enable_profiling = False,
+    )
+
+    # The object and interface file paths are depending on the real module name
+    # as inferred by GHC, not the source file path; currently this requires the
+    # module name to correspond to the source file path as otherwise GHC will
+    # not be able to find the created object or interface files in the search
+    # path.
+    #
+    # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
+
+    package_flag = _package_flag(haskell_toolchain)
+    ghc_args = cmd_args()
+    ghc_args.add("-hide-all-packages")
+    ghc_args.add(package_flag, "base")
+    ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
+    ghc_args.add(cmd_args(packages_info.exposed_package_args))
+    ghc_args.add(packages_info.packagedb_args)
+    ghc_args.add(ctx.attrs.compiler_flags)
+
+    md_args = cmd_args(md_gen)
+    md_args.add("--output", md_file.as_output())
+    md_args.add("--ghc", haskell_toolchain.compiler)
+    md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
+    md_args.add(
+        "--source-prefix",
+        _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
+    )
+    md_args.add(cmd_args(sources, format="--source={}"))
+
+    ctx.actions.run(md_args, category = "haskell_metadata")
+
+    return md_file
+
 def ghc_depends(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 

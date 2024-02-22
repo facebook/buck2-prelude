@@ -46,6 +46,10 @@ def _scripts_arg():
             providers = [RunInfo],
             default = "prelude//haskell/tools:detect_th_extension",
         ),
+        "_generate_target_metadata": attrs.dep(
+            providers = [RunInfo],
+            default = "prelude//haskell/tools:generate_target_metadata",
+        ),
     }
 
 haskell_common = struct(
