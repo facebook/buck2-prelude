@@ -40,7 +40,7 @@ load("@prelude//utils:strings.bzl", "strip_prefix")
 # The type of the return value of the `_compile()` function.
 CompileResultInfo = record(
     objects = field(Artifact),
-    hi = field(Artifact),
+    hi = field(list[Artifact]),
     stubs = field(Artifact),
     producing_indices = field(bool),
 )
@@ -73,7 +73,7 @@ HaskellLibraryInfo = record(
     # e.g. "base-4.13.0.0"
     id = str,
     # Import dirs indexed by profiling enabled/disabled
-    import_dirs = dict[bool, Artifact],
+    import_dirs = dict[bool, list[Artifact]],
     stub_dirs = list[Artifact],
 
     # This field is only used as hidden inputs to compilation, to
@@ -346,6 +346,8 @@ def compile_args(
 
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling, suffix)
 
+    # TODO[AH] These are only used for haddock and conflict with tracking
+    # per-module outputs individually. Rework the Haddock part to support this.
     objects = ctx.actions.declare_output(
         "objects-" + artifact_suffix,
         dir = True,
@@ -378,7 +380,7 @@ def compile_args(
     return CompileArgsInfo(
         result = CompileResultInfo(
             objects = objects,
-            hi = hi,
+            hi = [hi],
             stubs = stubs,
             producing_indices = producing_indices,
         ),
@@ -427,7 +429,7 @@ def _compile_module_args(
     return CompileArgsInfo(
         result = CompileResultInfo(
             objects = object,
-            hi = hi,
+            hi = [hi],
             stubs = stubs,
             producing_indices = producing_indices,
         ),
@@ -568,7 +570,7 @@ def compile(
 
     return CompileResultInfo(
         objects = object_dir,
-        hi = hi_dir,
+        hi = [hi_dir],
         stubs = stubs_dir,
         producing_indices = False,
     )

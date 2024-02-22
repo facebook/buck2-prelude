@@ -416,7 +416,7 @@ def _make_package(
         pkgname: str,
         libname: str,
         hlis: list[HaskellLibraryInfo],
-        hi: dict[bool, Artifact],
+        hi: dict[bool, list[Artifact]],
         lib: dict[bool, Artifact],
         enable_profiling: bool) -> Artifact:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
@@ -902,7 +902,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
 def derive_indexing_tset(
         actions: AnalysisActions,
         link_style: LinkStyle,
-        value: [Artifact, None],
+        value: [list[Artifact], None],
         children: list[Dependency]) -> HaskellIndexingTSet:
     index_children = []
     for dep in children:

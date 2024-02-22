@@ -89,7 +89,7 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
         "mkdir",
         "-p",
         args.result.objects.as_output(),
-        args.result.hi.as_output(),
+        args.result.hi[0].as_output(),
         args.result.stubs.as_output(),
         "&&",
         cmd_args(cmd, quote = "shell"),
