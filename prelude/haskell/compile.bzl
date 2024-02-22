@@ -203,6 +203,10 @@ def _parse_depends(depends: dict[str, list[str]], path_prefix: str) -> tuple:
     mapping = {}
 
     for k, vs in depends.items():
+        # remove leading `./` caused by using `-outputdir '.'`
+        k = _strip_prefix("./", k)
+        vs = [_strip_prefix("./", v) for v in vs]
+
         module_name = src_to_module_name(k)
 
         deps = [
