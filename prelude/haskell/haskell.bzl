@@ -438,7 +438,7 @@ def _make_package(
         return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + "\""
 
     import_dirs = [
-        mk_artifact_dir("hi", profiled)
+        mk_artifact_dir("mod", profiled)
         for profiled in hi.keys()
     ]
     library_dirs = [

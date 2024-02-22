@@ -542,12 +542,6 @@ def compile(
         a.short_path : a for a in objects
     })
 
-    hi_dir = ctx.actions.declare_output("hi-" + artifact_suffix, dir=True)
-
-    ctx.actions.copied_dir(hi_dir.as_output(), {
-        a.short_path : a for a in interfaces
-    })
-
     stubs_dir = ctx.actions.declare_output("stubs-" + artifact_suffix, dir=True)
 
     # collect the stubs from all modules into the stubs_dir
@@ -570,7 +564,7 @@ def compile(
 
     return CompileResultInfo(
         objects = object_dir,
-        hi = [hi_dir],
+        hi = interfaces,
         stubs = stubs_dir,
         producing_indices = False,
     )
