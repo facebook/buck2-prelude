@@ -88,7 +88,7 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
     script_args = cmd_args([
         "mkdir",
         "-p",
-        args.result.objects.as_output(),
+        args.result.objects[0].as_output(),
         args.result.hi[0].as_output(),
         args.result.stubs.as_output(),
         "&&",

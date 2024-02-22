@@ -367,17 +367,6 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
         linkable_graph,
     ]
 
-def _srcs_to_objfiles(
-        ctx: AnalysisContext,
-        odir: Artifact,
-        osuf: str) -> cmd_args:
-    objfiles = cmd_args()
-    for src, _ in srcs_to_pairs(ctx.attrs.srcs):
-        # Don't link boot sources, as they're only meant to be used for compiling.
-        if is_haskell_src(src):
-            objfiles.add(cmd_args([odir, "/", paths.replace_extension(src, "." + osuf)], delimiter = ""))
-    return objfiles
-
 # Script to generate a GHC package-db entry for a new package.
 #
 # Sets --force so that ghc-pkg does not check for .hi, .so, ... files.
@@ -552,8 +541,6 @@ def _build_haskell_lib(
     linfos = [x.prof_info if enable_profiling else x.info for x in hlis]
     uniq_infos = dedupe(flatten([x[link_style] for x in linfos]))
 
-    objfiles = _srcs_to_objfiles(ctx, compiled.objects, osuf)
-
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     if link_style == LinkStyle("shared"):
@@ -573,7 +560,7 @@ def _build_haskell_lib(
             ),
         )
 
-        link.add(objfiles)
+        link.add(compiled.objects)
 
         infos = get_link_args_for_strategy(
             ctx,
@@ -595,7 +582,7 @@ def _build_haskell_lib(
     else:  # static flavours
         # TODO: avoid making an archive for a single object, like cxx does
         # (but would that work with Template Haskell?)
-        archive = make_archive(ctx, lib_short_path, [compiled.objects], objfiles)
+        archive = make_archive(ctx, lib_short_path, compiled.objects)
         lib = archive.artifact
         libs = [lib] + archive.external_objects
         link_infos = LinkInfos(
@@ -954,8 +941,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
     osuf, _hisuf = output_extensions(link_style, enable_profiling)
 
-    objfiles = _srcs_to_objfiles(ctx, compiled.objects, osuf)
-    link.add(objfiles)
+    link.add(compiled.objects)
 
     indexing_tsets = {}
     if compiled.producing_indices:

@@ -39,7 +39,7 @@ load("@prelude//utils:strings.bzl", "strip_prefix")
 
 # The type of the return value of the `_compile()` function.
 CompileResultInfo = record(
-    objects = field(Artifact),
+    objects = field(list[Artifact]),
     hi = field(list[Artifact]),
     stubs = field(Artifact),
     producing_indices = field(bool),
@@ -379,7 +379,7 @@ def compile_args(
 
     return CompileArgsInfo(
         result = CompileResultInfo(
-            objects = objects,
+            objects = [objects],
             hi = [hi],
             stubs = stubs,
             producing_indices = producing_indices,
@@ -428,7 +428,7 @@ def _compile_module_args(
 
     return CompileArgsInfo(
         result = CompileResultInfo(
-            objects = object,
+            objects = [object],
             hi = [hi],
             stubs = stubs,
             producing_indices = producing_indices,
@@ -536,12 +536,6 @@ def compile(
         outputs = interfaces + objects + stub_dirs,
         f = do_compile)
 
-    object_dir = ctx.actions.declare_output("objects-" + artifact_suffix, dir=True)
-
-    ctx.actions.copied_dir(object_dir.as_output(), {
-        a.short_path : a for a in objects
-    })
-
     stubs_dir = ctx.actions.declare_output("stubs-" + artifact_suffix, dir=True)
 
     # collect the stubs from all modules into the stubs_dir
@@ -563,7 +557,7 @@ def compile(
     )
 
     return CompileResultInfo(
-        objects = object_dir,
+        objects = objects,
         hi = interfaces,
         stubs = stubs_dir,
         producing_indices = False,
