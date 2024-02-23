@@ -97,7 +97,7 @@ def run_ghc_depends(ghc, ghc_args, sources):
     with tempfile.TemporaryDirectory() as dname:
         fname = os.path.join(dname, "depends")
         args = [
-            ghc, "-M",
+            ghc, "-M", "-include-pkg-deps",
             # Note: `-outputdir '.'` removes the prefix of all targets:
             #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
             "-outputdir", ".",
@@ -117,6 +117,9 @@ def interpret_ghc_depends(ghc_depends, source_prefix):
         # remove lead `./` caused by using `-outputdir '.'`.
         k = strip_prefix_("./", k)
         vs = [strip_prefix_("./", v) for v in vs]
+
+        # TODO: Handle pkg-deps
+        vs = filter(lambda x: not x.startswith("buck-out"), vs)
 
         module_name = src_to_module_name(k)
         intdeps = parse_module_deps(vs)
