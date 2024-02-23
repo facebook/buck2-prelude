@@ -3,7 +3,7 @@
 """Helper script to generate relevant metadata about Haskell targets.
 
 * The mapping from module source file to actual module name.
-* The inter-package module dependency graph.
+* The intra-package module dependency graph.
 * Which modules require Template Haskell.
 
 The result is a JSON object with the following fields:
