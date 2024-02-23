@@ -95,17 +95,19 @@ def uses_th(filename):
 
 def run_ghc_depends(ghc, ghc_args, sources):
     with tempfile.TemporaryDirectory() as dname:
-        fname = os.path.join(dname, "depends")
+        json_fname = os.path.join(dname, "depends.json")
+        make_fname = os.path.join(dname, "depends.json")
         args = [
             ghc, "-M", "-include-pkg-deps",
             # Note: `-outputdir '.'` removes the prefix of all targets:
             #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
             "-outputdir", ".",
-            "-dep-json", fname,
+            "-dep-json", json_fname,
+            "-dep-makefile", make_fname,
         ] + ghc_args + sources
         subprocess.run(args, check=True)
 
-        with open(fname) as f:
+        with open(json_fname) as f:
             return json.load(f)
 
 
