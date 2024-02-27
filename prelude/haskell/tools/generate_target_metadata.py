@@ -4,12 +4,14 @@
 
 * The mapping from module source file to actual module name.
 * The intra-package module dependency graph.
+* The transitive cross-package module dependency graph.
 * Which modules require Template Haskell.
 
 The result is a JSON object with the following fields:
 * `th_modules`: List of modules that require Template Haskell.
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
+* `transitive_deps`: Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]]`.
 """
 
 import argparse
@@ -24,6 +26,11 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         fromfile_prefix_chars="@")
+    parser.add_argument(
+        "--pkgname",
+        required=True,
+        type=str,
+        help="The name of the current package.")
     parser.add_argument(
         "--output",
         required=True,
@@ -59,11 +66,14 @@ def main():
 
 
 def obtain_target_metadata(args):
+    output_prefix = os.path.dirname(args.output.name)
     th_modules = determine_th_modules(args.source, args.source_prefix)
     ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source)
     module_mapping, module_graph = interpret_ghc_depends(
         ghc_depends, args.source_prefix)
     return {
+        "pkgname": args.pkgname,
+        "output_prefix": output_prefix,
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,

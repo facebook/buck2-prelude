@@ -131,7 +131,12 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
     return modules
 
-def target_metadata(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifact:
+def target_metadata(
+        ctx: AnalysisContext,
+        *,
+        pkgname: str,
+        sources: list[Artifact],
+    ) -> Artifact:
     md_file = ctx.actions.declare_output(ctx.attrs.name + ".md.json")
     md_gen = ctx.attrs._generate_target_metadata[RunInfo]
 
@@ -169,6 +174,7 @@ def target_metadata(ctx: AnalysisContext, *, sources: list[Artifact]) -> Artifac
     ghc_args.add(ctx.attrs.compiler_flags)
 
     md_args = cmd_args(md_gen)
+    md_args.add("--pkgname", pkgname)
     md_args.add("--output", md_file.as_output())
     md_args.add("--ghc", haskell_toolchain.compiler)
     md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))

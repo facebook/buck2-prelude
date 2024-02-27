@@ -693,7 +693,11 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     libname = repr(ctx.label.path).replace("//", "_").replace("/", "_") + "_" + ctx.label.name
     pkgname = libname.replace("_", "-")
 
-    md_file = target_metadata(ctx, sources = ctx.attrs.srcs)
+    md_file = target_metadata(
+        ctx,
+        pkgname = pkgname,
+        sources = ctx.attrs.srcs,
+    )
 
     # The non-profiling library is also needed to build the package with
     # profiling enabled, so we need to keep track of it for each link style.
@@ -918,7 +922,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     if enable_profiling and link_style == LinkStyle("shared"):
         link_style = LinkStyle("static")
 
-    md_file = target_metadata(ctx, sources = ctx.attrs.srcs)
+    md_file = target_metadata(ctx, pkgname = "", sources = ctx.attrs.srcs)
 
     compiled = compile(
         ctx,
