@@ -17,6 +17,7 @@ The result is a JSON object with the following fields:
 import argparse
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import tempfile
@@ -76,14 +77,17 @@ def obtain_target_metadata(args):
     output_prefix = os.path.dirname(args.output.name)
     th_modules = determine_th_modules(args.source, args.source_prefix)
     ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source)
-    module_mapping, module_graph = interpret_ghc_depends(
-        ghc_depends, args.source_prefix)
+    deps_md = load_dependencies_metadata(args.dependency_metadata)
+    package_prefixes = calc_package_prefixes(deps_md)
+    module_mapping, module_graph, extgraph = interpret_ghc_depends(
+        ghc_depends, args.source_prefix, package_prefixes)
     return {
         "pkgname": args.pkgname,
         "output_prefix": output_prefix,
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
+        "external": extgraph,
     }
 
 
@@ -128,22 +132,40 @@ def run_ghc_depends(ghc, ghc_args, sources):
             return json.load(f)
 
 
-def interpret_ghc_depends(ghc_depends, source_prefix):
-    graph = {}
+def load_dependencies_metadata(fnames):
+    result = {}
+
+    for fname in fnames:
+        with open(fname) as f:
+            md = json.load(f)
+            result[md["pkgname"]] = md
+
+    return result
+
+
+def calc_package_prefixes(dependencies_metadata):
+    return {
+        md["output_prefix"]: pkgname
+        for pkgname, md in dependencies_metadata.items()
+    }
+
+
+def interpret_ghc_depends(ghc_depends, source_prefix, package_prefixes):
     mapping = {}
+    graph = {}
+    extgraph = {}
 
     for k, vs in ghc_depends.items():
         # remove lead `./` caused by using `-outputdir '.'`.
         k = strip_prefix_("./", k)
         vs = [strip_prefix_("./", v) for v in vs]
 
-        # TODO: Handle pkg-deps
-        vs = filter(lambda x: not x.startswith("buck-out"), vs)
-
         module_name = src_to_module_name(k)
-        intdeps = parse_module_deps(vs)
+        intdeps, extdeps = parse_module_deps(vs, package_prefixes)
 
         graph.setdefault(module_name, []).extend(intdeps)
+        for pkg, mods in extdeps.items():
+            extgraph.setdefault(module_name, {}).setdefault(pkg, []).extend(mods)
 
         ext = os.path.splitext(k)[1]
 
@@ -165,11 +187,12 @@ def interpret_ghc_depends(ghc_depends, source_prefix):
         if hs_module_name != module_name:
             mapping[hs_module_name] = module_name
 
-    return mapping, graph
+    return mapping, graph, extgraph
 
 
-def parse_module_deps(module_deps):
+def parse_module_deps(module_deps, package_prefixes):
     internal_deps = []
+    external_deps = {}
 
     for module_dep in module_deps:
         if is_haskell_src(module_dep):
@@ -178,9 +201,23 @@ def parse_module_deps(module_deps):
         if os.path.isabs(module_dep):
             continue
 
+        if (pkgdep := lookup_package_dep(module_dep, package_prefixes)) is not None:
+            pkgname, modname = pkgdep
+            external_deps.setdefault(pkgname, []).append(modname)
+            continue
+
         internal_deps.append(src_to_module_name(module_dep))
 
-    return internal_deps
+    return internal_deps, external_deps
+
+
+def lookup_package_dep(module_dep, package_prefixes):
+    module_path = Path(module_dep)
+    for pkg_prefix, pkgname in package_prefixes.items():
+        if module_path.is_relative_to(pkg_prefix):
+            sub_path = module_path.relative_to(pkg_prefix)
+            pkgdep = src_to_module_name("/".join(sub_path.parts[1:]))
+            return pkgname, pkgdep
 
 
 def src_to_module_name(x):
