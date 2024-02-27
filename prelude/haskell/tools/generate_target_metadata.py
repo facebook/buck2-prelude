@@ -79,15 +79,17 @@ def obtain_target_metadata(args):
     ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source)
     deps_md = load_dependencies_metadata(args.dependency_metadata)
     package_prefixes = calc_package_prefixes(deps_md)
-    module_mapping, module_graph, extgraph = interpret_ghc_depends(
+    module_mapping, module_graph, package_deps = interpret_ghc_depends(
         ghc_depends, args.source_prefix, package_prefixes)
+    transitive_deps = calc_transitive_deps(
+        args.pkgname, module_graph, package_deps, deps_md)
     return {
         "pkgname": args.pkgname,
         "output_prefix": output_prefix,
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
-        "external": extgraph,
+        "transitive_deps": transitive_deps,
     }
 
 
@@ -218,6 +220,24 @@ def lookup_package_dep(module_dep, package_prefixes):
             sub_path = module_path.relative_to(pkg_prefix)
             pkgdep = src_to_module_name("/".join(sub_path.parts[1:]))
             return pkgname, pkgdep
+
+
+def calc_transitive_deps(pkgname, module_graph, package_deps, deps_md):
+    result = {}
+
+    for modname, dep_mods in module_graph.items():
+        result[modname] = { pkgname: dep_mods } if dep_mods else {}
+
+    for modname, dep_pkgs in package_deps.items():
+        for dep_pkg, dep_mods in dep_pkgs.items():
+            result[modname][dep_pkg] = dep_mods
+
+            for dep_mod in dep_mods:
+                transitive_deps = deps_md[dep_pkg]["transitive_deps"][dep_mod]
+                for transitive_pkg, transitive_mods in transitive_deps.items():
+                    result[modname].setdefault(transitive_pkg, []).extend(transitive_mods)
+
+    return result
 
 
 def src_to_module_name(x):
