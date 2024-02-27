@@ -248,22 +248,24 @@ def parse_module_deps(module_deps, package_prefixes):
 
 
 def calc_transitive_deps(pkgname, module_graph, package_deps, deps_md):
-    result = {}
+    result = { modname: {} for modname in module_graph.keys() }
+
+    for modname, dep_pkgs in package_deps.items():
+        for dep_pkg, dep_pkg_mods in dep_pkgs.items():
+            result[modname][dep_pkg] = set(dep_pkg_mods)
+
+            for dep_pkg_mod in dep_pkg_mods:
+                transitive_deps = deps_md[dep_pkg]["transitive_deps"][dep_pkg_mod]
+                for transitive_pkg, transitive_mods in transitive_deps.items():
+                    result[modname].setdefault(transitive_pkg, set()).update(set(transitive_mods))
 
     for modname in graphlib.TopologicalSorter(module_graph).static_order():
         dep_mods = module_graph[modname]
-        result[modname] = { pkgname: set(dep_mods) } if dep_mods else {}
+        if dep_mods:
+            result[modname][pkgname] = set(dep_mods)
         for dep_mod in dep_mods:
-            result[modname][pkgname].update(result[dep_mod].get(pkgname, set()))
-
-    for modname, dep_pkgs in package_deps.items():
-        for dep_pkg, dep_mods in dep_pkgs.items():
-            result[modname][dep_pkg] = set(dep_mods)
-
-            for dep_mod in dep_mods:
-                transitive_deps = deps_md[dep_pkg]["transitive_deps"][dep_mod]
-                for transitive_pkg, transitive_mods in transitive_deps.items():
-                    result[modname].setdefault(transitive_pkg, set()).update(set(transitive_mods))
+            for dep_pkg, dep_pkg_mods in result[dep_mod].items():
+                result[modname].setdefault(dep_pkg, set()).update(dep_pkg_mods)
 
     return result
 
