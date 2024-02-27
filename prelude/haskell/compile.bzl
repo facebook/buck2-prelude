@@ -185,6 +185,11 @@ def target_metadata(
     )
     md_args.add(cmd_args(sources, format="--source={}"))
 
+    md_args.add(cmd_args(
+        _attr_deps_haskell_lib_metadata_files(ctx),
+        format="--dependency-metadata={}",
+    ))
+
     ctx.actions.run(md_args, category = "haskell_metadata")
 
     return md_file
@@ -197,6 +202,22 @@ def _attr_deps_haskell_link_infos(ctx: AnalysisContext) -> list[HaskellLinkInfo]
             for d in attr_deps(ctx) + ctx.attrs.template_deps
         ],
     )
+
+def _attr_deps_haskell_lib_metadata_files(ctx: AnalysisContext) -> list[Artifact]:
+    result = []
+
+    for dep in attr_deps(ctx) + ctx.attrs.template_deps:
+        lib = dep.get(HaskellLibraryProvider)
+        if lib == None:
+            continue
+
+        md = lib.metadata
+        if md == None:
+            continue
+
+        result.append(md)
+
+    return result
 
 def _attr_deps_haskell_lib_infos(
         ctx: AnalysisContext,

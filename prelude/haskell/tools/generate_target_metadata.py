@@ -58,6 +58,13 @@ def main():
         type=str,
         action="append",
         help="Haskell module source files of the current package.")
+    parser.add_argument(
+        "--dependency-metadata",
+        required=False,
+        default=[],
+        type=str,
+        action="append",
+        help="Path to the JSON metadata file of a package dependency.")
     args = parser.parse_args()
 
     result = obtain_target_metadata(args)
