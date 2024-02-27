@@ -70,7 +70,13 @@ def main():
 
     result = obtain_target_metadata(args)
 
-    json.dump(result, args.output, indent=4)
+    json.dump(result, args.output, indent=4, default=json_default_handler)
+
+
+def json_default_handler(o):
+    if isinstance(o, set):
+        return list(o)
+    raise TypeError(f'Object of type {o.__class__.__name__} is not JSON serializable')
 
 
 def obtain_target_metadata(args):
@@ -226,16 +232,16 @@ def calc_transitive_deps(pkgname, module_graph, package_deps, deps_md):
     result = {}
 
     for modname, dep_mods in module_graph.items():
-        result[modname] = { pkgname: dep_mods } if dep_mods else {}
+        result[modname] = { pkgname: set(dep_mods) } if dep_mods else {}
 
     for modname, dep_pkgs in package_deps.items():
         for dep_pkg, dep_mods in dep_pkgs.items():
-            result[modname][dep_pkg] = dep_mods
+            result[modname][dep_pkg] = set(dep_mods)
 
             for dep_mod in dep_mods:
                 transitive_deps = deps_md[dep_pkg]["transitive_deps"][dep_mod]
                 for transitive_pkg, transitive_mods in transitive_deps.items():
-                    result[modname].setdefault(transitive_pkg, []).extend(transitive_mods)
+                    result[modname].setdefault(transitive_pkg, set()).update(set(transitive_mods))
 
     return result
 
