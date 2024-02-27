@@ -243,7 +243,8 @@ def get_packages_info(
         ctx: AnalysisContext,
         link_style: LinkStyle,
         specify_pkg_version: bool,
-        enable_profiling: bool) -> PackagesInfo:
+        enable_profiling: bool,
+        transitive_deps: [None, dict[str, list[str]]] = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     # Collect library dependencies. Note that these don't need to be in a
@@ -267,7 +268,15 @@ def get_packages_info(
     packagedb_args = cmd_args()
 
     for lib in libs.values():
-        exposed_package_imports.extend(lib.import_dirs[enable_profiling])
+        if transitive_deps == None:
+            exposed_package_imports.extend(lib.import_dirs[enable_profiling])
+        elif lib.name in transitive_deps:
+            lib_module_deps = transitive_deps[lib.name]
+            exposed_package_imports.extend([
+                hi
+                for hi in lib.import_dirs[enable_profiling]
+                if src_to_module_name(hi.short_path) in lib_module_deps
+            ])
 
         # libs of dependencies might be needed at compile time if
         # we're using Template Haskell:
@@ -306,7 +315,8 @@ def _common_compile_args(
         link_style: LinkStyle,
         enable_profiling: bool,
         enable_th: bool,
-        pkgname: str | None) -> cmd_args:
+        pkgname: str | None,
+        transitive_deps: [None, dict[str, list[str]]] = None) -> cmd_args:
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     compile_args = cmd_args()
@@ -332,6 +342,7 @@ def _common_compile_args(
         link_style,
         specify_pkg_version = False,
         enable_profiling = enable_profiling,
+        transitive_deps = transitive_deps,
     )
 
     compile_args.add(packages_info.exposed_package_args)
@@ -424,7 +435,8 @@ def _compile_module_args(
         enable_profiling: bool,
         enable_th: bool,
         outputs: dict[Artifact, Artifact],
-        pkgname = None) -> CompileArgsInfo:
+        pkgname = None,
+        transitive_deps: [None, dict[str, list[str]]] = None) -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     compile_cmd = cmd_args()
@@ -435,7 +447,7 @@ def _compile_module_args(
     compile_cmd.add(ctx.attrs.compiler_flags)
     compile_cmd.add("-c")
 
-    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname)
+    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, transitive_deps = transitive_deps)
 
     object = outputs[module.object]
     hi = outputs[module.interface]
@@ -477,6 +489,7 @@ def _compile_module(
     modules: dict[str, _Module],
     md_file: Artifact,
     graph: dict[str, list[str]],
+    transitive_deps: dict[str, list[str]],
     outputs: dict[Artifact, Artifact],
     artifact_suffix: str,
     pkgname: str | None = None,
@@ -486,7 +499,7 @@ def _compile_module(
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     compile_cmd = cmd_args(haskell_toolchain.compiler)
 
-    args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, pkgname)
+    args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, pkgname, transitive_deps = transitive_deps)
 
     if args.args_for_file:
         if haskell_toolchain.use_argsfile:
@@ -534,8 +547,9 @@ def compile(
     def do_compile(ctx, artifacts, outputs, md_file=md_file, modules=modules):
         md = artifacts[md_file].read_json()
         th_modules = md["th_modules"]
-        graph = md["module_graph"]
         module_map = md["module_mapping"]
+        graph = md["module_graph"]
+        transitive_deps = md["transitive_deps"]
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
 
@@ -548,6 +562,7 @@ def compile(
                 module_name = module_name,
                 modules = mapped_modules,
                 graph = graph,
+                transitive_deps = transitive_deps[module_name],
                 outputs = outputs,
                 md_file=md_file,
                 artifact_suffix = artifact_suffix,
