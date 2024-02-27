@@ -153,10 +153,37 @@ def load_dependencies_metadata(fnames):
 
 
 def calc_package_prefixes(dependencies_metadata):
-    return {
-        md["output_prefix"]: pkgname
-        for pkgname, md in dependencies_metadata.items()
-    }
+    """Creates a trie to look up modules in dependency packages.
+
+    Package names are stored under the marker key `//pkgname`. This is
+    unambiguous since path components may not contain `/` characters.
+    """
+    result = {}
+    for pkgname, md in dependencies_metadata.items():
+        path = Path(md["output_prefix"])
+        layer = result
+        for part in path.parts:
+            layer = layer.setdefault(part, {})
+        layer["//pkgname"] = pkgname
+    return result
+
+
+def lookup_package_dep(module_dep, package_prefixes):
+    """Look up a cross-packge module dependency.
+
+    Assumes that `module_dep` is a relative path to an interface file of the form
+    `buck-out/.../__my_package__/mod-shared/Some/Package.hi`.
+    """
+    module_path = Path(module_dep)
+    layer = package_prefixes
+    for offset, part in enumerate(module_path.parts):
+        layer = layer.get(part, None)
+        if layer is None:
+            return None
+        elif "//pkgname" in layer:
+            pkgname = layer["//pkgname"]
+            modname = src_to_module_name("/".join(module_path.parts[offset+2:]))
+            return pkgname, modname
 
 
 def interpret_ghc_depends(ghc_depends, source_prefix, package_prefixes):
@@ -218,15 +245,6 @@ def parse_module_deps(module_deps, package_prefixes):
         internal_deps.append(src_to_module_name(module_dep))
 
     return internal_deps, external_deps
-
-
-def lookup_package_dep(module_dep, package_prefixes):
-    module_path = Path(module_dep)
-    for pkg_prefix, pkgname in package_prefixes.items():
-        if module_path.is_relative_to(pkg_prefix):
-            sub_path = module_path.relative_to(pkg_prefix)
-            pkgdep = src_to_module_name("/".join(sub_path.parts[1:]))
-            return pkgname, pkgdep
 
 
 def calc_transitive_deps(pkgname, module_graph, package_deps, deps_md):
