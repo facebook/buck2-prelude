@@ -15,6 +15,7 @@ The result is a JSON object with the following fields:
 """
 
 import argparse
+import graphlib
 import json
 import os
 from pathlib import Path
@@ -231,8 +232,11 @@ def lookup_package_dep(module_dep, package_prefixes):
 def calc_transitive_deps(pkgname, module_graph, package_deps, deps_md):
     result = {}
 
-    for modname, dep_mods in module_graph.items():
+    for modname in graphlib.TopologicalSorter(module_graph).static_order():
+        dep_mods = module_graph[modname]
         result[modname] = { pkgname: set(dep_mods) } if dep_mods else {}
+        for dep_mod in dep_mods:
+            result[modname][pkgname].update(result[dep_mod].get(pkgname, set()))
 
     for modname, dep_pkgs in package_deps.items():
         for dep_pkg, dep_mods in dep_pkgs.items():
