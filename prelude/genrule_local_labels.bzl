@@ -135,9 +135,6 @@ _GENRULE_LOCAL_LABELS = {label: True for label in [
     # When run on RE produces "Cache is out of space" (excessive disk/memory)
     "re_cache_out_of_space",
 
-    # When run on RE produces "Error, message length too large" on `BatchReadBlobs`
-    "re_message_too_large",
-
     # HHVM Post-link rules need to be local since the binary is huge.
     "hhvm_postlink",
 

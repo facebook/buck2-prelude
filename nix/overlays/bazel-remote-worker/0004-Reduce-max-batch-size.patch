@@ -1,0 +1,28 @@
+commit e47452fb67065fa05410c831bc9a5de9065541f6
+Author: Claudio Bley <claudio.bley@tweag.io>
+Date:   Tue Feb 27 10:19:20 2024 +0100
+
+    Configure the default max batch size to leave room for headers
+    
+    The default gRPC max transport message (including headers) is 4MiB and may be
+    enforced by the client when receiving a response.
+    
+    This can lead to problems when the response of a batch read request is larger
+    than this limit.
+    
+    Leave some room for the headers by setting the max batch size to 4MB.
+
+diff --git a/src/tools/remote/src/main/java/com/google/devtools/build/remote/worker/CasServer.java b/src/tools/remote/src/main/java/com/google/devtools/build/remote/worker/CasServer.java
+index d874b879af..6347bb669f 100644
+--- a/src/tools/remote/src/main/java/com/google/devtools/build/remote/worker/CasServer.java
++++ b/src/tools/remote/src/main/java/com/google/devtools/build/remote/worker/CasServer.java
+@@ -42,7 +42,7 @@ import java.util.Set;
+ /** A basic implementation of a {@link ContentAddressableStorageImplBase} service. */
+ final class CasServer extends ContentAddressableStorageImplBase {
+   private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+-  static final long MAX_BATCH_SIZE_BYTES = 1024 * 1024 * 4;
++  static final long MAX_BATCH_SIZE_BYTES = 1000 * 1000 * 4;
+   private final OnDiskBlobStoreCache cache;
+ 
+   public CasServer(OnDiskBlobStoreCache cache) {
+
