@@ -298,6 +298,7 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
         prof_info = prof_hlinkinfos,
     )
     haskell_lib_provider = HaskellLibraryProvider(
+        metadata = None,
         lib = hlibinfos,
         prof_lib = prof_hlibinfos,
     )
@@ -833,6 +834,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
             sub_targets = sub_targets,
         ),
         HaskellLibraryProvider(
+            metadata = md_file,
             lib = hlib_infos,
             prof_lib = prof_hlib_infos,
         ),
