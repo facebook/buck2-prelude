@@ -252,7 +252,7 @@ def calc_transitive_deps(pkgname, module_graph, package_deps, deps_md):
 
     for modname, dep_pkgs in package_deps.items():
         for dep_pkg, dep_pkg_mods in dep_pkgs.items():
-            result[modname][dep_pkg] = set(dep_pkg_mods)
+            result[modname].setdefault(dep_pkg, set()).update(dep_pkg_mods)
 
             for dep_pkg_mod in dep_pkg_mods:
                 transitive_deps = deps_md[dep_pkg]["transitive_deps"][dep_pkg_mod]
@@ -262,7 +262,7 @@ def calc_transitive_deps(pkgname, module_graph, package_deps, deps_md):
     for modname in graphlib.TopologicalSorter(module_graph).static_order():
         dep_mods = module_graph[modname]
         if dep_mods:
-            result[modname][pkgname] = set(dep_mods)
+            result[modname].setdefault(pkgname, set()).update(dep_mods)
         for dep_mod in dep_mods:
             for dep_pkg, dep_pkg_mods in result[dep_mod].items():
                 result[modname].setdefault(dep_pkg, set()).update(dep_pkg_mods)
