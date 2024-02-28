@@ -606,6 +606,10 @@ def _build_haskell_lib(
             True: compiled.hi,
             False: non_profiling_hlib.compiled.hi,
         }
+        object_artifacts = {
+            True: compiled.objects,
+            False: non_profiling_hlib.compiled.objects,
+        }
         library_artifacts = {
             True: lib,
             False: non_profiling_hlib.libs[0],
@@ -615,6 +619,9 @@ def _build_haskell_lib(
     else:
         import_artifacts = {
             False: compiled.hi,
+        }
+        object_artifacts = {
+            False: compiled.objects,
         }
         library_artifacts = {
             False: lib,
@@ -638,6 +645,7 @@ def _build_haskell_lib(
         db = db,
         id = pkgname,
         import_dirs = import_artifacts,
+        objects = object_artifacts,
         stub_dirs = stub_dirs,
         libs = all_libs,
         version = "1.0.0",

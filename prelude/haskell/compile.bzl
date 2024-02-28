@@ -75,6 +75,8 @@ HaskellLibraryInfo = record(
     id = str,
     # Import dirs indexed by profiling enabled/disabled
     import_dirs = dict[bool, list[Artifact]],
+    # Object files indexed by profiling enabled/disabled
+    objects = dict[bool, list[Artifact]],
     stub_dirs = list[Artifact],
 
     # This field is only used as hidden inputs to compilation, to
