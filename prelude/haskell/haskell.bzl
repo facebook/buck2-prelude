@@ -434,7 +434,7 @@ def _make_package(
     library_dirs = [
         mk_artifact_dir("lib", profiled)
         for profiled in hi.keys()
-    ]
+    ] + ["${pkgroot}/empty/lib-shared"]
 
     conf = [
         "name: " + pkgname,
@@ -580,6 +580,30 @@ def _build_haskell_lib(
             default = LinkInfo(linkables = [SharedLibLinkable(lib = lib)]),
         )
 
+        empty_lib = ctx.actions.declare_output("empty", lib_short_path)
+        empty_link = cmd_args(haskell_toolchain.linker)
+        empty_link.add("-o", empty_lib.as_output())
+        empty_link.add(
+            get_shared_library_flags(linker_info.type),
+            "-dynamic",
+            cmd_args(
+                _get_haskell_shared_library_name_linker_flags(linker_info.type, libfile),
+                prepend = "-optl",
+            ),
+        )
+        empty_link.add(ctx.actions.write("empty.c", ""))
+        empty_infos = get_link_args_for_strategy(
+            ctx,
+            nlis,
+            to_link_strategy(link_style),
+        )
+        empty_link.add(cmd_args(unpack_link_args(empty_infos), prepend = "-optl"))
+        ctx.actions.run(
+            empty_link,
+            category = "haskell_link_empty" + artifact_suffix.replace("-", "_"),
+        )
+        empty_libs = [empty_lib]
+
     else:  # static flavours
         # TODO: avoid making an archive for a single object, like cxx does
         # (but would that work with Template Haskell?)
@@ -597,6 +621,8 @@ def _build_haskell_lib(
                 ],
             ),
         )
+
+        empty_libs = []
 
     if enable_profiling and link_style != LinkStyle("shared"):
         if not non_profiling_hlib:
@@ -648,6 +674,7 @@ def _build_haskell_lib(
         objects = object_artifacts,
         stub_dirs = stub_dirs,
         libs = all_libs,
+        empty_libs = empty_libs,
         version = "1.0.0",
         is_prebuilt = False,
         profiling_enabled = enable_profiling,
