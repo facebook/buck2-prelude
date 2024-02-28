@@ -527,7 +527,9 @@ def _compile_module(
 
     for dep_name in breadth_first_traversal(graph, [module_name])[1:]:
         dep = modules[dep_name]
-        compile_cmd.hidden(dep.interface, dep.object)
+        compile_cmd.hidden(dep.interface)
+        if enable_th:
+            compile_cmd.hidden(dep.object)
 
     ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name)
 
