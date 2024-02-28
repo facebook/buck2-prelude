@@ -177,11 +177,10 @@ def lookup_package_dep(module_dep, package_prefixes):
     module_path = Path(module_dep)
     layer = package_prefixes
     for offset, part in enumerate(module_path.parts):
-        layer = layer.get(part, None)
-        if layer is None:
+        if (layer := layer.get(part)) is None:
             return None
-        elif "//pkgname" in layer:
-            pkgname = layer["//pkgname"]
+
+        if (pkgname := layer.get("//pkgname")) is not None:
             modname = src_to_module_name("/".join(module_path.parts[offset+2:]))
             return pkgname, modname
 
