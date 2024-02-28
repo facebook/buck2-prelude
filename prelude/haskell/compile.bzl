@@ -94,6 +94,7 @@ HaskellLibraryInfo = record(
 
 PackagesInfo = record(
     exposed_package_imports = field(list[Artifact]),
+    exposed_package_objects = field(list[Artifact]),
     exposed_package_libs = cmd_args,
     exposed_package_args = cmd_args,
     packagedb_args = cmd_args,
@@ -264,6 +265,7 @@ def get_packages_info(
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
     exposed_package_imports = []
+    exposed_package_objects = []
     exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
 
@@ -272,12 +274,18 @@ def get_packages_info(
     for lib in libs.values():
         if transitive_deps == None:
             exposed_package_imports.extend(lib.import_dirs[enable_profiling])
+            exposed_package_objects.extend(lib.objects[enable_profiling])
         elif lib.name in transitive_deps:
             lib_module_deps = transitive_deps[lib.name]
             exposed_package_imports.extend([
                 hi
                 for hi in lib.import_dirs[enable_profiling]
                 if src_to_module_name(hi.short_path) in lib_module_deps
+            ])
+            exposed_package_objects.extend([
+                o
+                for o in lib.objects[enable_profiling]
+                if src_to_module_name(o.short_path) in lib_module_deps
             ])
 
         # libs of dependencies might be needed at compile time if
@@ -305,6 +313,7 @@ def get_packages_info(
 
     return PackagesInfo(
         exposed_package_imports = exposed_package_imports,
+        exposed_package_objects = exposed_package_objects,
         exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
         packagedb_args = packagedb_args,
@@ -350,6 +359,8 @@ def _common_compile_args(
     compile_args.add(packages_info.exposed_package_args)
     compile_args.hidden(packages_info.exposed_package_imports)
     compile_args.add(packages_info.packagedb_args)
+    if enable_th:
+        compile_args.add(packages_info.exposed_package_objects)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
