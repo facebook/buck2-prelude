@@ -348,8 +348,6 @@ def _common_compile_args(
     compile_args.add(packages_info.exposed_package_args)
     compile_args.hidden(packages_info.exposed_package_imports)
     compile_args.add(packages_info.packagedb_args)
-    if enable_th:
-        compile_args.add(packages_info.exposed_package_libs)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
