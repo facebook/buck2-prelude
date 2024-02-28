@@ -278,6 +278,9 @@ def get_packages_info(
         if transitive_deps == None:
             exposed_package_imports.extend(lib.import_dirs[enable_profiling])
             exposed_package_objects.extend(lib.objects[enable_profiling])
+            # libs of dependencies might be needed at compile time if
+            # we're using Template Haskell:
+            exposed_package_libs.hidden(lib.libs)
         elif lib.name in transitive_deps:
             lib_module_deps = transitive_deps[lib.name]
             exposed_package_imports.extend([
@@ -290,10 +293,9 @@ def get_packages_info(
                 for o in lib.objects[enable_profiling]
                 if src_to_module_name(o.short_path) in lib_module_deps
             ])
-
-        # libs of dependencies might be needed at compile time if
-        # we're using Template Haskell:
-        exposed_package_libs.hidden(lib.libs)
+            # libs of dependencies might be needed at compile time if
+            # we're using Template Haskell:
+            exposed_package_libs.hidden(lib.empty_libs)
 
     for lib in libs.values():
         # These we need to add for all the packages/dependencies, i.e.
@@ -364,6 +366,7 @@ def _common_compile_args(
     compile_args.add(packages_info.packagedb_args)
     if enable_th:
         compile_args.add(packages_info.exposed_package_objects)
+        compile_args.add(packages_info.exposed_package_libs)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
