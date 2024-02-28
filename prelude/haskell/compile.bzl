@@ -332,6 +332,7 @@ def _common_compile_args(
         enable_profiling: bool,
         enable_th: bool,
         pkgname: str | None,
+        modname: str | None = None,
         transitive_deps: [None, dict[str, list[str]]] = None) -> cmd_args:
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
@@ -365,8 +366,16 @@ def _common_compile_args(
     compile_args.hidden(packages_info.exposed_package_imports)
     compile_args.add(packages_info.packagedb_args)
     if enable_th:
-        compile_args.add(packages_info.exposed_package_objects)
         compile_args.add(packages_info.exposed_package_libs)
+        if modname:
+            for o in packages_info.exposed_package_objects:
+                if o.extension != ".o":
+                    o_copy = ctx.actions.declare_output(modname, paths.replace_extension(o.short_path, ".o"))
+                    compile_args.add(ctx.actions.symlink_file(o_copy, o))
+                else:
+                    compile_args.add(o)
+        else:
+            compile_args.add(packages_info.exposed_package_objects)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
@@ -464,7 +473,7 @@ def _compile_module_args(
     compile_cmd.add(ctx.attrs.compiler_flags)
     compile_cmd.add("-c")
 
-    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, transitive_deps = transitive_deps)
+    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), transitive_deps = transitive_deps)
 
     object = outputs[module.object]
     hi = outputs[module.interface]
