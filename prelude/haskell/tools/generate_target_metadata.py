@@ -11,7 +11,7 @@ The result is a JSON object with the following fields:
 * `th_modules`: List of modules that require Template Haskell.
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
-* `transitive_deps`: Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]]`.
+* `transitive_deps`: Cross-package module dependencies in topological order starting at the leafs, `dict[modname, dict[pkgname, list[modname]]]`.
 """
 
 import argparse
@@ -70,13 +70,7 @@ def main():
 
     result = obtain_target_metadata(args)
 
-    json.dump(result, args.output, indent=4, sort_keys=True, default=json_default_handler)
-
-
-def json_default_handler(o):
-    if isinstance(o, set):
-        return sorted(o)
-    raise TypeError(f'Object of type {o.__class__.__name__} is not JSON serializable')
+    json.dump(result, args.output, indent=4)
 
 
 def obtain_target_metadata(args):
@@ -237,24 +231,36 @@ def parse_module_deps(module_deps, package_prefixes):
 
 
 def calc_transitive_deps(pkgname, module_graph, package_deps, deps_md):
-    result = { modname: {} for modname in module_graph.keys() }
+    result = {}
 
-    for modname, dep_pkgs in package_deps.items():
-        for dep_pkg, dep_pkg_mods in dep_pkgs.items():
-            result[modname].setdefault(dep_pkg, set()).update(dep_pkg_mods)
+    topo_modules = graphlib.TopologicalSorter(module_graph).static_order()
 
+    for modname in topo_modules:
+        result[modname] = {}
+
+        for dep_pkg, dep_pkg_mods in package_deps.get(modname, {}).items():
+            dep_pkg_trans_deps = deps_md[dep_pkg]["transitive_deps"]
             for dep_pkg_mod in dep_pkg_mods:
-                transitive_deps = deps_md[dep_pkg]["transitive_deps"][dep_pkg_mod]
-                for transitive_pkg, transitive_mods in transitive_deps.items():
-                    result[modname].setdefault(transitive_pkg, set()).update(set(transitive_mods))
+                for trans_pkg, trans_mods in dep_pkg_trans_deps[dep_pkg_mod].items():
+                    if trans_mods:
+                        result[modname].setdefault(trans_pkg, {}).update((m, None) for m in trans_mods)
 
-    for modname in graphlib.TopologicalSorter(module_graph).static_order():
-        dep_mods = module_graph[modname]
-        if dep_mods:
-            result[modname].setdefault(pkgname, set()).update(dep_mods)
-        for dep_mod in dep_mods:
-            for dep_pkg, dep_pkg_mods in result[dep_mod].items():
-                result[modname].setdefault(dep_pkg, set()).update(dep_pkg_mods)
+        for dep_pkg, dep_pkg_mods in package_deps.get(modname, {}).items():
+            if dep_pkg_mods:
+                result[modname].setdefault(dep_pkg, {}).update((m, None) for m in dep_pkg_mods)
+
+        for dep_mod in module_graph[modname]:
+            for trans_pkg, trans_mods in result[dep_mod].items():
+                if trans_mods:
+                    result[modname].setdefault(trans_pkg, {}).update((m, None) for m in trans_mods)
+
+        if module_graph[modname]:
+            result[modname].setdefault(pkgname, {}).update((m, None) for m in module_graph[modname])
+
+    for modname in result:
+        for dep_pkg in result[modname]:
+            dep_mods = list(result[modname][dep_pkg].keys())
+            result[modname][dep_pkg] = dep_mods
 
     return result
 
