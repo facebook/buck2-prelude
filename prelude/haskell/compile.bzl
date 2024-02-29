@@ -379,7 +379,8 @@ def _common_compile_args(
         if modname:
             for o in packages_info.exposed_package_objects:
                 if o.extension != ".o":
-                    o_copy = ctx.actions.declare_output(modname, paths.replace_extension(o.short_path, ".o"))
+                    prefix = o.owner.name + "-" + modname
+                    o_copy = ctx.actions.declare_output(prefix, paths.replace_extension(o.short_path, ".o"))
                     compile_args.add(ctx.actions.symlink_file(o_copy, o))
                 else:
                     compile_args.add(o)
