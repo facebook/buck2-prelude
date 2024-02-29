@@ -592,12 +592,6 @@ def _build_haskell_lib(
             ),
         )
         empty_link.add(ctx.actions.write("empty.c", ""))
-        empty_infos = get_link_args_for_strategy(
-            ctx,
-            nlis,
-            to_link_strategy(link_style),
-        )
-        empty_link.add(cmd_args(unpack_link_args(empty_infos), prepend = "-optl"))
         ctx.actions.run(
             empty_link,
             category = "haskell_link_empty" + artifact_suffix.replace("-", "_"),
