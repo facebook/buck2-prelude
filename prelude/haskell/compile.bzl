@@ -274,28 +274,37 @@ def get_packages_info(
 
     packagedb_args = cmd_args()
 
-    for lib in libs.values():
-        if transitive_deps == None:
+    if transitive_deps != None:
+        lib_objects = {}
+        lib_interfaces = {}
+        for lib in libs.values():
+            lib_objects[lib.name] = {}
+            lib_interfaces[lib.name] = {}
+
+            for o in lib.objects[enable_profiling]:
+                lib_objects[lib.name][src_to_module_name(o.short_path)] = o
+
+            for hi in lib.import_dirs[enable_profiling]:
+                lib_interfaces[lib.name][src_to_module_name(hi.short_path)] = hi
+
+            # libs of dependencies might be needed at compile time if
+            # we're using Template Haskell:
+            exposed_package_libs.hidden(lib.empty_libs)
+
+        for pkg, mods in transitive_deps.items():
+            if not pkg in lib_objects:
+                # TODO More robust handling. We want to skip self-package references here.
+                continue
+            for mod in mods:
+                exposed_package_objects.append(lib_objects[pkg][mod])
+                exposed_package_imports.append(lib_interfaces[pkg][mod])
+    else:
+        for lib in libs.values():
             exposed_package_imports.extend(lib.import_dirs[enable_profiling])
             exposed_package_objects.extend(lib.objects[enable_profiling])
             # libs of dependencies might be needed at compile time if
             # we're using Template Haskell:
             exposed_package_libs.hidden(lib.libs)
-        elif lib.name in transitive_deps:
-            lib_module_deps = transitive_deps[lib.name]
-            exposed_package_imports.extend([
-                hi
-                for hi in lib.import_dirs[enable_profiling]
-                if src_to_module_name(hi.short_path) in lib_module_deps
-            ])
-            exposed_package_objects.extend([
-                o
-                for o in lib.objects[enable_profiling]
-                if src_to_module_name(o.short_path) in lib_module_deps
-            ])
-            # libs of dependencies might be needed at compile time if
-            # we're using Template Haskell:
-            exposed_package_libs.hidden(lib.empty_libs)
 
     for lib in libs.values():
         # These we need to add for all the packages/dependencies, i.e.
