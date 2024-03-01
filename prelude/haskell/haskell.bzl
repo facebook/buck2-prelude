@@ -14,6 +14,10 @@ load(
     "get_auto_link_group_specs",
 )
 load(
+    "@prelude//cxx:cxx_context.bzl",
+    "get_cxx_toolchain_info",
+)
+load(
     "@prelude//cxx:cxx_toolchain_types.bzl",
     "CxxToolchainInfo",
     "PicBehavior",
@@ -40,6 +44,7 @@ load(
 load(
     "@prelude//cxx:linker.bzl",
     "LINKERS",
+    "get_rpath_origin",
     "get_shared_library_flags",
 )
 load(
