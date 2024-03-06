@@ -19,7 +19,6 @@ import graphlib
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import tempfile
 
@@ -82,8 +81,8 @@ def json_default_handler(o):
 
 def obtain_target_metadata(args):
     output_prefix = os.path.dirname(args.output.name)
-    th_modules = determine_th_modules(args.source, args.source_prefix)
-    ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source)
+    ghc_depends, ghc_options = run_ghc_depends(args.ghc, args.ghc_arg, args.source)
+    th_modules = determine_th_modules(ghc_options, args.source_prefix)
     deps_md = load_dependencies_metadata(args.dependency_metadata)
     package_prefixes = calc_package_prefixes(deps_md)
     module_mapping, module_graph, package_deps = interpret_ghc_depends(
@@ -100,32 +99,26 @@ def obtain_target_metadata(args):
     }
 
 
-def determine_th_modules(sources, source_prefix):
-    result = []
-
-    for fname in sources:
-        if uses_th(fname):
-            module_name = src_to_module_name(
-                strip_prefix_(source_prefix, fname).lstrip("/"))
-            result.append(module_name)
-
-    return result
+def determine_th_modules(ghc_options, source_prefix):
+    return [
+        src_to_module_name(strip_prefix_(source_prefix, fname).lstrip("/"))
+        for fname, opts in ghc_options.items()
+        if uses_th(opts)
+    ]
 
 
-th_regex = re.compile(r"^\s*{-# LANGUAGE (TemplateHaskell|TemplateHaskellQuotes|QuasiQuotes) #-}")
+__TH_EXTENSIONS = ["TemplateHaskell", "TemplateHaskellQuotes", "QuasiQuotes"]
 
 
-def uses_th(filename):
-    """Determine if the given module uses Template Haskell."""
-    with open(filename, "r") as file:
-        for line in file:
-            if th_regex.match(line):
-                return True
+def uses_th(opts):
+    """Determine if a Template Haskell extension is enabled."""
+    return any([f"-X{ext}" in opts for ext in __TH_EXTENSIONS])
 
 
 def run_ghc_depends(ghc, ghc_args, sources):
     with tempfile.TemporaryDirectory() as dname:
         json_fname = os.path.join(dname, "depends.json")
+        opt_json_fname = os.path.join(dname, "options.json")
         make_fname = os.path.join(dname, "depends.make")
         args = [
             ghc, "-M", "-include-pkg-deps",
@@ -133,12 +126,13 @@ def run_ghc_depends(ghc, ghc_args, sources):
             #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
             "-outputdir", ".",
             "-dep-json", json_fname,
+            "-opt-json", opt_json_fname,
             "-dep-makefile", make_fname,
         ] + ghc_args + sources
         subprocess.run(args, check=True)
 
-        with open(json_fname) as f:
-            return json.load(f)
+        with open(json_fname) as f, open(opt_json_fname) as o:
+            return json.load(f), json.load(o)
 
 
 def load_dependencies_metadata(fnames):
