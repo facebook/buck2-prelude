@@ -185,10 +185,6 @@ def interpret_ghc_depends(ghc_depends, source_prefix, package_prefixes):
     extgraph = {}
 
     for k, vs in ghc_depends.items():
-        # remove lead `./` caused by using `-outputdir '.'`.
-        k = strip_prefix_("./", k)
-        vs = [strip_prefix_("./", v) for v in vs]
-
         module_name = src_to_module_name(k)
         intdeps, extdeps = parse_module_deps(vs, package_prefixes)
 
