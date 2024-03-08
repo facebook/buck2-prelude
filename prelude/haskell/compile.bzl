@@ -65,8 +65,8 @@ PackagesInfo = record(
 
 _Module = record(
     source = field(Artifact),
-    interface = field(Artifact),
-    object = field(Artifact),
+    interfaces = field(list[Artifact]),
+    objects = field(list[Artifact]),
     stub_dir = field(Artifact),
     prefix_dir = field(str),
 )
@@ -90,10 +90,22 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
         module_name = src_to_module_name(src.short_path)
         interface_path = paths.replace_extension(src.short_path, "." + hisuf)
         interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
+        interfaces = [interface]
         object_path = paths.replace_extension(src.short_path, "." + osuf)
         object = ctx.actions.declare_output("mod-" + suffix, object_path)
+        objects = [object]
+
+        if link_style in [LinkStyle("static"), LinkStyle("static_pic")]:
+            dyn_osuf, dyn_hisuf = output_extensions(LinkStyle("shared"), enable_profiling)
+            interface_path = paths.replace_extension(src.short_path, "." + dyn_hisuf)
+            interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
+            interfaces.append(interface)
+            object_path = paths.replace_extension(src.short_path, "." + dyn_osuf)
+            object = ctx.actions.declare_output("mod-" + suffix, object_path)
+            objects.append(object)
+
         stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
-        modules[module_name] = _Module(source = src, interface = interface, object = object, stub_dir = stub_dir, prefix_dir = "mod-" + suffix)
+        modules[module_name] = _Module(source = src, interfaces = interfaces, objects = objects, stub_dir = stub_dir, prefix_dir = "mod-" + suffix)
 
     return modules
 
@@ -415,13 +427,19 @@ def _compile_module_args(
 
     compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), transitive_deps = transitive_deps)
 
-    object = outputs[module.object]
-    hi = outputs[module.interface]
+    objects = [outputs[obj] for obj in module.objects]
+    his = [outputs[hi] for hi in module.interfaces]
     stubs = outputs[module.stub_dir]
 
-    compile_args.add("-ohi", cmd_args(hi.as_output()))
-    compile_args.add("-o", cmd_args(object.as_output()))
+    compile_args.add("-outputdir", cmd_args([cmd_args(stubs.as_output()).parent(), module.prefix_dir], delimiter="/"))
+    compile_args.add("-o", objects[0].as_output())
+    compile_args.add("-ohi", his[0].as_output())
     compile_args.add("-stubdir", stubs.as_output())
+
+    if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
+        compile_args.add("-dynamic-too")
+        compile_args.add("-dyno", objects[1].as_output())
+        compile_args.add("-dynohi", his[1].as_output())
 
     srcs = cmd_args(module.source)
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
@@ -434,8 +452,8 @@ def _compile_module_args(
 
     return CompileArgsInfo(
         result = CompileResultInfo(
-            objects = [object],
-            hi = [hi],
+            objects = objects,
+            hi = his,
             stubs = stubs,
             producing_indices = producing_indices,
         ),
@@ -493,9 +511,9 @@ def _compile_module(
 
     for dep_name in breadth_first_traversal(graph, [module_name])[1:]:
         dep = modules[dep_name]
-        compile_cmd.hidden(dep.interface)
+        compile_cmd.hidden(dep.interfaces)
         if enable_th:
-            compile_cmd.hidden(dep.object)
+            compile_cmd.hidden(dep.objects)
 
     ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name)
 
@@ -537,8 +555,8 @@ def compile(
                 pkgname = pkgname,
             )
 
-    interfaces = [module.interface for module in modules.values()]
-    objects = [module.object for module in modules.values()]
+    interfaces = [interface for module in modules.values() for interface in module.interfaces]
+    objects = [object for module in modules.values() for object in module.objects]
     stub_dirs = [module.stub_dir for module in modules.values()]
 
     ctx.actions.dynamic_output(
