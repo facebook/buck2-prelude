@@ -306,7 +306,7 @@ def _build_haskell_omnibus_so(ctx: AnalysisContext) -> HaskellOmnibusData:
         soname,
         opts = link_options(
             links = [
-                LinkArgs(flags = extra_ldflags),
+                LinkArgs(flags = cmd_args(cmd_args(extra_ldflags, delimiter=","), format="-Wl,{}")),
                 LinkArgs(infos = body_link_infos.values()),
                 LinkArgs(infos = tp_deps_shared_link_infos.values()),
             ],
