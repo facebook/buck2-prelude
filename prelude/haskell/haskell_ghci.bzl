@@ -648,7 +648,8 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
 
             for prof, import_dir in lib.import_dirs.items():
                 artifact_suffix = get_artifact_suffix(link_style, prof)
-                lib_symlinks["hi-" + artifact_suffix] = import_dir
+                for imp in import_dir:
+                    lib_symlinks["mod-" + artifact_suffix + "/" + imp.short_path] = imp
 
             for o in lib.libs:
                 lib_symlinks[o.short_path] = o
