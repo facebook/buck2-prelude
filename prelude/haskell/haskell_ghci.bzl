@@ -615,7 +615,8 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
         enable_profiling,
     )
 
-    link_style = LinkStyle("static_pic")
+    link_style = LinkStyle("shared")
+    #link_style = LinkStyle("static_pic")
 
     packages_info = get_packages_info(
         ctx,
