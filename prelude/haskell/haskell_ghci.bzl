@@ -52,6 +52,11 @@ load(
     "traverse_shared_library_info",
 )
 load(
+    "@prelude//cxx:linker.bzl",
+    "get_rpath_origin",
+    "get_shared_library_flags",
+)
+load(
     "@prelude//utils:graph_utils.bzl",
     "breadth_first_traversal",
     "breadth_first_traversal_by",
@@ -294,7 +299,7 @@ def _build_haskell_omnibus_so(ctx: AnalysisContext) -> HaskellOmnibusData:
     soname = "libghci_dependencies.so"
     extra_ldflags = [
         "-rpath",
-        "$ORIGIN/{}".format(so_symlinks_root_path),
+        "{}/{}".format(get_rpath_origin(linker_info.type), so_symlinks_root_path)
     ]
     link_result = cxx_link_shared_library(
         ctx,
