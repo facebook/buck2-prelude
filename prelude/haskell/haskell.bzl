@@ -953,7 +953,15 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     link.add(haskell_toolchain.linker_flags)
     link.add(ctx.attrs.linker_flags)
 
-    link.add(compiled.objects)
+    objects = {}
+    # only add the first object per module
+    # TODO[CB] restructure this to use a record / dict for compiled.objects
+    for obj in compiled.objects:
+        key = paths.replace_extension(obj.short_path, "")
+        if not key in objects:
+            objects[key] = obj
+
+    link.add(objects.values())
 
     indexing_tsets = {}
     if compiled.producing_indices:
