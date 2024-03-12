@@ -953,6 +953,8 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     link.add(haskell_toolchain.linker_flags)
     link.add(ctx.attrs.linker_flags)
 
+    link.hidden(packages_info.exposed_package_libs)
+
     objects = {}
     # only add the first object per module
     # TODO[CB] restructure this to use a record / dict for compiled.objects
