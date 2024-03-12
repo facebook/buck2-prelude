@@ -80,7 +80,7 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
             cmd.add(cmd_args(argsfile, format = "@{}"))
             cmd.hidden(fileargs)
         else:
-            cmd.add(args.args_for_file)
+            cmd.add(cmd_args(args.args_for_file, format = "--optghc={}"))
 
     # Buck2 requires that the output artifacts are always produced, but Haddock only
     # creates them if it needs to, so we need a wrapper script to mkdir the outputs.
