@@ -53,6 +53,7 @@ load(
     "@prelude//haskell:compile.bzl",
     "CompileResultInfo",
     "compile",
+    "get_packages_info",
     "target_metadata",
 )
 load(
@@ -932,10 +933,22 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+    packages_info = get_packages_info(
+        ctx,
+        link_style,
+        specify_pkg_version = False,
+        enable_profiling = enable_profiling,
+        use_empty_lib = False,
+    )
+
     output = ctx.actions.declare_output(ctx.attrs.name)
     link = cmd_args(haskell_toolchain.compiler)
     link.add("-hide-all-packages")
     link.add(cmd_args(toolchain_libs, prepend="-package"))
+    link.add(cmd_args(packages_info.exposed_package_args))
+    link.add(packages_info.packagedb_args)
     link.add("-o", output.as_output())
     link.add(haskell_toolchain.linker_flags)
     link.add(ctx.attrs.linker_flags)
