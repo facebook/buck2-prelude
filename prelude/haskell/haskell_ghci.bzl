@@ -16,7 +16,6 @@ load(
     "@prelude//cxx:link_types.bzl",
     "link_options",
 )
-load("@prelude//decls:common.bzl", "Linkage")
 load(
     "@prelude//haskell:compile.bzl",
     "HaskellLibraryInfo",
@@ -51,6 +50,7 @@ load(
     "SharedLibraryInfo",
     "traverse_shared_library_info",
 )
+load("@prelude//linking:types.bzl", "Linkage")
 load(
     "@prelude//cxx:linker.bzl",
     "get_rpath_origin",
