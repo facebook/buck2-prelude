@@ -136,16 +136,18 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
     script = ctx.actions.declare_output("haddock-script")
     script_args = cmd_args([
         "#!/bin/sh",
-        "set -ueo pipefail",
-        cmd_args(cmd, delimiter = " ", quote = "shell"),
-    ])
-    for dir in dep_htmls:
-        script_args.add(
-            cmd_args(
-                ["cp", "-Rf", "--reflink=auto", cmd_args(dir, format = "{}/*"), out.as_output()],
-                delimiter = " ",
-            ),
+        cmd_args(
+            cmd_args(cmd, delimiter = " ", quote = "shell"),
+            [
+                cmd_args(
+                    ["cp", "-Rf", "--reflink=auto", cmd_args(dir, format = "{}/*"), out.as_output()],
+                    delimiter = " ",
+                ) for dir in dep_htmls
+            ],
+            delimiter = " && "
         )
+    ])
+
     ctx.actions.write(
         script,
         script_args,
