@@ -168,7 +168,7 @@ haskell_library = prelude_rule(
         haskell_common.scripts_arg() |
         buck.platform_deps_arg() |
         native_common.link_whole(link_whole_type = attrs.bool(default = False)) |
-        native_common.preferred_linkage(preferred_linkage_type = attrs.enum(Linkage)) |
+        native_common.preferred_linkage(preferred_linkage_type = attrs.enum(Linkage.values())) |
         {
             "contacts": attrs.list(attrs.string(), default = []),
             "default_host_platform": attrs.option(attrs.configuration_label(), default = None),

@@ -16,6 +16,7 @@ load(
     "@prelude//cxx:link_types.bzl",
     "link_options",
 )
+load("@prelude//decls:common.bzl", "Linkage")
 load(
     "@prelude//haskell:compile.bzl",
     "HaskellLibraryInfo",
@@ -34,7 +35,6 @@ load(
     "LinkArgs",
     "LinkInfo",
     "LinkStyle",
-    "Linkage",
     "get_lib_output_style",
     "set_linkable_link_whole",
     "to_link_strategy",
