@@ -29,6 +29,7 @@ load(
     "get_rpath_origin",
     "get_shared_library_flags",
 )
+load("@prelude//cxx:groups.bzl", "get_dedupped_roots_from_groups")
 load(
     "@prelude//cxx:link_groups.bzl",
     "LinkGroupContext",
@@ -1059,12 +1060,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         link_group_relevant_roots = find_relevant_roots(
             linkable_graph_node_map = linkable_graph_node_map,
             link_group_mappings = link_group_info.mappings,
-            roots = [
-                mapping.root
-                for group in link_group_info.groups.values()
-                for mapping in group.mappings
-                if mapping.root != None
-            ],
+            roots = get_dedupped_roots_from_groups(link_group_info.groups.values()),
         )
 
         labels_to_links_map = get_filtered_labels_to_links_map(
