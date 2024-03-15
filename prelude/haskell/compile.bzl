@@ -250,7 +250,8 @@ def get_packages_info(
         link_style: LinkStyle,
         specify_pkg_version: bool,
         enable_profiling: bool,
-        transitive_deps: [None, dict[str, list[str]]] = None) -> PackagesInfo:
+        transitive_deps: [None, dict[str, list[str]]] = None,
+        pkgname: str | None = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     # Collect library dependencies. Note that these don't need to be in a
@@ -292,8 +293,8 @@ def get_packages_info(
             exposed_package_libs.hidden(lib.empty_libs)
 
         for pkg, mods in transitive_deps.items():
-            if not pkg in lib_objects:
-                # TODO More robust handling. We want to skip self-package references here.
+            if pkg == pkgname:
+                # Skip dependencies from the same package.
                 continue
             for mod in mods:
                 exposed_package_objects.append(lib_objects[pkg][mod])
@@ -369,6 +370,7 @@ def _common_compile_args(
         specify_pkg_version = False,
         enable_profiling = enable_profiling,
         transitive_deps = transitive_deps,
+        pkgname = pkgname,
     )
 
     compile_args.add(packages_info.exposed_package_args)
