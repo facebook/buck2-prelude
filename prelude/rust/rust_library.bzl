@@ -467,7 +467,7 @@ def _build_library_artifacts(
         link, meta = rust_compile_multi(
             ctx = ctx,
             compile_ctx = compile_ctx,
-            emits = [Emit("link"), Emit("metadata")],
+            emits = [Emit("link"), Emit("metadata-full")],
             params = params,
             default_roots = ["lib.rs"],
         )
