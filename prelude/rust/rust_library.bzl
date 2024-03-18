@@ -110,6 +110,7 @@ load(
 )
 load(
     ":outputs.bzl",
+    "RustcExtraOutputsInfo",
     "RustcOutput",  # @unused Used as a type
     "output_as_diag_subtargets",
 )
@@ -273,7 +274,7 @@ def rust_library_impl(ctx: AnalysisContext) -> list[Provider]:
     # `LibOutputStyle` ensures that the subtarget shares work with the main
     # build if possible
     check_params = lang_style_param[(LinkageLang("rust"), LibOutputStyle("archive"))]
-    check_artifacts = output_as_diag_subtargets(artifacts[check_params][MetadataKind("full")])
+    check_artifacts = artifacts[check_params]
 
     # For doctests, we need to know two things to know how to link them. The
     # first is that we need a link strategy, which affects how deps of this
@@ -371,19 +372,21 @@ def rust_library_impl(ctx: AnalysisContext) -> list[Provider]:
         rustdoc = rustdoc,
         rustdoc_test = rustdoc_test,
         doctests_enabled = doctests_enabled,
-        check_artifacts = check_artifacts,
+        check_artifacts = output_as_diag_subtargets(check_artifacts[MetadataKind("full")]),
         expand = expand.output,
         sources = compile_ctx.symlinked_srcs,
         rustdoc_coverage = rustdoc_coverage,
     )
-    rust_link_info = _rust_providers(
+    rust_link_info, rust_extra_outputs_info = _rust_providers(
         ctx = ctx,
         compile_ctx = compile_ctx,
         lang_style_param = lang_style_param,
         param_artifact = rust_param_artifact,
+        check_artifacts = check_artifacts,
         link_infos = link_infos,
     )
     providers.append(rust_link_info)
+    providers.append(rust_extra_outputs_info)
     providers += _native_providers(
         ctx = ctx,
         compile_ctx = compile_ctx,
@@ -692,7 +695,8 @@ def _rust_providers(
         compile_ctx: CompileContext,
         lang_style_param: dict[(LinkageLang, LibOutputStyle), BuildParams],
         param_artifact: dict[BuildParams, dict[MetadataKind, RustcOutput]],
-        link_infos: dict[LibOutputStyle, LinkInfos]) -> RustLinkInfo:
+        check_artifacts: dict[MetadataKind, RustcOutput],
+        link_infos: dict[LibOutputStyle, LinkInfos]) -> (RustLinkInfo, RustcExtraOutputsInfo):
     """
     Return the set of providers for Rust linkage.
     """
@@ -718,7 +722,12 @@ def _rust_providers(
         linkable_graphs = inherited_graphs,
     )
 
-    return rust_link_info
+    rust_extra_outputs = RustcExtraOutputsInfo(
+        metadata_full = check_artifacts[MetadataKind("full")],
+        metadata_fast = check_artifacts[MetadataKind("fast")],
+    )
+
+    return (rust_link_info, rust_extra_outputs)
 
 def _link_infos(
         ctx: AnalysisContext,
