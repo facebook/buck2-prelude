@@ -168,11 +168,6 @@ def _solution_for_haskell_lib(ctx, target, exclude):
     haskell_toolchain = ctx.analysis(resolved_attrs._haskell_toolchain.label)
     toolchain = haskell_toolchain.providers().get(HaskellToolchainInfo)
 
-    binutils_path = paths.join(root, toolchain.ghci_binutils_path)
-    cc_path = paths.join(root, toolchain.ghci_cc_path)
-    cxx_path = paths.join(root, toolchain.ghci_cxx_path)
-    cpp_path = paths.join(root, toolchain.ghci_cpp_path)
-
     flags = [
         "-this-unit-id",
         "fbcode_fake_unit_id",
@@ -182,13 +177,30 @@ def _solution_for_haskell_lib(ctx, target, exclude):
         "-no-global-package-db",
         "-no-user-package-db",
         "-hide-all-packages",
-        "-pgma%s" % cc_path,
-        "-pgml%s" % cxx_path,
-        "-pgmc%s" % cc_path,
-        "-pgmP%s" % cpp_path,
-        "-opta-B%s" % binutils_path,
-        "-optc-B%s" % binutils_path,
     ]
+
+    if toolchain.ghci_binutils_path:
+        binutils_path = paths.join(root, toolchain.ghci_binutils_path)
+        flags.extend([
+            "-opta-B%s" % binutils_path,
+            "-optc-B%s" % binutils_path,
+        ])
+
+    if toolchain.ghci_cc_path:
+        cc_path = paths.join(root, toolchain.ghci_cc_path)
+        flags.extend([
+            "-pgma%s" % cc_path,
+            "-pgmc%s" % cc_path,
+        ])
+
+    if toolchain.ghci_cxx_path:
+        cxx_path = paths.join(root, toolchain.ghci_cxx_path)
+        flags.append("-pgml%s" % cxx_path)
+
+    if toolchain.ghci_cpp_path:
+        cpp_path = paths.join(root, toolchain.ghci_cpp_path)
+        flags.append("-pgmP%s" % cpp_path)
+
     flags.extend(resolved_attrs.compiler_flags)
 
     return {
