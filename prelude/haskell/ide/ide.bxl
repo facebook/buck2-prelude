@@ -7,7 +7,7 @@
 
 load("@prelude//haskell:compile.bzl", "HaskellLibraryProvider")
 load("@prelude//haskell:link_info.bzl", "HaskellLinkInfo")
-load("@prelude//haskell:toolchain.bzl", "HaskellToolchainInfo")
+load("@prelude//haskell:toolchain.bzl", "HaskellToolchainInfo", "HaskellToolchainLibrary")
 load("@prelude//haskell:util.bzl", "is_haskell_src", "srcs_to_pairs")
 load("@prelude//linking:link_info.bzl", "LinkStyle")
 load("@prelude//paths.bzl", "paths")
@@ -143,12 +143,19 @@ def _solution_for_haskell_lib(ctx, target, exclude):
     hli = ctx.analysis(target).providers().get(HaskellLibraryProvider)
 
     haskellLibs = {}
+    toolchain_libs = []
+
     for dep in resolved_attrs.deps + resolved_attrs.template_deps:
         if exclude.get(dep.label) == None:
             providers = ctx.analysis(dep.label).providers()
             lb = providers.get(HaskellLinkInfo)
             if lb != None:
                 haskellLibs[dep.label] = lb
+                continue
+
+            lb = providers.get(HaskellToolchainLibrary)
+            if lb != None:
+                toolchain_libs.append(lb.name)
 
     target_srcs = {
         k: v
@@ -212,6 +219,7 @@ def _solution_for_haskell_lib(ctx, target, exclude):
         "flags": flags,
         "generated_dependencies": externalSourcesForTarget(ctx, target),
         "haskell_deps": haskellLibs,
+        "toolchain_libs": toolchain_libs,
         "import_dirs": import_dirs.keys(),
         "sources": sources,
         "targets": targetsForTarget(ctx, target),
@@ -288,6 +296,9 @@ def _assembleSolution(ctx, linkStyle, result):
         ctx.output.ensure_multiple(hli.libs)
         ctx.output.ensure_multiple(hli.import_dirs.values())
         package_dbs[hli.db] = ()
+    for lib in result["toolchain_libs"]:
+        flags.append("-package")
+        flags.append(lib)
     for pkgdb in ctx.output.ensure_multiple(package_dbs.keys()):
         flags.append("-package-db")
         flags.append(pkgdb.abs_path())
