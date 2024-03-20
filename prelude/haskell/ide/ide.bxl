@@ -185,7 +185,6 @@ def _solution_for_haskell_lib(ctx, target, exclude):
         "-optP-undef",
         "-optP-traditional-cpp",
         "-I.",
-        "-no-global-package-db",
         "-no-user-package-db",
         "-hide-all-packages",
     ]
