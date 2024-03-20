@@ -8,6 +8,7 @@
 load("@prelude//haskell:compile.bzl", "HaskellLibraryProvider")
 load("@prelude//haskell:link_info.bzl", "HaskellLinkInfo")
 load("@prelude//haskell:toolchain.bzl", "HaskellToolchainInfo")
+load("@prelude//haskell:util.bzl", "srcs_to_pairs")
 load("@prelude//linking:link_info.bzl", "LinkStyle")
 load("@prelude//paths.bzl", "paths")
 
@@ -149,13 +150,15 @@ def _solution_for_haskell_lib(ctx, target, exclude):
             if lb != None:
                 haskellLibs[dep.label] = lb
 
-    sources = []
-    for item in ctx.output.ensure_multiple(resolved_attrs.srcs.values()):
-        sources.append(item.abs_path())
+    target_srcs = dict(srcs_to_pairs(resolved_attrs.srcs))
+    sources = [
+        item.abs_path()
+        for item in ctx.output.ensure_multiple(target_srcs.values())
+    ]
 
     import_dirs = {}
     root = ctx.root()
-    for key, item in resolved_attrs.srcs.items():
+    for key, item in target_srcs.items():
         # because BXL wont give you the path of an ensured artifact
         sp = get_path_without_materialization(item, ctx)
         (_, ext) = paths.split_extension(sp)
