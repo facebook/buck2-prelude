@@ -293,7 +293,8 @@ def _assembleSolution(ctx, linkStyle, result):
         flags.append(hli.name)
         ctx.output.ensure_multiple(hli.stub_dirs)
         ctx.output.ensure_multiple(hli.libs)
-        ctx.output.ensure_multiple(hli.import_dirs.values())
+        import_dirs = [d for ds in hli.import_dirs.values() for d in ds]
+        ctx.output.ensure_multiple(import_dirs)
         package_dbs[hli.db] = ()
     for lib in result["toolchain_libs"]:
         flags.append("-package")
