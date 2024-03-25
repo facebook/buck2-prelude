@@ -188,6 +188,7 @@ def _solution_for_haskell_lib(ctx, target, exclude):
         "-I.",
         "-no-user-package-db",
         "-hide-all-packages",
+        "-i",
     ]
 
     if toolchain.ghci_binutils_path:
