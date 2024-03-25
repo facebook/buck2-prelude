@@ -181,7 +181,7 @@ def _solution_for_haskell_lib(ctx, target, exclude):
 
     flags = [
         "-this-unit-id",
-        "fbcode_fake_unit_id",
+        "{}-fake_unit_id".format(target.label.name),
         "-dynamic",
         "-optP-undef",
         "-optP-traditional-cpp",
