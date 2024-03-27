@@ -397,9 +397,7 @@ PKGCONF=$3
 #  - controlling module visibility: only dependencies that are
 #    directly declared as dependencies may be used
 #
-#  - Template Haskell: the compiler needs to load libraries itself
-#    at compile time, so it uses the package specs to find out
-#    which libraries and where.
+#  - by GHCi when loading packages into the repl
 def _make_package(
         ctx: AnalysisContext,
         link_style: LinkStyle,
@@ -408,7 +406,8 @@ def _make_package(
         hlis: list[HaskellLibraryInfo],
         hi: dict[bool, list[Artifact]],
         lib: dict[bool, Artifact],
-        enable_profiling: bool) -> Artifact:
+        enable_profiling: bool,
+        use_empty_lib: bool) -> Artifact:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
     # Don't expose boot sources, as they're only meant to be used for compiling.
@@ -431,10 +430,10 @@ def _make_package(
         mk_artifact_dir("mod", profiled)
         for profiled in hi.keys()
     ]
-    library_dirs = [
+    library_dirs = ["${pkgroot}/empty/lib-shared"] if use_empty_lib else [
         mk_artifact_dir("lib", profiled)
         for profiled in hi.keys()
-    ] + ["${pkgroot}/empty/lib-shared"]
+    ]
 
     conf = [
         "name: " + pkgname,
@@ -448,9 +447,12 @@ def _make_package(
         "extra-libraries: " + libname,
         "depends: " + ", ".join(uniq_hlis),
     ]
-    pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + ".conf", conf)
-
-    db = ctx.actions.declare_output("db-" + artifact_suffix)
+    if use_empty_lib:
+        pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + "_empty.conf", conf)
+        db = ctx.actions.declare_output("db-" + artifact_suffix + "_empty", dir = True)
+    else:
+        pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + ".conf", conf)
+        db = ctx.actions.declare_output("db-" + artifact_suffix, dir = True)
 
     db_deps = {}
     for x in uniq_hlis.values():
@@ -475,6 +477,7 @@ def _make_package(
             pkg_conf,
         ]),
         category = "haskell_package_" + artifact_suffix.replace("-", "_"),
+        identifier = "empty" if use_empty_lib else "final",
         env = {"GHC_PACKAGE_PATH": ghc_package_path},
     )
 
@@ -658,11 +661,24 @@ def _build_haskell_lib(
         import_artifacts,
         library_artifacts,
         enable_profiling = enable_profiling,
+        use_empty_lib = False,
+    )
+    empty_db = _make_package(
+        ctx,
+        link_style,
+        pkgname,
+        libstem,
+        uniq_infos,
+        import_artifacts,
+        library_artifacts,
+        enable_profiling = enable_profiling,
+        use_empty_lib = True,
     )
 
     hlib = HaskellLibraryInfo(
         name = pkgname,
         db = db,
+        empty_db = empty_db,
         id = pkgname,
         import_dirs = import_artifacts,
         objects = object_artifacts,

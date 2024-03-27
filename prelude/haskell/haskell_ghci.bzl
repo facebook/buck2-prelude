@@ -629,6 +629,7 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
         link_style,
         specify_pkg_version = True,
         enable_profiling = enable_profiling,
+        use_empty_lib = False,
     )
 
     # Create package db symlinks

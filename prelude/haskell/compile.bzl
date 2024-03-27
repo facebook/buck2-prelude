@@ -71,6 +71,8 @@ HaskellLibraryInfo = record(
     name = str,
     # package config database: e.g. platform009/build/ghc/lib/package.conf.d
     db = Artifact,
+    # package config database, referring to the empty lib which is only used for compilation
+    empty_db = Artifact,
     # e.g. "base-4.13.0.0"
     id = str,
     # Import dirs indexed by profiling enabled/disabled
@@ -161,6 +163,7 @@ def target_metadata(
         LinkStyle("shared"),
         specify_pkg_version = False,
         enable_profiling = False,
+        use_empty_lib = True,
     )
 
     # The object and interface file paths are depending on the real module name
@@ -250,6 +253,7 @@ def get_packages_info(
         link_style: LinkStyle,
         specify_pkg_version: bool,
         enable_profiling: bool,
+        use_empty_lib: bool,
         transitive_deps: [None, dict[str, list[str]]] = None,
         pkgname: str | None = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -310,7 +314,7 @@ def get_packages_info(
     for lib in libs.values():
         # These we need to add for all the packages/dependencies, i.e.
         # direct and transitive (e.g. `fbcode-common-hs-util-hs-array`)
-        packagedb_args.add("-package-db", lib.db)
+        packagedb_args.add("-package-db", lib.empty_db if use_empty_lib else lib.db)
 
     haskell_direct_deps_lib_infos = _attr_deps_haskell_lib_infos(
         ctx,
@@ -369,6 +373,7 @@ def _common_compile_args(
         link_style,
         specify_pkg_version = False,
         enable_profiling = enable_profiling,
+        use_empty_lib = True,
         transitive_deps = transitive_deps,
         pkgname = pkgname,
     )
