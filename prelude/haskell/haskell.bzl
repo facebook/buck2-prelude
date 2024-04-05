@@ -403,7 +403,6 @@ def _make_package(
         libname: str,
         hlis: list[HaskellLibraryInfo],
         hi: dict[bool, list[Artifact]],
-        lib: dict[bool, Artifact],
         enable_profiling: bool,
         use_empty_lib: bool) -> Artifact:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
@@ -631,10 +630,6 @@ def _build_haskell_lib(
             True: compiled.objects,
             False: non_profiling_hlib.compiled.objects,
         }
-        library_artifacts = {
-            True: lib,
-            False: non_profiling_hlib.libs[0],
-        }
         all_libs = libs + non_profiling_hlib.libs
         stub_dirs = [compiled.stubs] + [non_profiling_hlib.compiled.stubs]
     else:
@@ -643,9 +638,6 @@ def _build_haskell_lib(
         }
         object_artifacts = {
             False: compiled.objects,
-        }
-        library_artifacts = {
-            False: lib,
         }
         all_libs = libs
         stub_dirs = [compiled.stubs]
@@ -657,7 +649,6 @@ def _build_haskell_lib(
         libstem,
         uniq_infos,
         import_artifacts,
-        library_artifacts,
         enable_profiling = enable_profiling,
         use_empty_lib = False,
     )
@@ -668,7 +659,6 @@ def _build_haskell_lib(
         libstem,
         uniq_infos,
         import_artifacts,
-        library_artifacts,
         enable_profiling = enable_profiling,
         use_empty_lib = True,
     )
