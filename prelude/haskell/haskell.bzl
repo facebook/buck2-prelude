@@ -22,13 +22,6 @@ load(
     "CxxToolchainInfo",
     "PicBehavior",
 )
-load("@prelude//cxx:cxx_context.bzl", "get_cxx_toolchain_info")
-load(
-    "@prelude//cxx:linker.bzl",
-    "LINKERS",
-    "get_rpath_origin",
-    "get_shared_library_flags",
-)
 load("@prelude//cxx:groups.bzl", "get_dedupped_roots_from_groups")
 load(
     "@prelude//cxx:link_groups.bzl",
