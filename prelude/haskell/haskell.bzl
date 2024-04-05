@@ -516,8 +516,6 @@ def _build_haskell_lib(
     # Link the objects into a library
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
-    osuf, _hisuf = output_extensions(link_style, enable_profiling)
-
     # Compile the sources
     compiled = compile(
         ctx,
@@ -960,8 +958,6 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     link.add("-o", output.as_output())
     link.add(haskell_toolchain.linker_flags)
     link.add(ctx.attrs.linker_flags)
-
-    osuf, _hisuf = output_extensions(link_style, enable_profiling)
 
     link.add(compiled.objects)
 
