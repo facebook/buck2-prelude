@@ -86,7 +86,6 @@ load(
     "attr_deps_shared_library_infos",
     "get_artifact_suffix",
     "is_haskell_src",
-    "output_extensions",
     "src_to_module_name",
     "srcs_to_pairs",
 )

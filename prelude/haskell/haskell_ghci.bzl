@@ -57,7 +57,6 @@ load("@prelude//linking:types.bzl", "Linkage")
 load(
     "@prelude//cxx:linker.bzl",
     "get_rpath_origin",
-    "get_shared_library_flags",
 )
 load(
     "@prelude//utils:graph_utils.bzl",
