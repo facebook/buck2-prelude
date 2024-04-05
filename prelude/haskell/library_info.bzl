@@ -49,3 +49,16 @@ HaskellLibraryInfo = record(
     is_prebuilt = bool,
     profiling_enabled = bool,
 )
+
+def _project_as_package_db(lib: HaskellLibraryInfo):
+  return cmd_args("-package-db", lib.db)
+
+def _project_as_empty_package_db(lib: HaskellLibraryInfo):
+  return cmd_args("-package-db", lib.empty_db)
+
+HaskellLibraryInfoTSet = transitive_set(
+    args_projections = {
+        "package_db": _project_as_package_db,
+        "empty_package_db": _project_as_empty_package_db,
+    }
+)

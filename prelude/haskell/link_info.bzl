@@ -13,13 +13,18 @@ load(
     "@prelude//linking:link_info.bzl",
     "LinkStyle",
 )
+load(
+    "@prelude//haskell:library_info.bzl",
+    "HaskellLibraryInfo",
+    "HaskellLibraryInfoTSet",
+)
 
 # A list of `HaskellLibraryInfo`s.
 HaskellLinkInfo = provider(
     # Contains a list of HaskellLibraryInfo records.
     fields = {
-        "info": provider_field(typing.Any, default = None),  # dict[LinkStyle, list[HaskellLibraryInfo]] # TODO use a tset
-        "prof_info": provider_field(typing.Any, default = None),  # dict[LinkStyle, list[HaskellLibraryInfo]] # TODO use a tset
+        "info": provider_field(dict[LinkStyle, HaskellLibraryInfoTSet]),
+        "prof_info": provider_field(dict[LinkStyle, HaskellLibraryInfoTSet]),
     },
 )
 
@@ -32,7 +37,7 @@ HaskellProfLinkInfo = provider(
     },
 )
 
-def merge_haskell_link_infos(deps: list[HaskellLinkInfo]) -> HaskellLinkInfo:
+def merge_haskell_link_infos(deps: list[HaskellLinkInfo], ctx: AnalysisContext, ) -> HaskellLinkInfo:
     merged = {}
     prof_merged = {}
     for link_style in LinkStyle:
@@ -40,13 +45,13 @@ def merge_haskell_link_infos(deps: list[HaskellLinkInfo]) -> HaskellLinkInfo:
         prof_children = []
         for dep in deps:
             if link_style in dep.info:
-                children.extend(dep.info[link_style])
+                children.append(dep.info[link_style])
 
             if link_style in dep.prof_info:
-                prof_children.extend(dep.prof_info[link_style])
+                prof_children.append(dep.prof_info[link_style])
 
-        merged[link_style] = dedupe(children)
-        prof_merged[link_style] = dedupe(prof_children)
+        merged[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, children = children)
+        prof_merged[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, children = prof_children)
 
     return HaskellLinkInfo(info = merged, prof_info = prof_merged)
 

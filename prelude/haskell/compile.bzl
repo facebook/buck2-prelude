@@ -14,6 +14,7 @@ load(
     "@prelude//haskell:library_info.bzl",
     "HaskellLibraryInfo",
     "HaskellLibraryProvider",
+    "HaskellLibraryInfoTSet",
 )
 load(
     "@prelude//haskell:link_info.bzl",
@@ -64,7 +65,7 @@ PackagesInfo = record(
     exposed_package_libs = cmd_args,
     exposed_package_args = cmd_args,
     packagedb_args = cmd_args,
-    transitive_deps = field(list[HaskellLibraryInfo]),
+    transitive_deps = field(HaskellLibraryInfoTSet),
 )
 
 _Module = record(
@@ -199,14 +200,12 @@ def get_packages_info(
     # Collect library dependencies. Note that these don't need to be in a
     # particular order and we really want to remove duplicates (there
     # are a *lot* of duplicates).
-    libs = {}
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
-    merged_hs_link_info = merge_haskell_link_infos(direct_deps_link_info)
+    merged_hs_link_info = merge_haskell_link_infos(direct_deps_link_info, ctx)
 
     hs_link_info = merged_hs_link_info.prof_info if enable_profiling else merged_hs_link_info.info
 
-    for lib in hs_link_info[link_style]:
-        libs[lib.db] = lib  # lib.db is a good enough unique key
+    libs = hs_link_info[link_style]
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
@@ -220,7 +219,7 @@ def get_packages_info(
     if transitive_deps != None:
         lib_objects = {}
         lib_interfaces = {}
-        for lib in libs.values():
+        for lib in libs.traverse():
             lib_objects[lib.name] = {}
             lib_interfaces[lib.name] = {}
 
@@ -242,17 +241,14 @@ def get_packages_info(
                 exposed_package_objects.append(lib_objects[pkg][mod])
                 exposed_package_imports.append(lib_interfaces[pkg][mod])
     else:
-        for lib in libs.values():
+        for lib in libs.traverse():
             exposed_package_imports.extend(lib.import_dirs[enable_profiling])
             exposed_package_objects.extend(lib.objects[enable_profiling])
             # libs of dependencies might be needed at compile time if
             # we're using Template Haskell:
             exposed_package_libs.hidden(lib.libs)
 
-    for lib in libs.values():
-        # These we need to add for all the packages/dependencies, i.e.
-        # direct and transitive (e.g. `fbcode-common-hs-util-hs-array`)
-        packagedb_args.add("-package-db", lib.empty_db if use_empty_lib else lib.db)
+    packagedb_args.add(libs.project_as_args("empty_package_db" if use_empty_lib else "package_db"))
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
@@ -274,7 +270,7 @@ def get_packages_info(
         exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
         packagedb_args = packagedb_args,
-        transitive_deps = libs.values(),
+        transitive_deps = libs,
     )
 
 
