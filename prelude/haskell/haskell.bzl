@@ -71,7 +71,6 @@ load(
     "HaskellProfLinkInfo",
     "attr_link_style",
     "cxx_toolchain_link_style",
-    "merge_haskell_link_infos",
 )
 load(
     "@prelude//haskell:toolchain.bzl",
@@ -275,9 +274,13 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
         ]
 
         hlibinfos[link_style] = hlibinfo
-        hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlibinfo)
+        hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlibinfo, children = [
+            lib.info[link_style] for lib in haskell_infos
+        ])
         prof_hlibinfos[link_style] = prof_hlibinfo
-        prof_hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = prof_hlibinfo)
+        prof_hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = prof_hlibinfo, children = [
+            lib.prof_info[link_style] for lib in haskell_infos
+        ])
         link_infos[link_style] = LinkInfos(
             default = LinkInfo(
                 pre_flags = ctx.attrs.exported_linker_flags,
@@ -358,7 +361,7 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
             shared_library_infos,
         ),
         merge_link_group_lib_info(deps = ctx.attrs.deps),
-        merge_haskell_link_infos(haskell_infos + [haskell_link_infos], ctx),
+        haskell_link_infos,
         merged_link_info,
         HaskellProfLinkInfo(
             prof_infos = prof_merged_link_info,
@@ -401,7 +404,7 @@ def _make_package(
         link_style: LinkStyle,
         pkgname: str,
         libname: str,
-        hlis: HaskellLibraryInfoTSet,
+        hlis: list[HaskellLibraryInfo],
         hi: dict[bool, list[Artifact]],
         enable_profiling: bool,
         use_empty_lib: bool) -> Artifact:
@@ -438,7 +441,7 @@ def _make_package(
         "import-dirs:" + ", ".join(import_dirs),
         "library-dirs:" + ", ".join(library_dirs),
         "extra-libraries: " + libname,
-        "depends: " + ", ".join([l.id for l in hlis.traverse()]),
+        "depends: " + ", ".join([lib.id for lib in hlis]),
     ]
     if use_empty_lib:
         pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + "_empty.conf", conf)
@@ -447,7 +450,7 @@ def _make_package(
         pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + ".conf", conf)
         db = ctx.actions.declare_output("db-" + artifact_suffix, dir = True)
 
-    db_deps = [x.db for x in hlis.traverse()]
+    db_deps = [x.db for x in hlis]
 
     # So that ghc-pkg can find the DBs for the dependencies. We might
     # be able to use flags for this instead, but this works.
@@ -532,8 +535,8 @@ def _build_haskell_lib(
     lib_short_path = paths.join("lib-{}".format(artifact_suffix), libfile)
 
     linfos = [x.prof_info if enable_profiling else x.info for x in hlis]
-    uniq_infos = ctx.actions.tset(HaskellLibraryInfoTSet, children = [x[link_style] for x in linfos])
 
+    uniq_infos = [x[link_style].reduce("root") for x in linfos]
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     if link_style == LinkStyle("shared"):
@@ -739,11 +742,11 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
             if enable_profiling:
                 prof_hlib_infos[link_style] = hlib
-                prof_hlink_infos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlib)
+                prof_hlink_infos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlib, children = [li.prof_info[link_style] for li in hlis])
                 prof_link_infos[link_style] = hlib_build_out.link_infos
             else:
                 hlib_infos[link_style] = hlib
-                hlink_infos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlib)
+                hlink_infos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlib, children = [li.info[link_style] for li in hlis])
                 link_infos[link_style] = hlib_build_out.link_infos
 
             # Build the indices and create subtargets only once, with profiling
@@ -846,10 +849,10 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
             lib = hlib_infos,
             prof_lib = prof_hlib_infos,
         ),
-        merge_haskell_link_infos(hlis + [HaskellLinkInfo(
+        HaskellLinkInfo(
             info = hlink_infos,
             prof_info = prof_hlink_infos,
-        )], ctx),
+        ),
         merged_link_info,
         HaskellProfLinkInfo(
             prof_infos = prof_merged_link_info,

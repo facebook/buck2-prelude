@@ -15,7 +15,6 @@ load(
 )
 load(
     "@prelude//haskell:library_info.bzl",
-    "HaskellLibraryInfo",
     "HaskellLibraryInfoTSet",
 )
 
