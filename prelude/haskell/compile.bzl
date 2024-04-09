@@ -16,10 +16,6 @@ load(
     "HaskellLibraryInfoTSet",
 )
 load(
-    "@prelude//haskell:link_info.bzl",
-    "merge_haskell_link_infos",
-)
-load(
     "@prelude//haskell:toolchain.bzl",
     "HaskellToolchainInfo",
     "HaskellToolchainLibrary",
@@ -197,14 +193,12 @@ def get_packages_info(
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     # Collect library dependencies. Note that these don't need to be in a
-    # particular order and we really want to remove duplicates (there
-    # are a *lot* of duplicates).
+    # particular order.
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
-    merged_hs_link_info = merge_haskell_link_infos(direct_deps_link_info, ctx)
-
-    hs_link_info = merged_hs_link_info.prof_info if enable_profiling else merged_hs_link_info.info
-
-    libs = hs_link_info[link_style]
+    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = [
+        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        for lib in direct_deps_link_info
+    ])
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)

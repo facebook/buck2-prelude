@@ -36,24 +36,6 @@ HaskellProfLinkInfo = provider(
     },
 )
 
-def merge_haskell_link_infos(deps: list[HaskellLinkInfo], ctx: AnalysisContext, ) -> HaskellLinkInfo:
-    merged = {}
-    prof_merged = {}
-    for link_style in LinkStyle:
-        children = []
-        prof_children = []
-        for dep in deps:
-            if link_style in dep.info:
-                children.append(dep.info[link_style])
-
-            if link_style in dep.prof_info:
-                prof_children.append(dep.prof_info[link_style])
-
-        merged[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, children = children)
-        prof_merged[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, children = prof_children)
-
-    return HaskellLinkInfo(info = merged, prof_info = prof_merged)
-
 def cxx_toolchain_link_style(ctx: AnalysisContext) -> LinkStyle:
     return ctx.attrs._cxx_toolchain[CxxToolchainInfo].linker_info.link_style
 
