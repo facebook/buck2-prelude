@@ -222,10 +222,6 @@ def get_packages_info(
             for hi in lib.import_dirs[enable_profiling]:
                 lib_interfaces[lib.name][src_to_module_name(hi.short_path)] = hi
 
-            # libs of dependencies might be needed at compile time if
-            # we're using Template Haskell:
-            exposed_package_libs.hidden(lib.empty_libs)
-
         for pkg, mods in transitive_deps.items():
             if pkg == pkgname:
                 # Skip dependencies from the same package.

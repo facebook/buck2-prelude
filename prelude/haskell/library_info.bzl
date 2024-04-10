@@ -39,9 +39,6 @@ HaskellLibraryInfo = record(
     # at compile time.  The real library flags are propagated up the
     # dependency graph via MergedLinkInfo.
     libs = field(list[Artifact], []),
-    # GHC insists on loading a library, but does not actually need it when we
-    # pass module granular object files into compilation actions.
-    empty_libs = field(list[Artifact], []),
     # Package version, used to specify the full package when exposing it,
     # e.g. filepath-1.4.2.1, deepseq-1.4.4.0.
     # Internal packages default to 1.0.0, e.g. `fbcode-dsi-logger-hs-types-1.0.0`.

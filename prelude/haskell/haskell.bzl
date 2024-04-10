@@ -403,7 +403,7 @@ def _make_package(
         ctx: AnalysisContext,
         link_style: LinkStyle,
         pkgname: str,
-        libname: str,
+        libname: str | None,
         hlis: list[HaskellLibraryInfo],
         hi: dict[bool, list[Artifact]],
         enable_profiling: bool,
@@ -413,21 +413,12 @@ def _make_package(
     # Don't expose boot sources, as they're only meant to be used for compiling.
     modules = [src_to_module_name(x) for x, _ in srcs_to_pairs(ctx.attrs.srcs) if is_haskell_src(x)]
 
-    if enable_profiling:
-        # Add the `-p` suffix otherwise ghc will look for objects
-        # following this logic (https://fburl.com/code/3gmobm5x) and will fail.
-        libname += "_p"
-
     def mk_artifact_dir(dir_prefix: str, profiled: bool) -> str:
         art_suff = get_artifact_suffix(link_style, profiled)
         return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + "\""
 
     import_dirs = [
         mk_artifact_dir("mod", profiled)
-        for profiled in hi.keys()
-    ]
-    library_dirs = ["${pkgroot}/empty/lib-shared"] if use_empty_lib else [
-        mk_artifact_dir("lib", profiled)
         for profiled in hi.keys()
     ]
 
@@ -439,14 +430,28 @@ def _make_package(
         "exposed: False",
         "exposed-modules: " + ", ".join(modules),
         "import-dirs:" + ", ".join(import_dirs),
-        "library-dirs:" + ", ".join(library_dirs),
-        "extra-libraries: " + libname,
         "depends: " + ", ".join([lib.id for lib in hlis]),
     ]
+
     if use_empty_lib:
         pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + "_empty.conf", conf)
         db = ctx.actions.declare_output("db-" + artifact_suffix + "_empty", dir = True)
     else:
+        if not libname:
+            fail("argument `libname` cannot be empty, when use_empty_lib == False")
+
+        if enable_profiling:
+            # Add the `-p` suffix otherwise ghc will look for objects
+            # following this logic (https://fburl.com/code/3gmobm5x) and will fail.
+            libname += "_p"
+
+        library_dirs = [
+            mk_artifact_dir("lib", profiled)
+            for profiled in hi.keys()
+        ]
+        conf.append("library-dirs:" + ", ".join(library_dirs))
+        conf.append("extra-libraries: " + libname)
+
         pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + ".conf", conf)
         db = ctx.actions.declare_output("db-" + artifact_suffix, dir = True)
 
@@ -575,24 +580,6 @@ def _build_haskell_lib(
             default = LinkInfo(linkables = [SharedLibLinkable(lib = lib)]),
         )
 
-        empty_lib = ctx.actions.declare_output("empty", lib_short_path)
-        empty_link = cmd_args(haskell_toolchain.linker)
-        empty_link.add("-o", empty_lib.as_output())
-        empty_link.add(
-            get_shared_library_flags(linker_info.type),
-            "-dynamic",
-            cmd_args(
-                _get_haskell_shared_library_name_linker_flags(linker_info.type, libfile),
-                prepend = "-optl",
-            ),
-        )
-        empty_link.add(ctx.actions.write("empty.c", ""))
-        ctx.actions.run(
-            empty_link,
-            category = "haskell_link_empty" + artifact_suffix.replace("-", "_"),
-        )
-        empty_libs = [empty_lib]
-
     else:  # static flavours
         # TODO: avoid making an archive for a single object, like cxx does
         # (but would that work with Template Haskell?)
@@ -610,8 +597,6 @@ def _build_haskell_lib(
                 ],
             ),
         )
-
-        empty_libs = []
 
     if enable_profiling and link_style != LinkStyle("shared"):
         if not non_profiling_hlib:
@@ -651,7 +636,7 @@ def _build_haskell_lib(
         ctx,
         link_style,
         pkgname,
-        libstem,
+        None,
         uniq_infos,
         import_artifacts,
         enable_profiling = enable_profiling,
@@ -667,7 +652,6 @@ def _build_haskell_lib(
         objects = object_artifacts,
         stub_dirs = stub_dirs,
         libs = all_libs,
-        empty_libs = empty_libs,
         version = "1.0.0",
         is_prebuilt = False,
         profiling_enabled = enable_profiling,
