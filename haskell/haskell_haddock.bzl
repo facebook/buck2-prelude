@@ -14,20 +14,21 @@ load(
 load(
     "@prelude//haskell:util.bzl",
     "attr_deps",
+    "src_to_module_name",
 )
 
 HaskellHaddockInfo = provider(
     fields = {
         "html": provider_field(typing.Any, default = None),
-        "interface": provider_field(typing.Any, default = None),
+        "interfaces": provider_field(list[typing.Any], default = []),
     },
 )
 
-def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
+def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, sources: list[Artifact]) -> Provider:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
-    iface = ctx.actions.declare_output("haddock-interface")
     odir = ctx.actions.declare_output("haddock-html", dir = True)
+
 
     link_style = cxx_toolchain_link_style(ctx)
     args = compile_args(
@@ -39,21 +40,22 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
         pkgname = pkgname,
     )
 
+    touch = ctx.actions.declare_output("haddock-stamp")
+    ctx.actions.write(touch, "")
     cmd = cmd_args(haskell_toolchain.haddock)
     cmd.add(cmd_args(args.args_for_cmd, format = "--optghc={}"))
+
     cmd.add(
-        "--use-index",
-        "doc-index.html",
-        "--use-contents",
-        "index.html",
-        "--html",
-        "--hoogle",
+        #"--use-index",
+        #"doc-index.html",
+        #"--use-contents",
+        #"index.html",
+        #"--html",
+        #"--hoogle",
         "--no-tmp-comp-dir",
         "--no-warnings",
-        "--dump-interface",
-        iface.as_output(),
-        "--odir",
-        odir.as_output(),
+        #"--odir",
+        #odir.as_output(),
         "--package-name",
         pkgname,
     )
@@ -61,7 +63,7 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
     for lib in attr_deps(ctx):
         hi = lib.get(HaskellHaddockInfo)
         if hi != None:
-            cmd.add("--read-interface", hi.interface)
+            cmd.add(cmd_args(hi.interfaces, format="--read-interface={}"))
 
     cmd.add(ctx.attrs.haddock_flags)
 
@@ -82,17 +84,56 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
         else:
             cmd.add(cmd_args(args.args_for_file, format = "--optghc={}"))
 
-    cmd.add(args.srcs)
+    cmd.add(
+        cmd_args(
+            cmd_args(touch, format = "--optghc=-i{}").parent(),
+            "mod-shared",
+            delimiter="/"
+        ),
+        "--optghc=-hidir",
+        cmd_args(cmd_args(touch).parent(), "mod-shared", delimiter="/"),
+    )
+
+    ifaces = []
+
+    for src in sources:
+        module = src_to_module_name(src.short_path)
+        iface = ctx.actions.declare_output("haddock-interface/{}".format(module))
+
+        ifaces.append(iface)
+        pprint(iface)
+
+        ctx.actions.run(
+            cmd.copy().add("--dump-interface", iface.as_output(), src),
+            category = "haskell_haddock",
+            identifier = module,
+            no_outputs_cleanup = True,
+        )
+
+    cmd.add(
+        "--use-index",
+        "doc-index.html",
+        "--use-contents",
+        "index.html",
+        "--html",
+        "--hoogle",
+        "--no-tmp-comp-dir",
+        "--no-warnings",
+        "--odir",
+        odir.as_output(),
+        cmd_args(ifaces, format="--read-interface={}"),
+    )
+
     # Buck2 requires that the output artifacts are always produced, but Haddock only
     # creates them if it needs to, so we need a wrapper script to mkdir the outputs.
-    script = ctx.actions.declare_output("haddock-script")
+    script = ctx.actions.declare_output("haddock-script-{}".format(module))
     script_args = cmd_args([
-        "mkdir",
-        "-p",
-        args.result.objects[0].as_output(),
-        args.result.hi[0].as_output(),
-        args.result.stubs.as_output(),
-        "&&",
+        #"mkdir",
+        #"-p",
+        #args.result.objects[0].as_output(),
+        #args.result.hi[0].as_output(),
+        #args.result.stubs.as_output(),
+        #"&& set -x &&",
         cmd_args(cmd, quote = "shell"),
     ], delimiter = " ")
     ctx.actions.write(
@@ -105,10 +146,12 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
     ctx.actions.run(
         cmd_args(script).hidden(cmd),
         category = "haskell_haddock",
+        identifier = "html",
         no_outputs_cleanup = True,
     )
 
-    return HaskellHaddockInfo(interface = iface, html = odir)
+
+    return HaskellHaddockInfo(interfaces = ifaces, html = odir)
 
 def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -128,7 +171,7 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
     for lib in attr_deps(ctx):
         hi = lib.get(HaskellHaddockInfo)
         if hi != None:
-            cmd.add("--read-interface", hi.interface)
+            cmd.add(cmd_args(hi.interfaces, format="--read-interface={}"))
             dep_htmls.append(hi.html)
 
     cmd.add(ctx.attrs.haddock_flags)

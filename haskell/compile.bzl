@@ -87,7 +87,7 @@ DynamicCompileResultInfo = provider(fields = {
 CompileResultInfo = record(
     objects = field(list[Artifact]),
     hi = field(list[Artifact]),
-    stubs = field(Artifact),
+    #stubs = field(Artifact),
     hashes = field(list[Artifact]),
     producing_indices = field(bool),
     module_tsets = field(None | list[CompiledModuleTSet] | DynamicValue),
@@ -445,23 +445,23 @@ def compile_args(
 
     # TODO[AH] These are only used for haddock and conflict with tracking
     # per-module outputs individually. Rework the Haddock part to support this.
-    objects = ctx.actions.declare_output(
-        "objects-" + artifact_suffix,
-        dir = True,
-    )
-    hi = ctx.actions.declare_output("hi-" + artifact_suffix, dir = True)
-    stubs = ctx.actions.declare_output("stubs-" + artifact_suffix, dir = True)
+    # objects = ctx.actions.declare_output(
+    #     "objects-" + artifact_suffix,
+    #     dir = True,
+    # )
+    # hi = ctx.actions.declare_output("hi-" + artifact_suffix, dir = True)
+    # stubs = ctx.actions.declare_output("stubs-" + artifact_suffix, dir = True)
 
-    compile_args.add(
-        "-odir",
-        objects.as_output(),
-        "-hidir",
-        hi.as_output(),
-        "-hiedir",
-        hi.as_output(),
-        "-stubdir",
-        stubs.as_output(),
-    )
+    # compile_args.add(
+    #     "-odir",
+    #     objects.as_output(),
+    #     "-hidir",
+    #     hi.as_output(),
+    #     "-hiedir",
+    #     hi.as_output(),
+    #     "-stubdir",
+    #     stubs.as_output(),
+    # )
 
     srcs = cmd_args()
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
@@ -476,10 +476,10 @@ def compile_args(
 
     return CompileArgsInfo(
         result = CompileResultInfo(
-            objects = [objects],
-            hi = [hi],
+            objects = [],
+            hi = [],
             hashes = [],
-            stubs = stubs,
+            #stubs = stubs,
             producing_indices = producing_indices,
             module_tsets = None,
         ),
@@ -538,7 +538,7 @@ def _compile_module_args(
             objects = objects,
             hi = his,
             hashes = [module.hash],
-            stubs = stubs,
+            #stubs = stubs,
             producing_indices = producing_indices,
             module_tsets = module_tsets,
         ),
@@ -750,7 +750,7 @@ def compile(
         objects = objects,
         hi = interfaces,
         hashes = abi_hashes,
-        stubs = stubs_dir,
+        #stubs = stubs_dir,
         producing_indices = False,
         module_tsets = dyn_module_tsets,
     )

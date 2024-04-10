@@ -617,7 +617,7 @@ def _build_haskell_lib(
             False: non_profiling_hlib.compiled.objects,
         }
         all_libs = libs + non_profiling_hlib.libs
-        stub_dirs = [compiled.stubs] + [non_profiling_hlib.compiled.stubs]
+        stub_dirs = [] #[compiled.stubs] + [non_profiling_hlib.compiled.stubs]
     else:
         dynamic = {
             False: compiled.module_tsets,
@@ -629,7 +629,7 @@ def _build_haskell_lib(
             False: compiled.objects,
         }
         all_libs = libs
-        stub_dirs = [compiled.stubs]
+        stub_dirs = [] #compiled.stubs]
 
     db = _make_package(
         ctx,
@@ -858,7 +858,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
             shared_libs,
             shared_library_infos,
         ),
-        haskell_haddock_lib(ctx, pkgname),
+        haskell_haddock_lib(ctx, pkgname, [src for src in ctx.attrs.srcs if is_haskell_src(src.short_path)]),
     ]
 
     if indexing_tsets:
