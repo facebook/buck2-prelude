@@ -7,6 +7,7 @@
 
 # Implementation of the Haskell build rules.
 
+load("@prelude//utils:arglike.bzl", "ArgLike")
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//cxx:archive.bzl", "make_archive")
 load(
@@ -400,6 +401,9 @@ PKGCONF=$3
 #    directly declared as dependencies may be used
 #
 #  - by GHCi when loading packages into the repl
+#
+#  - when linking binaries statically, in order to pass libraries
+#    to the linker in the correct order
 def _make_package(
         ctx: AnalysisContext,
         link_style: LinkStyle,
@@ -906,6 +910,53 @@ def derive_indexing_tset(
         children = index_children,
     )
 
+def _make_link_package(
+        ctx: AnalysisContext,
+        link_style: LinkStyle,
+        pkgname: str,
+        hlis: list[HaskellLibraryInfo],
+        static_libs: ArgLike) -> Artifact:
+    artifact_suffix = get_artifact_suffix(link_style, False)
+
+    conf = cmd_args(
+        "name: " + pkgname,
+        "version: 1.0.0",
+        "id: " + pkgname,
+        "key: " + pkgname,
+        "exposed: False",
+        cmd_args(cmd_args(static_libs, delimiter = ", "), format = "ld-options: {}"),
+        "depends: " + ", ".join([lib.id for lib in hlis]),
+    )
+
+    pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + "_link.conf", conf)
+    db = ctx.actions.declare_output("db-" + artifact_suffix + "_link", dir = True)
+
+    db_deps = [x.db for x in hlis]
+
+    # So that ghc-pkg can find the DBs for the dependencies. We might
+    # be able to use flags for this instead, but this works.
+    ghc_package_path = cmd_args(
+        db_deps,
+        delimiter = ":",
+    )
+
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+    ctx.actions.run(
+        cmd_args([
+            "sh",
+            "-c",
+            _REGISTER_PACKAGE,
+            "",
+            haskell_toolchain.packager,
+            db.as_output(),
+            pkg_conf,
+        ]),
+        category = "haskell_package_link" + artifact_suffix.replace("-", "_"),
+        env = {"GHC_PACKAGE_PATH": ghc_package_path},
+    )
+
+    return db
+
 def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     enable_profiling = ctx.attrs.enable_profiling
 
@@ -1109,7 +1160,30 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
             sos[name] = shared_lib.lib
         infos = get_link_args_for_strategy(ctx, nlis, to_link_strategy(link_style))
 
-    link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
+    if link_style in [LinkStyle("static"), LinkStyle("static_pic")]:
+        hlis = attr_deps_haskell_link_infos_sans_template_deps(ctx)
+        linfos = [x.prof_info if enable_profiling else x.info for x in hlis]
+        uniq_infos = [x[link_style].reduce("root") for x in linfos]
+
+        pkgname = ctx.label.name + "-link"
+        linkable_artifacts = [
+            f.archive.artifact
+            for link in infos.tset.infos.traverse(ordering = "topological")
+            for f in link.default.linkables
+        ]
+        db = _make_link_package(
+            ctx,
+            link_style,
+            pkgname,
+            uniq_infos,
+            linkable_artifacts,
+        )
+
+        link.add(cmd_args(db, prepend="-package-db"))
+        link.add("-package", pkgname)
+        link.hidden(linkable_artifacts)
+    else:
+        link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
 
     ctx.actions.run(link, category = "haskell_link")
 
