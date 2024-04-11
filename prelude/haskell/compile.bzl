@@ -229,10 +229,12 @@ def get_packages_info(
             lib_interfaces[lib.name] = {}
 
             for o in lib.objects[enable_profiling]:
+                # this should prefer the dyn_o -- since it is used for TH
                 lib_objects[lib.name][src_to_module_name(o.short_path)] = o
 
             for hi in lib.import_dirs[enable_profiling]:
-                lib_interfaces[lib.name][src_to_module_name(hi.short_path)] = hi
+                mod_name = src_to_module_name(hi.short_path)
+                lib_interfaces[lib.name].setdefault(mod_name, []).append(hi)
 
         for pkg, mods in transitive_deps.items():
             if pkg == pkgname:
@@ -240,7 +242,7 @@ def get_packages_info(
                 continue
             for mod in mods:
                 exposed_package_objects.append(lib_objects[pkg][mod])
-                exposed_package_imports.append(lib_interfaces[pkg][mod])
+                exposed_package_imports.extend(lib_interfaces[pkg][mod])
     else:
         for lib in libs.traverse():
             exposed_package_imports.extend(lib.import_dirs[enable_profiling])
