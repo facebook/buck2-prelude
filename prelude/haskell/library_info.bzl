@@ -28,6 +28,8 @@ HaskellLibraryInfo = record(
     empty_db = Artifact,
     # e.g. "base-4.13.0.0"
     id = str,
+    # dynamic dependency information
+    dynamic = None | dict[bool, DynamicValue],
     # Import dirs indexed by profiling enabled/disabled
     import_dirs = dict[bool, list[Artifact]],
     # Object files indexed by profiling enabled/disabled

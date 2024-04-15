@@ -239,6 +239,7 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
             import_dirs = {},
             stub_dirs = [],
             id = ctx.attrs.id,
+            dynamic = None,
             libs = libs,
             version = ctx.attrs.version,
             is_prebuilt = True,
@@ -250,6 +251,7 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
             import_dirs = {},
             stub_dirs = [],
             id = ctx.attrs.id,
+            dynamic = None,
             libs = prof_libs,
             version = ctx.attrs.version,
             is_prebuilt = True,
@@ -603,6 +605,10 @@ def _build_haskell_lib(
         if not non_profiling_hlib:
             fail("Non-profiling HaskellLibBuildOutput wasn't provided when building profiling lib")
 
+        dynamic = {
+            True: compiled.dynamic,
+            False: non_profiling_hlib.compiled.dynamic,
+        }
         import_artifacts = {
             True: compiled.hi,
             False: non_profiling_hlib.compiled.hi,
@@ -614,6 +620,9 @@ def _build_haskell_lib(
         all_libs = libs + non_profiling_hlib.libs
         stub_dirs = [compiled.stubs] + [non_profiling_hlib.compiled.stubs]
     else:
+        dynamic = {
+            False: compiled.dynamic,
+        }
         import_artifacts = {
             False: compiled.hi,
         }
@@ -649,6 +658,7 @@ def _build_haskell_lib(
         db = db,
         empty_db = empty_db,
         id = pkgname,
+        dynamic = dynamic, # TODO(ah) refine with dynamic projections
         import_dirs = import_artifacts,
         objects = object_artifacts,
         stub_dirs = stub_dirs,
