@@ -564,7 +564,7 @@ def compile(
     ctx.actions.dynamic_output(
         dynamic = [md_file],
         inputs = ctx.attrs.srcs,
-        outputs = interfaces + objects + stub_dirs,
+        outputs = [o.as_output() for o in interfaces + objects + stub_dirs],
         f = do_compile)
 
     stubs_dir = ctx.actions.declare_output("stubs-" + artifact_suffix, dir=True)
