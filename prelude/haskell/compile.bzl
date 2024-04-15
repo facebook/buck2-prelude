@@ -205,6 +205,7 @@ def get_packages_info(
         specify_pkg_version: bool,
         enable_profiling: bool,
         use_empty_lib: bool,
+        resolved: None | dict[DynamicValue, typing.Any] = None,
         transitive_deps: [None, dict[str, list[str]]] = None,
         pkgname: str | None = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -217,10 +218,14 @@ def get_packages_info(
         for lib in direct_deps_link_info
     ])
 
-    for lib in direct_deps_link_info:
-        info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-        direct = info.reduce("root")
-        dynamic = direct.dynamic
+    if resolved != None:
+        for lib in direct_deps_link_info:
+            info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+            direct = info.reduce("root")
+            dynamic = direct.dynamic[enable_profiling]
+            # TODO(ah) look up
+            # resolved = resolved[dynamic]
+            # print("!!!", resolved)
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
@@ -294,6 +299,7 @@ def _common_compile_args(
         enable_th: bool,
         pkgname: str | None,
         modname: str | None = None,
+        resolved: None | dict[DynamicValue, typing.Any] = None,
         transitive_deps: [None, dict[str, list[str]]] = None,
         use_empty_lib = True) -> (typing.Any, cmd_args):
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
@@ -322,6 +328,7 @@ def _common_compile_args(
         specify_pkg_version = False,
         enable_profiling = enable_profiling,
         use_empty_lib = use_empty_lib,
+        resolved = resolved,
         transitive_deps = transitive_deps,
         pkgname = pkgname,
     )
@@ -434,6 +441,7 @@ def _compile_module_args(
         enable_profiling: bool,
         enable_th: bool,
         outputs: dict[Artifact, Artifact],
+        resolved: dict[DynamicValue, typing.Any],
         pkgname = None,
         transitive_deps: [None, dict[str, list[str]]] = None) -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -446,7 +454,7 @@ def _compile_module_args(
     compile_cmd.add(ctx.attrs.compiler_flags)
     compile_cmd.add("-c")
 
-    dynamic, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), transitive_deps = transitive_deps)
+    dynamic, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, transitive_deps = transitive_deps)
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
@@ -497,6 +505,7 @@ def _compile_module(
     graph: dict[str, list[str]],
     transitive_deps: dict[str, list[str]],
     outputs: dict[Artifact, Artifact],
+    resolved: dict[DynamicValue, typing.Any],
     artifact_suffix: str,
     pkgname: str | None = None,
 ) -> typing.Any:
@@ -505,7 +514,7 @@ def _compile_module(
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     compile_cmd = cmd_args(haskell_toolchain.compiler)
 
-    args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, pkgname, transitive_deps = transitive_deps)
+    args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, resolved, pkgname, transitive_deps = transitive_deps)
 
     if args.args_for_file:
         if haskell_toolchain.use_argsfile:
@@ -555,6 +564,7 @@ def compile(
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
     def do_compile(ctx, artifacts, outputs, md_file=md_file, modules=modules):
+        resolved = {}
         md = artifacts[md_file].read_json()
         th_modules = md["th_modules"]
         module_map = md["module_mapping"]
@@ -575,6 +585,7 @@ def compile(
                 graph = graph,
                 transitive_deps = transitive_deps[module_name],
                 outputs = outputs,
+                resolved = resolved,
                 md_file=md_file,
                 artifact_suffix = artifact_suffix,
                 pkgname = pkgname,
@@ -588,6 +599,7 @@ def compile(
 
     dynamic = ctx.actions.dynamic_output(
         dynamic = [md_file],
+        promises = [],
         inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs],
         f = do_compile)
