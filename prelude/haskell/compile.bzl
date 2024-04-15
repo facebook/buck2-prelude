@@ -216,6 +216,11 @@ def get_packages_info(
         for lib in direct_deps_link_info
     ])
 
+    for lib in direct_deps_link_info:
+        info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        direct = info.reduce("root")
+        dynamic = direct.dynamic
+
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
     exposed_package_imports = []
