@@ -39,8 +39,9 @@ load("@prelude//:paths.bzl", "paths")
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
 
-DynamicCompileResultInfo = record(
-)
+DynamicCompileResultInfo = provider(fields = {
+    "value": typing.Any,
+})
 
 # The type of the return value of the `_compile()` function.
 CompileResultInfo = record(
@@ -48,7 +49,7 @@ CompileResultInfo = record(
     hi = field(list[Artifact]),
     stubs = field(Artifact),
     producing_indices = field(bool),
-    dynamic = field(None | DynamicValue),
+    dynamic = field(typing.Any | DynamicValue),
 )
 
 CompileArgsInfo = record(
@@ -294,7 +295,7 @@ def _common_compile_args(
         pkgname: str | None,
         modname: str | None = None,
         transitive_deps: [None, dict[str, list[str]]] = None,
-        use_empty_lib = True) -> cmd_args:
+        use_empty_lib = True) -> (typing.Any, cmd_args):
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     compile_args = cmd_args()
@@ -350,7 +351,12 @@ def _common_compile_args(
     if pkgname:
         compile_args.add(["-this-unit-id", pkgname])
 
-    return compile_args
+    dynamic = struct(
+        imports = packages_info.exposed_package_imports,
+        objects = packages_info.exposed_package_objects,
+    )
+
+    return dynamic, compile_args
 
 # NOTE this function is currently only used by `haskell_haddock_lib`
 def compile_args(
@@ -370,7 +376,7 @@ def compile_args(
     compile_cmd.add(ctx.attrs.compiler_flags)
 
     # TODO[CB] use the empty lib once using hi haddock
-    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, use_empty_lib = False)
+    _, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, use_empty_lib = False)
 
     if getattr(ctx.attrs, "main", None) != None:
         compile_args.add(["-main-is", ctx.attrs.main])
@@ -440,7 +446,7 @@ def _compile_module_args(
     compile_cmd.add(ctx.attrs.compiler_flags)
     compile_cmd.add("-c")
 
-    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), transitive_deps = transitive_deps)
+    dynamic, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), transitive_deps = transitive_deps)
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
@@ -471,7 +477,7 @@ def _compile_module_args(
             hi = his,
             stubs = stubs,
             producing_indices = producing_indices,
-            dynamic = None,
+            dynamic = dynamic,
         ),
         srcs = srcs,
         args_for_cmd = compile_cmd,
@@ -493,7 +499,7 @@ def _compile_module(
     outputs: dict[Artifact, Artifact],
     artifact_suffix: str,
     pkgname: str | None = None,
-) -> None:
+) -> typing.Any:
     module = modules[module_name]
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -533,6 +539,8 @@ def _compile_module(
 
     ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name)
 
+    # TODO(ah) attach intra-package deps
+    return args.result.dynamic
 
 
 # Compile all the context's sources.
@@ -554,9 +562,10 @@ def compile(
         transitive_deps = md["transitive_deps"]
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
+        dynamic = {}
 
         for module_name in post_order_traversal(graph):
-            _compile_module(
+            dynamic[module_name] = _compile_module(
                 ctx,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
@@ -570,6 +579,8 @@ def compile(
                 artifact_suffix = artifact_suffix,
                 pkgname = pkgname,
             )
+
+        return [DynamicCompileResultInfo(value = dynamic)]
 
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
     objects = [object for module in modules.values() for object in module.objects]
