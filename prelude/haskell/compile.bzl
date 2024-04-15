@@ -39,12 +39,16 @@ load("@prelude//:paths.bzl", "paths")
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
 
+DynamicCompileResultInfo = record(
+)
+
 # The type of the return value of the `_compile()` function.
 CompileResultInfo = record(
     objects = field(list[Artifact]),
     hi = field(list[Artifact]),
     stubs = field(Artifact),
     producing_indices = field(bool),
+    dynamic = field(None | DynamicValue),
 )
 
 CompileArgsInfo = record(
@@ -405,6 +409,7 @@ def compile_args(
             hi = [hi],
             stubs = stubs,
             producing_indices = producing_indices,
+            dynamic = None,
         ),
         srcs = srcs,
         args_for_cmd = compile_cmd,
@@ -461,6 +466,7 @@ def _compile_module_args(
             hi = his,
             stubs = stubs,
             producing_indices = producing_indices,
+            dynamic = None,
         ),
         srcs = srcs,
         args_for_cmd = compile_cmd,
@@ -564,7 +570,7 @@ def compile(
     objects = [object for module in modules.values() for object in module.objects]
     stub_dirs = [module.stub_dir for module in modules.values()]
 
-    ctx.actions.dynamic_output(
+    dynamic = ctx.actions.dynamic_output(
         dynamic = [md_file],
         inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs],
@@ -595,4 +601,5 @@ def compile(
         hi = interfaces,
         stubs = stubs_dir,
         producing_indices = False,
+        dynamic = dynamic,
     )
