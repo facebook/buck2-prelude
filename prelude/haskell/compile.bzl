@@ -599,7 +599,15 @@ def compile(
 
     dynamic = ctx.actions.dynamic_output(
         dynamic = [md_file],
-        promises = [],
+        promises = [
+            info.reduce("root").dynamic[enable_profiling]
+            for lib in attr_deps_haskell_link_infos(ctx)
+            for info in [
+                lib.prof_info[link_style]
+                if enable_profiling else
+                lib.info[link_style]
+            ]
+        ],
         inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs],
         f = do_compile)
