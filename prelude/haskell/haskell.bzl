@@ -410,7 +410,7 @@ def _make_package(
         pkgname: str,
         libname: str | None,
         hlis: list[HaskellLibraryInfo],
-        hi: dict[bool, list[Artifact]],
+        profiling: list[bool],
         enable_profiling: bool,
         use_empty_lib: bool) -> Artifact:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
@@ -422,10 +422,7 @@ def _make_package(
         art_suff = get_artifact_suffix(link_style, profiled)
         return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + "\""
 
-    import_dirs = [
-        mk_artifact_dir("mod", profiled)
-        for profiled in hi.keys()
-    ]
+    import_dirs = [ mk_artifact_dir("mod", profiled) for profiled in profiling ]
 
     conf = [
         "name: " + pkgname,
@@ -450,10 +447,7 @@ def _make_package(
             # following this logic (https://fburl.com/code/3gmobm5x) and will fail.
             libname += "_p"
 
-        library_dirs = [
-            mk_artifact_dir("lib", profiled)
-            for profiled in hi.keys()
-        ]
+        library_dirs = [ mk_artifact_dir("lib", profiled) for profiled in profiling ]
         conf.append("library-dirs:" + ", ".join(library_dirs))
         conf.append("extra-libraries: " + libname)
 
@@ -633,7 +627,7 @@ def _build_haskell_lib(
         pkgname,
         libstem,
         uniq_infos,
-        import_artifacts,
+        import_artifacts.keys(),
         enable_profiling = enable_profiling,
         use_empty_lib = False,
     )
@@ -643,7 +637,7 @@ def _build_haskell_lib(
         pkgname,
         None,
         uniq_infos,
-        import_artifacts,
+        import_artifacts.keys(),
         enable_profiling = enable_profiling,
         use_empty_lib = True,
     )
