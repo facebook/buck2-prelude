@@ -284,7 +284,8 @@ def _common_compile_args(
         enable_th: bool,
         pkgname: str | None,
         modname: str | None = None,
-        transitive_deps: [None, dict[str, list[str]]] = None) -> cmd_args:
+        transitive_deps: [None, dict[str, list[str]]] = None,
+        use_empty_lib = True) -> cmd_args:
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     compile_args = cmd_args()
@@ -310,7 +311,7 @@ def _common_compile_args(
         link_style,
         specify_pkg_version = False,
         enable_profiling = enable_profiling,
-        use_empty_lib = True,
+        use_empty_lib = use_empty_lib,
         transitive_deps = transitive_deps,
         pkgname = pkgname,
     )
@@ -342,6 +343,7 @@ def _common_compile_args(
 
     return compile_args
 
+# NOTE this function is currently only used by `haskell_haddock_lib`
 def compile_args(
         ctx: AnalysisContext,
         link_style: LinkStyle,
@@ -358,7 +360,8 @@ def compile_args(
     # be parsed when inside an argsfile.
     compile_cmd.add(ctx.attrs.compiler_flags)
 
-    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname)
+    # TODO[CB] use the empty lib once using hi haddock
+    compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, use_empty_lib = False)
 
     if getattr(ctx.attrs, "main", None) != None:
         compile_args.add(["-main-is", ctx.attrs.main])
