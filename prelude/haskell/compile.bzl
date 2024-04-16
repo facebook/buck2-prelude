@@ -563,8 +563,7 @@ def compile(
 
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
-    def do_compile(ctx, artifacts, outputs, md_file=md_file, modules=modules):
-        resolved = {}
+    def do_compile(ctx, artifacts, resolved, outputs, md_file=md_file, modules=modules):
         md = artifacts[md_file].read_json()
         th_modules = md["th_modules"]
         module_map = md["module_mapping"]
