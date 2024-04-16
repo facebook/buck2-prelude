@@ -42,6 +42,7 @@ load("@prelude//utils:strings.bzl", "strip_prefix")
 CompiledModuleInfo = provider(fields = {
     "interface": provider_field(Artifact),
     "object": provider_field(Artifact),
+    "object_dot_o": provider_field(Artifact),
 })
 
 def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
@@ -50,10 +51,14 @@ def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
 def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.object)
 
+def _compiled_module_project_as_objects_dot_o(mod: CompiledModuleInfo) -> cmd_args:
+    return cmd_args(mod.object_dot_o)
+
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "interfaces": _compiled_module_project_as_interfaces,
         "objects": _compiled_module_project_as_objects,
+        "objects_dot_o": _compiled_module_project_as_objects_dot_o,
     },
 )
 
@@ -547,7 +552,10 @@ def _compile_module(
     )
 
     # Transitive module dependencies from other packages.
-    cross_package_modules = args.result.dynamic
+    cross_package_modules = ctx.actions.tset(
+        CompiledModuleTSet,
+        children = args.result.dynamic,
+    )
     # Transitive module dependencies from the same package.
     this_package_modules = [
         module_tsets[dep_name]
@@ -556,23 +564,32 @@ def _compile_module(
 
     dependency_modules = ctx.actions.tset(
         CompiledModuleTSet,
-        children = cross_package_modules + this_package_modules,
+        children = [cross_package_modules] + this_package_modules,
     )
 
     compile_cmd.hidden(dependency_modules.project_as_args("interfaces"))
     if enable_th:
-        # TODO(ah) perform the `.dyn_o` to `.o` dance.
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
+        compile_cmd.add(cross_package_modules.project_as_args("objects_dot_o"))
 
     ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name)
+
+    interface = module.interfaces[0]
+    object = module.objects[0]
+    if object.extension == ".o":
+        object_dot_o = object
+    else:
+        object_dot_o = ctx.actions.declare_output("dot-o", paths.replace_extension(object.short_path, ".o"))
+        ctx.actions.symlink_file(object_dot_o, object)
 
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
-            interface = module.interfaces[0],
-            object = module.objects[0],
+            interface = interface,
+            object = object,
+            object_dot_o = object_dot_o,
         ),
-        children = cross_package_modules + this_package_modules,
+        children = [cross_package_modules] + this_package_modules,
     )
 
     return module_tset
@@ -616,7 +633,6 @@ def compile(
                 artifact_suffix = artifact_suffix,
                 pkgname = pkgname,
             )
-            print("\n\n!!!", ctx.label.name, module_name, list(module_tsets[module_name].traverse()))
 
         return [DynamicCompileResultInfo(modules = module_tsets)]
 
