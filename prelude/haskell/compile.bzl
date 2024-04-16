@@ -218,13 +218,6 @@ def get_packages_info(
         for lib in direct_deps_link_info
     ])
 
-    if resolved != None:
-        for lib in direct_deps_link_info:
-            info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-            direct = info.reduce("root")
-            dynamic = direct.dynamic[enable_profiling]
-            dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
-
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
     exposed_package_imports = []
@@ -234,24 +227,34 @@ def get_packages_info(
 
     packagedb_args = cmd_args()
 
-    if transitive_deps != None:
+    if resolved != None and transitive_deps != None:
         lib_objects = {}
         lib_interfaces = {}
-        for lib in libs.traverse():
-            lib_objects[lib.name] = {}
-            lib_interfaces[lib.name] = {}
 
-            for o in lib.objects[enable_profiling]:
+        for lib in direct_deps_link_info:
+            info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+            direct = info.reduce("root")
+            dynamic = direct.dynamic[enable_profiling]
+            dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
+
+            lib_objects[direct.name] = {}
+            lib_interfaces[direct.name] = {}
+
+            for o in direct.objects[enable_profiling]:
                 # this should prefer the dyn_o -- since it is used for TH
-                lib_objects[lib.name][src_to_module_name(o.short_path)] = o
+                lib_objects[direct.name][src_to_module_name(o.short_path)] = o
 
-            for hi in lib.import_dirs[enable_profiling]:
+            for hi in direct.import_dirs[enable_profiling]:
                 mod_name = src_to_module_name(hi.short_path)
-                lib_interfaces[lib.name].setdefault(mod_name, []).append(hi)
+                lib_interfaces[direct.name].setdefault(mod_name, []).append(hi)
 
         for pkg, mods in transitive_deps.items():
             if pkg == pkgname:
                 # Skip dependencies from the same package.
+                continue
+            if pkg not in lib_objects:
+                # Skip transitive dependencies
+                # TODO(ah) only iterate over direct dependencies
                 continue
             for mod in mods:
                 exposed_package_objects.append(lib_objects[pkg][mod])
