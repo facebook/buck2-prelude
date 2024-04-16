@@ -542,7 +542,7 @@ def _build_haskell_lib(
 
     linfos = [x.prof_info if enable_profiling else x.info for x in hlis]
 
-    uniq_infos = [x[link_style].reduce("root") for x in linfos]
+    uniq_infos = [x[link_style].value for x in linfos]
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     if link_style == LinkStyle("shared"):
@@ -1159,7 +1159,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     if link_style in [LinkStyle("static"), LinkStyle("static_pic")]:
         hlis = attr_deps_haskell_link_infos_sans_template_deps(ctx)
         linfos = [x.prof_info if enable_profiling else x.info for x in hlis]
-        uniq_infos = [x[link_style].reduce("root") for x in linfos]
+        uniq_infos = [x[link_style].value for x in linfos]
 
         pkgname = ctx.label.name + "-link"
         linkable_artifacts = [
