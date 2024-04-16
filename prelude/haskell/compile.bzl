@@ -223,9 +223,7 @@ def get_packages_info(
             info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
             direct = info.reduce("root")
             dynamic = direct.dynamic[enable_profiling]
-            # TODO(ah) look up
-            # resolved = resolved[dynamic]
-            # print("!!!", resolved)
+            dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
