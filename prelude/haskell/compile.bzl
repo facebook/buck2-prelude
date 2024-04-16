@@ -40,8 +40,8 @@ load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_t
 load("@prelude//utils:strings.bzl", "strip_prefix")
 
 CompiledModuleInfo = provider(fields = {
-    "interface": field(Artifact),
-    "object": field(Artifact),
+    "interface": provider_field(Artifact),
+    "object": provider_field(Artifact),
 })
 
 def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
@@ -58,7 +58,7 @@ CompiledModuleTSet = transitive_set(
 )
 
 DynamicCompileResultInfo = provider(fields = {
-    "value": typing.Any,
+    "modules": dict[str, CompiledModuleTSet],
 })
 
 # The type of the return value of the `_compile()` function.
@@ -78,6 +78,7 @@ CompileArgsInfo = record(
 )
 
 PackagesInfo = record(
+    exposed_package_modules = field(None | list[CompiledModuleTSet]),
     exposed_package_imports = field(list[Artifact]),
     exposed_package_objects = field(list[Artifact]),
     exposed_package_libs = cmd_args,
@@ -238,6 +239,7 @@ def get_packages_info(
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
+    exposed_package_modules = None
     exposed_package_imports = []
     exposed_package_objects = []
     exposed_package_libs = cmd_args()
@@ -246,8 +248,7 @@ def get_packages_info(
     packagedb_args = cmd_args()
 
     if resolved != None and transitive_deps != None:
-        lib_objects = {}
-        lib_interfaces = {}
+        exposed_package_modules = []
 
         for lib in direct_deps_link_info:
             info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
@@ -255,28 +256,13 @@ def get_packages_info(
             dynamic = direct.dynamic[enable_profiling]
             dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
 
-            lib_objects[direct.name] = {}
-            lib_interfaces[direct.name] = {}
-
-            for o in direct.objects[enable_profiling]:
-                # this should prefer the dyn_o -- since it is used for TH
-                lib_objects[direct.name][src_to_module_name(o.short_path)] = o
-
-            for hi in direct.import_dirs[enable_profiling]:
-                mod_name = src_to_module_name(hi.short_path)
-                lib_interfaces[direct.name].setdefault(mod_name, []).append(hi)
-
-        for pkg, mods in transitive_deps.items():
-            if pkg == pkgname:
-                # Skip dependencies from the same package.
+            # TODO(ah) only track direct package deps
+            if direct.name not in transitive_deps:
+                # We don't depend on this package
                 continue
-            if pkg not in lib_objects:
-                # Skip transitive dependencies
-                # TODO(ah) only iterate over direct dependencies
-                continue
-            for mod in mods:
-                exposed_package_objects.append(lib_objects[pkg][mod])
-                exposed_package_imports.extend(lib_interfaces[pkg][mod])
+
+            for mod in transitive_deps.get(direct.name, []):
+                exposed_package_modules.append(dynamic_info.modules[mod])
     else:
         for lib in libs.traverse():
             exposed_package_imports.extend(lib.import_dirs[enable_profiling])
@@ -302,6 +288,7 @@ def get_packages_info(
         exposed_package_args.add(package_flag, pkg_name)
 
     return PackagesInfo(
+        exposed_package_modules = exposed_package_modules,
         exposed_package_imports = exposed_package_imports,
         exposed_package_objects = exposed_package_objects,
         exposed_package_libs = exposed_package_libs,
@@ -353,11 +340,13 @@ def _common_compile_args(
     )
 
     compile_args.add(packages_info.exposed_package_args)
-    compile_args.hidden(packages_info.exposed_package_imports)
+    if packages_info.exposed_package_modules == None:
+        compile_args.hidden(packages_info.exposed_package_imports)
     compile_args.add(packages_info.packagedb_args)
     if enable_th:
         compile_args.add(packages_info.exposed_package_libs)
-        if modname:
+        if modname and packages_info.exposed_package_modules == None:
+            # TODO(ah) remove this
             for o in packages_info.exposed_package_objects:
                 if o.extension != ".o":
                     prefix = o.owner.name + "-" + modname
@@ -377,10 +366,7 @@ def _common_compile_args(
     if pkgname:
         compile_args.add(["-this-unit-id", pkgname])
 
-    dynamic = struct(
-        imports = packages_info.exposed_package_imports,
-        objects = packages_info.exposed_package_objects,
-    )
+    dynamic = packages_info.exposed_package_modules
 
     return dynamic, compile_args
 
@@ -520,6 +506,7 @@ def _compile_module(
     enable_th: bool,
     module_name: str,
     modules: dict[str, _Module],
+    module_tsets: dict[str, CompiledModuleTSet],
     md_file: Artifact,
     graph: dict[str, list[str]],
     transitive_deps: dict[str, list[str]],
@@ -559,16 +546,36 @@ def _compile_module(
         )
     )
 
-    for dep_name in breadth_first_traversal(graph, [module_name])[1:]:
-        dep = modules[dep_name]
-        compile_cmd.hidden(dep.interfaces)
-        if enable_th:
-            compile_cmd.hidden(dep.objects)
+    # Transitive module dependencies from other packages.
+    cross_package_modules = args.result.dynamic
+    # Transitive module dependencies from the same package.
+    this_package_modules = [
+        module_tsets[dep_name]
+        for dep_name in graph[module_name]
+    ]
+
+    dependency_modules = ctx.actions.tset(
+        CompiledModuleTSet,
+        children = cross_package_modules + this_package_modules,
+    )
+
+    compile_cmd.hidden(dependency_modules.project_as_args("interfaces"))
+    if enable_th:
+        # TODO(ah) perform the `.dyn_o` to `.o` dance.
+        compile_cmd.hidden(dependency_modules.project_as_args("objects"))
 
     ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name)
 
-    # TODO(ah) attach intra-package deps
-    return args.result.dynamic
+    module_tset = ctx.actions.tset(
+        CompiledModuleTSet,
+        value = CompiledModuleInfo(
+            interface = module.interfaces[0],
+            object = module.objects[0],
+        ),
+        children = cross_package_modules + this_package_modules,
+    )
+
+    return module_tset
 
 
 # Compile all the context's sources.
@@ -590,16 +597,17 @@ def compile(
         transitive_deps = md["transitive_deps"]
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
-        dynamic = {}
+        module_tsets = {}
 
         for module_name in post_order_traversal(graph):
-            dynamic[module_name] = _compile_module(
+            module_tsets[module_name] = _compile_module(
                 ctx,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
                 enable_th = module_name in th_modules,
                 module_name = module_name,
                 modules = mapped_modules,
+                module_tsets = module_tsets,
                 graph = graph,
                 transitive_deps = transitive_deps[module_name],
                 outputs = outputs,
@@ -608,8 +616,9 @@ def compile(
                 artifact_suffix = artifact_suffix,
                 pkgname = pkgname,
             )
+            print("\n\n!!!", ctx.label.name, module_name, list(module_tsets[module_name].traverse()))
 
-        return [DynamicCompileResultInfo(value = dynamic)]
+        return [DynamicCompileResultInfo(modules = module_tsets)]
 
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
     objects = [object for module in modules.values() for object in module.objects]
