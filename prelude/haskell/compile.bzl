@@ -39,6 +39,24 @@ load("@prelude//:paths.bzl", "paths")
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
 
+CompiledModuleInfo = provider(fields = {
+    "interface": field(Artifact),
+    "object": field(Artifact),
+})
+
+def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
+    return cmd_args(mod.interface)
+
+def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
+    return cmd_args(mod.object)
+
+CompiledModuleTSet = transitive_set(
+    args_projections = {
+        "interfaces": _compiled_module_project_as_interfaces,
+        "objects": _compiled_module_project_as_objects,
+    },
+)
+
 DynamicCompileResultInfo = provider(fields = {
     "value": typing.Any,
 })
