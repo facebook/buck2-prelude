@@ -140,7 +140,8 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
             cmd_args(cmd, delimiter = " ", quote = "shell"),
             [
                 cmd_args(
-                    ["cp", "-Rf", "--reflink=auto", cmd_args(dir, format = "{}/*"), out.as_output()],
+                    # NOTE could use --reflink=auto if cp command supports it
+                    ["cp", "-Rf", cmd_args(dir, format = "{}/*"), out.as_output()],
                     delimiter = " ",
                 ) for dir in dep_htmls
             ],
