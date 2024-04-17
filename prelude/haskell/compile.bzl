@@ -72,7 +72,7 @@ CompileResultInfo = record(
     hi = field(list[Artifact]),
     stubs = field(Artifact),
     producing_indices = field(bool),
-    dynamic = field(typing.Any | DynamicValue),
+    module_tsets = field(None | list[CompiledModuleTSet] | DynamicValue),
 )
 
 CompileArgsInfo = record(
@@ -312,7 +312,7 @@ def _common_compile_args(
         modname: str | None = None,
         resolved: None | dict[DynamicValue, typing.Any] = None,
         transitive_deps: [None, dict[str, list[str]]] = None,
-        use_empty_lib = True) -> (typing.Any, cmd_args):
+        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args):
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     compile_args = cmd_args()
@@ -362,9 +362,9 @@ def _common_compile_args(
     if pkgname:
         compile_args.add(["-this-unit-id", pkgname])
 
-    dynamic = packages_info.exposed_package_modules
+    module_tsets = packages_info.exposed_package_modules
 
-    return dynamic, compile_args
+    return module_tsets, compile_args
 
 # NOTE this function is currently only used by `haskell_haddock_lib`
 def compile_args(
@@ -428,7 +428,7 @@ def compile_args(
             hi = [hi],
             stubs = stubs,
             producing_indices = producing_indices,
-            dynamic = None,
+            module_tsets = None,
         ),
         srcs = srcs,
         args_for_cmd = compile_cmd,
@@ -455,7 +455,7 @@ def _compile_module_args(
     compile_cmd.add(ctx.attrs.compiler_flags)
     compile_cmd.add("-c")
 
-    dynamic, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, transitive_deps = transitive_deps)
+    module_tsets, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, transitive_deps = transitive_deps)
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
@@ -486,7 +486,7 @@ def _compile_module_args(
             hi = his,
             stubs = stubs,
             producing_indices = producing_indices,
-            dynamic = dynamic,
+            module_tsets = module_tsets,
         ),
         srcs = srcs,
         args_for_cmd = compile_cmd,
@@ -510,7 +510,7 @@ def _compile_module(
     resolved: dict[DynamicValue, typing.Any],
     artifact_suffix: str,
     pkgname: str | None = None,
-) -> typing.Any:
+) -> CompiledModuleTSet:
     module = modules[module_name]
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -545,7 +545,7 @@ def _compile_module(
     # Transitive module dependencies from other packages.
     cross_package_modules = ctx.actions.tset(
         CompiledModuleTSet,
-        children = args.result.dynamic,
+        children = args.result.module_tsets,
     )
     # Transitive module dependencies from the same package.
     this_package_modules = [
@@ -631,7 +631,7 @@ def compile(
     objects = [object for module in modules.values() for object in module.objects]
     stub_dirs = [module.stub_dir for module in modules.values()]
 
-    dynamic = ctx.actions.dynamic_output(
+    dyn_module_tsets = ctx.actions.dynamic_output(
         dynamic = [md_file],
         promises = [
             info.reduce("root").dynamic[enable_profiling]
@@ -671,5 +671,5 @@ def compile(
         hi = interfaces,
         stubs = stubs_dir,
         producing_indices = False,
-        dynamic = dynamic,
+        module_tsets = dyn_module_tsets,
     )

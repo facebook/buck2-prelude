@@ -606,8 +606,8 @@ def _build_haskell_lib(
             fail("Non-profiling HaskellLibBuildOutput wasn't provided when building profiling lib")
 
         dynamic = {
-            True: compiled.dynamic,
-            False: non_profiling_hlib.compiled.dynamic,
+            True: compiled.module_tsets,
+            False: non_profiling_hlib.compiled.module_tsets,
         }
         import_artifacts = {
             True: compiled.hi,
@@ -621,7 +621,7 @@ def _build_haskell_lib(
         stub_dirs = [compiled.stubs] + [non_profiling_hlib.compiled.stubs]
     else:
         dynamic = {
-            False: compiled.dynamic,
+            False: compiled.module_tsets,
         }
         import_artifacts = {
             False: compiled.hi,
