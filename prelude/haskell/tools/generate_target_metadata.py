@@ -59,6 +59,7 @@ def main():
         type=str,
         action="append",
         help="Haskell module source files of the current package.")
+    # TODO(ah) do not depend on other md files
     parser.add_argument(
         "--dependency-metadata",
         required=False,
@@ -144,6 +145,7 @@ def calc_package_prefixes(dependencies_metadata):
     Package names are stored under the marker key `//pkgname`. This is
     unambiguous since path components may not contain `/` characters.
     """
+    # TODO(ah) determine package prefixes without depending on md files.
     result = {}
     for pkgname, md in dependencies_metadata.items():
         path = Path(md["output_prefix"])

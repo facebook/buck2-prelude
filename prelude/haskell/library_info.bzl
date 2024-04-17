@@ -12,6 +12,7 @@
 # indirect dependencies for the purposes of module visibility.
 HaskellLibraryProvider = provider(
     fields = {
+        # TODO(ah) remove the metadata file field
         "metadata": provider_field(typing.Any, default = None),  # Artifact
         "lib": provider_field(typing.Any, default = None),  # dict[LinkStyle, HaskellLibraryInfo]
         "prof_lib": provider_field(typing.Any, default = None),  # dict[LinkStyle, HaskellLibraryInfo]
