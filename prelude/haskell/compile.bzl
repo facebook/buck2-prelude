@@ -257,7 +257,7 @@ def get_packages_info(
 
         for lib in direct_deps_link_info:
             info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-            direct = info.reduce("root")
+            direct = info.value
             dynamic = direct.dynamic[enable_profiling]
             dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
 
@@ -629,7 +629,7 @@ def compile(
     dyn_module_tsets = ctx.actions.dynamic_output(
         dynamic = [md_file],
         promises = [
-            info.reduce("root").dynamic[enable_profiling]
+            info.value.dynamic[enable_profiling]
             for lib in attr_deps_haskell_link_infos(ctx)
             for info in [
                 lib.prof_info[link_style]
