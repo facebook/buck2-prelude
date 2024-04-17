@@ -345,21 +345,12 @@ def _common_compile_args(
     )
 
     compile_args.add(packages_info.exposed_package_args)
-    if packages_info.exposed_package_modules == None:
+    if not modname:
         compile_args.hidden(packages_info.exposed_package_imports)
     compile_args.add(packages_info.packagedb_args)
     if enable_th:
         compile_args.add(packages_info.exposed_package_libs)
-        if modname and packages_info.exposed_package_modules == None:
-            # TODO(ah) remove this
-            for o in packages_info.exposed_package_objects:
-                if o.extension != ".o":
-                    prefix = o.owner.name + "-" + modname
-                    o_copy = ctx.actions.declare_output(prefix, paths.replace_extension(o.short_path, ".o"))
-                    compile_args.add(ctx.actions.symlink_file(o_copy, o))
-                else:
-                    compile_args.add(o)
-        else:
+        if not modname:
             compile_args.hidden(packages_info.exposed_package_objects)
 
     # Add args from preprocess-able inputs.
