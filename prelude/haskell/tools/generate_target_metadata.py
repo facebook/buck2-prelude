@@ -4,7 +4,7 @@
 
 * The mapping from module source file to actual module name.
 * The intra-package module dependency graph.
-* The transitive cross-package module dependency graph.
+* The cross-package module dependencies.
 * Which modules require Template Haskell.
 
 The result is a JSON object with the following fields:
@@ -12,7 +12,6 @@ The result is a JSON object with the following fields:
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
 * `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
-* `transitive_deps`: Cross-package module dependencies in topological order starting at the leafs, `dict[modname, dict[pkgname, list[modname]]]`.
 """
 
 import argparse
@@ -82,8 +81,6 @@ def obtain_target_metadata(args):
     package_prefixes = calc_package_prefixes(deps_md)
     module_mapping, module_graph, package_deps = interpret_ghc_depends(
         ghc_depends, args.source_prefix, package_prefixes)
-    transitive_deps = calc_transitive_deps(
-        args.pkgname, module_graph, package_deps, deps_md)
     return {
         "pkgname": args.pkgname,
         "output_prefix": output_prefix,
@@ -91,7 +88,6 @@ def obtain_target_metadata(args):
         "module_mapping": module_mapping,
         "module_graph": module_graph,
         "package_deps": package_deps,
-        "transitive_deps": transitive_deps,
     }
 
 
@@ -230,41 +226,6 @@ def parse_module_deps(module_deps, package_prefixes):
         internal_deps.append(src_to_module_name(module_dep))
 
     return internal_deps, external_deps
-
-
-def calc_transitive_deps(pkgname, module_graph, package_deps, deps_md):
-    result = {}
-
-    topo_modules = graphlib.TopologicalSorter(module_graph).static_order()
-
-    for modname in topo_modules:
-        result[modname] = {}
-
-        for dep_pkg, dep_pkg_mods in package_deps.get(modname, {}).items():
-            dep_pkg_trans_deps = deps_md[dep_pkg]["transitive_deps"]
-            for dep_pkg_mod in dep_pkg_mods:
-                for trans_pkg, trans_mods in dep_pkg_trans_deps[dep_pkg_mod].items():
-                    if trans_mods:
-                        result[modname].setdefault(trans_pkg, {}).update((m, None) for m in trans_mods)
-
-        for dep_pkg, dep_pkg_mods in package_deps.get(modname, {}).items():
-            if dep_pkg_mods:
-                result[modname].setdefault(dep_pkg, {}).update((m, None) for m in dep_pkg_mods)
-
-        for dep_mod in module_graph[modname]:
-            for trans_pkg, trans_mods in result[dep_mod].items():
-                if trans_mods:
-                    result[modname].setdefault(trans_pkg, {}).update((m, None) for m in trans_mods)
-
-        if module_graph[modname]:
-            result[modname].setdefault(pkgname, {}).update((m, None) for m in module_graph[modname])
-
-    for modname in result:
-        for dep_pkg in result[modname]:
-            dep_mods = list(result[modname][dep_pkg].keys())
-            result[modname][dep_pkg] = dep_mods
-
-    return result
 
 
 def src_to_module_name(x):
