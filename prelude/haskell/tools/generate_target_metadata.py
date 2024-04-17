@@ -11,6 +11,7 @@ The result is a JSON object with the following fields:
 * `th_modules`: List of modules that require Template Haskell.
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
+* `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
 * `transitive_deps`: Cross-package module dependencies in topological order starting at the leafs, `dict[modname, dict[pkgname, list[modname]]]`.
 """
 
@@ -89,6 +90,7 @@ def obtain_target_metadata(args):
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
+        "package_deps": package_deps,
         "transitive_deps": transitive_deps,
     }
 
