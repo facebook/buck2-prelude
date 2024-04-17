@@ -230,7 +230,7 @@ def get_packages_info(
         enable_profiling: bool,
         use_empty_lib: bool,
         resolved: None | dict[DynamicValue, typing.Any] = None,
-        transitive_deps: [None, dict[str, list[str]]] = None,
+        package_deps: None | dict[str, list[str]] = None,
         pkgname: str | None = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
@@ -252,7 +252,7 @@ def get_packages_info(
 
     packagedb_args = cmd_args()
 
-    if resolved != None and transitive_deps != None:
+    if resolved != None and package_deps != None:
         exposed_package_modules = []
 
         for lib in direct_deps_link_info:
@@ -261,12 +261,7 @@ def get_packages_info(
             dynamic = direct.dynamic[enable_profiling]
             dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
 
-            # TODO(ah) only track direct package deps
-            if direct.name not in transitive_deps:
-                # We don't depend on this package
-                continue
-
-            for mod in transitive_deps.get(direct.name, []):
+            for mod in package_deps.get(direct.name, []):
                 exposed_package_modules.append(dynamic_info.modules[mod])
     else:
         for lib in libs.traverse():
@@ -311,7 +306,7 @@ def _common_compile_args(
         pkgname: str | None,
         modname: str | None = None,
         resolved: None | dict[DynamicValue, typing.Any] = None,
-        transitive_deps: [None, dict[str, list[str]]] = None,
+        package_deps: None | dict[str, list[str]] = None,
         use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args):
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
@@ -340,7 +335,7 @@ def _common_compile_args(
         enable_profiling = enable_profiling,
         use_empty_lib = use_empty_lib,
         resolved = resolved,
-        transitive_deps = transitive_deps,
+        package_deps = package_deps,
         pkgname = pkgname,
     )
 
@@ -444,7 +439,7 @@ def _compile_module_args(
         outputs: dict[Artifact, Artifact],
         resolved: dict[DynamicValue, typing.Any],
         pkgname = None,
-        transitive_deps: [None, dict[str, list[str]]] = None) -> CompileArgsInfo:
+        package_deps: None | dict[str, list[str]] = None) -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     compile_cmd = cmd_args()
@@ -455,7 +450,7 @@ def _compile_module_args(
     compile_cmd.add(ctx.attrs.compiler_flags)
     compile_cmd.add("-c")
 
-    module_tsets, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, transitive_deps = transitive_deps)
+    module_tsets, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, package_deps = package_deps)
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
@@ -505,7 +500,7 @@ def _compile_module(
     module_tsets: dict[str, CompiledModuleTSet],
     md_file: Artifact,
     graph: dict[str, list[str]],
-    transitive_deps: dict[str, list[str]],
+    package_deps: dict[str, list[str]],
     outputs: dict[Artifact, Artifact],
     resolved: dict[DynamicValue, typing.Any],
     artifact_suffix: str,
@@ -516,7 +511,7 @@ def _compile_module(
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     compile_cmd = cmd_args(haskell_toolchain.compiler)
 
-    args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, resolved, pkgname, transitive_deps = transitive_deps)
+    args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, resolved, pkgname, package_deps = package_deps)
 
     if args.args_for_file:
         if haskell_toolchain.use_argsfile:
@@ -602,7 +597,7 @@ def compile(
         th_modules = md["th_modules"]
         module_map = md["module_mapping"]
         graph = md["module_graph"]
-        transitive_deps = md["transitive_deps"]
+        package_deps = md["package_deps"]
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
         module_tsets = {}
@@ -617,7 +612,7 @@ def compile(
                 modules = mapped_modules,
                 module_tsets = module_tsets,
                 graph = graph,
-                transitive_deps = transitive_deps[module_name],
+                package_deps = package_deps.get(module_name, {}),
                 outputs = outputs,
                 resolved = resolved,
                 md_file=md_file,
