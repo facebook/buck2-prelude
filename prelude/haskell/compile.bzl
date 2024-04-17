@@ -229,7 +229,7 @@ def get_packages_info(
         specify_pkg_version: bool,
         enable_profiling: bool,
         use_empty_lib: bool,
-        resolved: None | dict[DynamicValue, typing.Any] = None,
+        resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
         package_deps: None | dict[str, list[str]] = None,
         pkgname: str | None = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -305,7 +305,7 @@ def _common_compile_args(
         enable_th: bool,
         pkgname: str | None,
         modname: str | None = None,
-        resolved: None | dict[DynamicValue, typing.Any] = None,
+        resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
         package_deps: None | dict[str, list[str]] = None,
         use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args):
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
@@ -437,7 +437,7 @@ def _compile_module_args(
         enable_profiling: bool,
         enable_th: bool,
         outputs: dict[Artifact, Artifact],
-        resolved: dict[DynamicValue, typing.Any],
+        resolved: dict[DynamicValue, ResolvedDynamicValue],
         pkgname = None,
         package_deps: None | dict[str, list[str]] = None) -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -502,7 +502,7 @@ def _compile_module(
     graph: dict[str, list[str]],
     package_deps: dict[str, list[str]],
     outputs: dict[Artifact, Artifact],
-    resolved: dict[DynamicValue, typing.Any],
+    resolved: dict[DynamicValue, ResolvedDynamicValue],
     artifact_suffix: str,
     pkgname: str | None = None,
 ) -> CompiledModuleTSet:
