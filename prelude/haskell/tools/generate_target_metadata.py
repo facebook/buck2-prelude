@@ -15,7 +15,6 @@ The result is a JSON object with the following fields:
 """
 
 import argparse
-import graphlib
 import json
 import os
 from pathlib import Path
@@ -27,11 +26,6 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         fromfile_prefix_chars="@")
-    parser.add_argument(
-        "--pkgname",
-        required=True,
-        type=str,
-        help="The name of the current package.")
     parser.add_argument(
         "--output",
         required=True,
@@ -66,14 +60,6 @@ def main():
         action="append",
         default=[],
         help="Package dependencies formated as `NAME:PREFIX_PATH`.")
-    # TODO(ah) do not depend on other md files
-    parser.add_argument(
-        "--dependency-metadata",
-        required=False,
-        default=[],
-        type=str,
-        action="append",
-        help="Path to the JSON metadata file of a package dependency.")
     args = parser.parse_args()
 
     result = obtain_target_metadata(args)
@@ -82,23 +68,16 @@ def main():
 
 
 def obtain_target_metadata(args):
-    output_prefix = os.path.dirname(args.output.name)
     ghc_depends, ghc_options = run_ghc_depends(args.ghc, args.ghc_arg, args.source)
     th_modules = determine_th_modules(ghc_options, args.source_prefix)
-    deps_md = load_dependencies_metadata(args.dependency_metadata)
     package_prefixes = calc_package_prefixes(args.package)
     module_mapping, module_graph, package_deps = interpret_ghc_depends(
         ghc_depends, args.source_prefix, package_prefixes)
     return {
-        "pkgname": args.pkgname,
-        "output_prefix": output_prefix,
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
         "package_deps": package_deps,
-        "ghc_args": args.ghc_arg,
-        "packages": args.package,
-        "ghc_depends": ghc_depends,
     }
 
 
@@ -136,17 +115,6 @@ def run_ghc_depends(ghc, ghc_args, sources):
 
         with open(json_fname) as f, open(opt_json_fname) as o:
             return json.load(f), json.load(o)
-
-
-def load_dependencies_metadata(fnames):
-    result = {}
-
-    for fname in fnames:
-        with open(fname) as f:
-            md = json.load(f)
-            result[md["pkgname"]] = md
-
-    return result
 
 
 def calc_package_prefixes(package_specs):

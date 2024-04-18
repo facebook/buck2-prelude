@@ -182,7 +182,6 @@ def target_metadata(
     ghc_args.add(ctx.attrs.compiler_flags)
 
     md_args = cmd_args(md_gen)
-    md_args.add("--pkgname", pkgname)
     md_args.add("--output", md_file.as_output())
     md_args.add("--ghc", haskell_toolchain.compiler)
     md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
@@ -192,11 +191,6 @@ def target_metadata(
     )
     md_args.add(cmd_args(sources, format="--source={}"))
 
-    md_args.add(cmd_args(
-        _attr_deps_haskell_lib_metadata_files(ctx),
-        format="--dependency-metadata={}",
-    ))
-
     md_args.add(
         _attr_deps_haskell_lib_package_name_and_prefix(ctx),
     )
@@ -204,22 +198,6 @@ def target_metadata(
     ctx.actions.run(md_args, category = "haskell_metadata")
 
     return md_file
-
-def _attr_deps_haskell_lib_metadata_files(ctx: AnalysisContext) -> list[Artifact]:
-    result = []
-
-    for dep in attr_deps(ctx) + ctx.attrs.template_deps:
-        lib = dep.get(HaskellLibraryProvider)
-        if lib == None:
-            continue
-
-        md = lib.metadata
-        if md == None:
-            continue
-
-        result.append(md)
-
-    return result
 
 def _attr_deps_haskell_lib_package_name_and_prefix(ctx: AnalysisContext) -> cmd_args:
     args = cmd_args(prepend = "--package")
