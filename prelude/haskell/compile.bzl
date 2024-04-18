@@ -197,6 +197,10 @@ def target_metadata(
         format="--dependency-metadata={}",
     ))
 
+    md_args.add(
+        _attr_deps_haskell_lib_package_name_and_prefix(ctx),
+    )
+
     ctx.actions.run(md_args, category = "haskell_metadata")
 
     return md_file
@@ -216,6 +220,23 @@ def _attr_deps_haskell_lib_metadata_files(ctx: AnalysisContext) -> list[Artifact
         result.append(md)
 
     return result
+
+def _attr_deps_haskell_lib_package_name_and_prefix(ctx: AnalysisContext) -> cmd_args:
+    args = cmd_args(prepend = "--package")
+
+    for dep in attr_deps(ctx) + ctx.attrs.template_deps:
+        lib = dep.get(HaskellLibraryProvider)
+        if lib == None:
+            continue
+
+        lib_info = lib.lib.values()[0]
+        args.add(cmd_args(
+            lib_info.name,
+            cmd_args(lib_info.db, parent = 1),
+            delimiter = ":",
+        ))
+
+    return args
 
 def _package_flag(toolchain: HaskellToolchainInfo) -> str:
     if toolchain.support_expose_package:

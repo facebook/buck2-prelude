@@ -59,6 +59,13 @@ def main():
         type=str,
         action="append",
         help="Haskell module source files of the current package.")
+    parser.add_argument(
+        "--package",
+        required=False,
+        type=str,
+        action="append",
+        default=[],
+        help="Package dependencies formated as `NAME:PREFIX_PATH`.")
     # TODO(ah) do not depend on other md files
     parser.add_argument(
         "--dependency-metadata",
@@ -79,7 +86,7 @@ def obtain_target_metadata(args):
     ghc_depends, ghc_options = run_ghc_depends(args.ghc, args.ghc_arg, args.source)
     th_modules = determine_th_modules(ghc_options, args.source_prefix)
     deps_md = load_dependencies_metadata(args.dependency_metadata)
-    package_prefixes = calc_package_prefixes(deps_md)
+    package_prefixes = calc_package_prefixes(args.package)
     module_mapping, module_graph, package_deps = interpret_ghc_depends(
         ghc_depends, args.source_prefix, package_prefixes)
     return {
@@ -89,6 +96,9 @@ def obtain_target_metadata(args):
         "module_mapping": module_mapping,
         "module_graph": module_graph,
         "package_deps": package_deps,
+        "ghc_args": args.ghc_arg,
+        "packages": args.package,
+        "ghc_depends": ghc_depends,
     }
 
 
@@ -139,18 +149,16 @@ def load_dependencies_metadata(fnames):
     return result
 
 
-def calc_package_prefixes(dependencies_metadata):
+def calc_package_prefixes(package_specs):
     """Creates a trie to look up modules in dependency packages.
 
     Package names are stored under the marker key `//pkgname`. This is
     unambiguous since path components may not contain `/` characters.
     """
-    # TODO(ah) determine package prefixes without depending on md files.
     result = {}
-    for pkgname, md in dependencies_metadata.items():
-        path = Path(md["output_prefix"])
+    for pkgname, path in (spec.split(":", 1) for spec in package_specs):
         layer = result
-        for part in path.parts:
+        for part in Path(path).parts:
             layer = layer.setdefault(part, {})
         layer["//pkgname"] = pkgname
     return result
