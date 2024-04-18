@@ -78,13 +78,13 @@ def attr_deps(ctx: AnalysisContext) -> list[Dependency]:
     return ctx.attrs.deps + _by_platform(ctx, ctx.attrs.platform_deps)
 
 def attr_deps_haskell_link_infos(ctx: AnalysisContext) -> list[HaskellLinkInfo]:
-    return filter(
+    return dedupe(filter(
         None,
         [
             d.get(HaskellLinkInfo)
             for d in attr_deps(ctx) + ctx.attrs.template_deps
         ],
-    )
+    ))
 
 def attr_deps_haskell_toolchain_libraries(ctx: AnalysisContext) -> list[HaskellToolchainLibrary]:
     return filter(
@@ -97,13 +97,13 @@ def attr_deps_haskell_toolchain_libraries(ctx: AnalysisContext) -> list[HaskellT
 
 # DONT CALL THIS FUNCTION, you want attr_deps_haskell_link_infos instead
 def attr_deps_haskell_link_infos_sans_template_deps(ctx: AnalysisContext) -> list[HaskellLinkInfo]:
-    return filter(
+    return dedupe(filter(
         None,
         [
             d.get(HaskellLinkInfo)
             for d in attr_deps(ctx)
         ],
-    )
+    ))
 
 def attr_deps_haskell_lib_infos(
         ctx: AnalysisContext,
@@ -120,13 +120,13 @@ def attr_deps_haskell_lib_infos(
     ]
 
 def attr_deps_merged_link_infos(ctx: AnalysisContext) -> list[MergedLinkInfo]:
-    return filter(
+    return dedupe(filter(
         None,
         [
             d.get(MergedLinkInfo)
             for d in attr_deps(ctx)
         ],
-    )
+    ))
 
 def attr_deps_profiling_link_infos(ctx: AnalysisContext) -> list[MergedLinkInfo]:
     return filter(
