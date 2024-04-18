@@ -42,7 +42,7 @@ load("@prelude//utils:strings.bzl", "strip_prefix")
 CompiledModuleInfo = provider(fields = {
     "interfaces": provider_field(list[Artifact]),
     "objects": provider_field(list[Artifact]),
-    "object_dot_o": provider_field(Artifact),
+    "dyn_object_dot_o": provider_field(Artifact),
 })
 
 def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
@@ -51,14 +51,14 @@ def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
 def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.objects)
 
-def _compiled_module_project_as_objects_dot_o(mod: CompiledModuleInfo) -> cmd_args:
-    return cmd_args(mod.object_dot_o)
+def _compiled_module_project_as_dyn_objects_dot_o(mod: CompiledModuleInfo) -> cmd_args:
+    return cmd_args(mod.dyn_object_dot_o)
 
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "interfaces": _compiled_module_project_as_interfaces,
         "objects": _compiled_module_project_as_objects,
-        "objects_dot_o": _compiled_module_project_as_objects_dot_o,
+        "dyn_objects_dot_o": _compiled_module_project_as_dyn_objects_dot_o,
     },
 )
 
@@ -556,24 +556,23 @@ def _compile_module(
     compile_cmd.hidden(dependency_modules.project_as_args("interfaces"))
     if enable_th:
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
-        compile_cmd.add(cross_package_modules.project_as_args("objects_dot_o"))
+        compile_cmd.add(cross_package_modules.project_as_args("dyn_objects_dot_o"))
 
     ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name)
 
-    interface = module.interfaces[0]
-    object = module.objects[0]
+    object = module.objects[-1]
     if object.extension == ".o":
-        object_dot_o = object
+        dyn_object_dot_o = object
     else:
-        object_dot_o = ctx.actions.declare_output("dot-o", paths.replace_extension(object.short_path, ".o"))
-        ctx.actions.symlink_file(object_dot_o, object)
+        dyn_object_dot_o = ctx.actions.declare_output("dot-o", paths.replace_extension(object.short_path, ".o"))
+        ctx.actions.symlink_file(dyn_object_dot_o, object)
 
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
             interfaces = module.interfaces,
             objects = module.objects,
-            object_dot_o = object_dot_o,
+            dyn_object_dot_o = dyn_object_dot_o,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
