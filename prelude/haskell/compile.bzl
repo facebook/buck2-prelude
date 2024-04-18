@@ -40,16 +40,16 @@ load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_t
 load("@prelude//utils:strings.bzl", "strip_prefix")
 
 CompiledModuleInfo = provider(fields = {
-    "interface": provider_field(Artifact),
-    "object": provider_field(Artifact),
+    "interfaces": provider_field(list[Artifact]),
+    "objects": provider_field(list[Artifact]),
     "object_dot_o": provider_field(Artifact),
 })
 
 def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
-    return cmd_args(mod.interface)
+    return cmd_args(mod.interfaces)
 
 def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
-    return cmd_args(mod.object)
+    return cmd_args(mod.objects)
 
 def _compiled_module_project_as_objects_dot_o(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.object_dot_o)
@@ -571,8 +571,8 @@ def _compile_module(
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
-            interface = interface,
-            object = object,
+            interfaces = module.interfaces,
+            objects = module.objects,
             object_dot_o = object_dot_o,
         ),
         children = [cross_package_modules] + this_package_modules,
