@@ -36,7 +36,7 @@ load(
     "LinkStyle",
 )
 load("@prelude//:paths.bzl", "paths")
-load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_traversal")
+load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
 
 CompiledModuleInfo = provider(fields = {
@@ -192,7 +192,6 @@ _toolchain_library_catalog = anon_rule(
 def target_metadata(
         ctx: AnalysisContext,
         *,
-        pkgname: str,
         sources: list[Artifact],
         suffix: str = "",
     ) -> Artifact:
@@ -287,8 +286,7 @@ def get_packages_info(
         enable_profiling: bool,
         use_empty_lib: bool,
         resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
-        package_deps: None | dict[str, list[str]] = None,
-        pkgname: str | None = None) -> PackagesInfo:
+        package_deps: None | dict[str, list[str]] = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     # Collect library dependencies. Note that these don't need to be in a
@@ -394,7 +392,6 @@ def _common_compile_args(
         use_empty_lib = use_empty_lib,
         resolved = resolved,
         package_deps = package_deps,
-        pkgname = pkgname,
     )
 
     if not modname:

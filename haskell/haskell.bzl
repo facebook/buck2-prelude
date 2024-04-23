@@ -703,7 +703,6 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
     md_file = target_metadata(
         ctx,
-        pkgname = pkgname,
         sources = ctx.attrs.srcs,
     )
 
@@ -983,7 +982,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     if enable_profiling and link_style == LinkStyle("shared"):
         link_style = LinkStyle("static")
 
-    md_file = target_metadata(ctx, pkgname = "", sources = ctx.attrs.srcs)
+    md_file = target_metadata(ctx, sources = ctx.attrs.srcs)
 
     compiled = compile(
         ctx,
