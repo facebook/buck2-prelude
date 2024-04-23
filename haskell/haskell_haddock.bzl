@@ -35,7 +35,7 @@ HaskellHaddockInfo = provider(
 
 
 _HaddockInterface = record(
-    src = Artifact,
+    hi = Artifact,
     output = Artifact,
     html = Artifact,
 )
@@ -86,19 +86,14 @@ def _dump_haddock_interface(
     ]
     #pprint(this_package_modules)
 
-    haskell_interface = cmd_args(
-        cmd_args(outputs[haddock_interface.output].as_output(), parent = 2),
-        "mod-shared",
-        paths.replace_extension(haddock_interface.src.short_path, ".dyn_hi"), delimiter='/')
     ctx.actions.run(
         cmd.copy().add(
             "--html",
             "--hoogle",
             "--odir", cmd_args(outputs[haddock_interface.html].as_output(), parent = 1),
             "--dump-interface", outputs[haddock_interface.output].as_output(),
-            # TODO add specific reference to hi artifact
             cmd_args(
-                haskell_interface,
+                haddock_interface.hi,
                 format="--one-shot-hi={}"),
             cmd_args(
                 [haddock_info.project_as_args("interfaces") for haddock_info in this_package_modules],
@@ -107,7 +102,7 @@ def _dump_haddock_interface(
                 cross_interfaces, format="--one-shot-dep-hi={}"
             )
         ),
-        category = "haskell_haddock_x",
+        category = "haskell_haddock",
         identifier = module_name,
         no_outputs_cleanup = True,
     )
@@ -116,17 +111,14 @@ def _dump_haddock_interface(
 
     return ctx.actions.tset(
         _HaddockInfoTSet,
-        value = _HaddockInfo(interface = haskell_interface, dump = outputs[haddock_interface.output], html = outputs[haddock_interface.html]),
+        value = _HaddockInfo(interface = haddock_interface.hi, dump = outputs[haddock_interface.output], html = outputs[haddock_interface.html]),
         children = this_package_modules,
     )
 
-    #haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
-def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, sources: list[Artifact], compiled: CompileResultInfo, md_file: Artifact) -> Provider:
+#def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, sources: list[Artifact], compiled: CompileResultInfo, md_file: Artifact) -> Provider:
+def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileResultInfo, md_file: Artifact) -> Provider:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    hifaces = [] # : list[Artifact]
-    #iface = ctx.actions.declare_output("haddock-interface")
-    #odir = ctx.actions.declare_output("haddock-html", dir = True)
 
     link_style = cxx_toolchain_link_style(ctx)
     # args = compile_args(
@@ -198,12 +190,12 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, sources: list[Artifa
     #modules = modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = False, suffix = artifact_suffix)
 
     haddock_interfaces = {
-        src_to_module_name(src.short_path): _HaddockInterface(
-            src = src,
-            output = ctx.actions.declare_output("haddock-interface/{}.haddock".format(src_to_module_name(src.short_path))),
-            html = ctx.actions.declare_output("haddock-html/{}.html".format(src_to_module_name(src.short_path).replace(".", "-"))),
+        src_to_module_name(hi.short_path): _HaddockInterface(
+            hi = hi,
+            output = ctx.actions.declare_output("haddock-interface/{}.haddock".format(src_to_module_name(hi.short_path))),
+            html = ctx.actions.declare_output("haddock-html/{}.html".format(src_to_module_name(hi.short_path).replace(".", "-"))),
         )
-        for src in sources if is_haskell_src(src.short_path)
+        for hi in compiled.hi
     }
 
     # for haddock in haddock_interfaces.values():
@@ -277,7 +269,7 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, sources: list[Artifa
                 lib.info[link_style]
             ]
         ],
-        inputs = hifaces,
+        inputs = compiled.hi,
         outputs = [output.as_output() for haddock in haddock_interfaces.values() for output in [haddock.output, haddock.html]],
         f = dump_haddock_interfaces
     )

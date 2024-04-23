@@ -863,7 +863,6 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
         haskell_haddock_lib(
             ctx,
             pkgname,
-            [src for src in ctx.attrs.srcs if is_haskell_src(src.short_path)],
             non_profiling_hlib[LinkStyle("shared")].compiled,
             md_file,
         ),
