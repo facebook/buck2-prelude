@@ -476,7 +476,7 @@ def _compile_module_args(
         compile_args.add("-dyno", objects[1].as_output())
         compile_args.add("-dynohi", his[1].as_output())
 
-    srcs = cmd_args(module.source)
+    srcs = cmd_args("--source", module.source)
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
         # hs-boot files aren't expected to be an argument to compiler but does need
         # to be included in the directory of the associated src file
@@ -520,7 +520,8 @@ def _compile_module(
     module = modules[module_name]
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    compile_cmd = cmd_args(haskell_toolchain.compiler)
+    compile_cmd = cmd_args(ctx.attrs._incremental_ghc[RunInfo])
+    compile_cmd.add("--ghc", haskell_toolchain.compiler)
 
     args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, resolved, pkgname, package_deps = package_deps)
 
@@ -569,7 +570,12 @@ def _compile_module(
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
         compile_cmd.add(cross_package_modules.project_as_args("dyn_objects_dot_o"))
 
-    ctx.actions.run(compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name)
+    ctx.actions.run(
+        compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
+        metadata_env_var = "ACTION_METADATA",
+        metadata_path = "ghc_{}.json".format(module_name),
+        no_outputs_cleanup = True,
+    )
 
     object = module.objects[-1]
     if object.extension == ".o":

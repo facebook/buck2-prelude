@@ -46,6 +46,10 @@ def _scripts_arg():
             providers = [RunInfo],
             default = "prelude//haskell/tools:generate_target_metadata",
         ),
+        "_incremental_ghc": attrs.dep(
+            providers = [RunInfo],
+            default = "prelude//haskell/tools:incremental_ghc",
+        ),
     }
 
 haskell_common = struct(
