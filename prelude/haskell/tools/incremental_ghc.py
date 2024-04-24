@@ -38,11 +38,19 @@ def main():
 
     metadata_file = os.environ.get('ACTION_METADATA')
 
+    needs_recompilation = True
+
     if metadata_file:
         # open metadata file as json
         with open(metadata_file) as f:
             digests = json.load(f)
-            #print(digests, file=sys.stderr)
+            # check version
+            assert digests.get('version') == 1
+
+            json.dump(digests, sys.stderr, indent=True)
+            print(file=sys.stderr)
+
+    if not needs_recompilation: return
 
     cmd = [
         args.ghc,

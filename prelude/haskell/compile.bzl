@@ -40,10 +40,14 @@ load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_t
 load("@prelude//utils:strings.bzl", "strip_prefix")
 
 CompiledModuleInfo = provider(fields = {
+    "abi": provider_field(list[Artifact]),
     "interfaces": provider_field(list[Artifact]),
     "objects": provider_field(list[Artifact]),
     "dyn_object_dot_o": provider_field(Artifact),
 })
+
+def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
+    return cmd_args(mod.abi)
 
 def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.interfaces)
@@ -56,6 +60,7 @@ def _compiled_module_project_as_dyn_objects_dot_o(mod: CompiledModuleInfo) -> cm
 
 CompiledModuleTSet = transitive_set(
     args_projections = {
+        "abi": _compiled_module_project_as_abi,
         "interfaces": _compiled_module_project_as_interfaces,
         "objects": _compiled_module_project_as_objects,
         "dyn_objects_dot_o": _compiled_module_project_as_dyn_objects_dot_o,
@@ -565,6 +570,7 @@ def _compile_module(
         children = [cross_package_modules] + this_package_modules,
     )
 
+    compile_cmd.hidden(dependency_modules.project_as_args("abi"))
     compile_cmd.hidden(dependency_modules.project_as_args("interfaces"))
     if enable_th:
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
@@ -603,6 +609,7 @@ def _compile_module(
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
+            abi = module.hashes,
             interfaces = module.interfaces,
             objects = module.objects,
             dyn_object_dot_o = dyn_object_dot_o,
