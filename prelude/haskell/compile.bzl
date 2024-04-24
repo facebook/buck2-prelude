@@ -71,6 +71,7 @@ CompileResultInfo = record(
     objects = field(list[Artifact]),
     hi = field(list[Artifact]),
     stubs = field(Artifact),
+    hashes = field(list[Artifact]),
     producing_indices = field(bool),
     module_tsets = field(None | list[CompiledModuleTSet] | DynamicValue),
 )
@@ -95,6 +96,7 @@ PackagesInfo = record(
 _Module = record(
     source = field(Artifact),
     interfaces = field(list[Artifact]),
+    hashes = field(list[Artifact]),
     objects = field(list[Artifact]),
     stub_dir = field(Artifact),
     prefix_dir = field(str),
@@ -123,6 +125,7 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
         object_path = paths.replace_extension(src.short_path, "." + osuf)
         object = ctx.actions.declare_output("mod-" + suffix, object_path)
         objects = [object]
+        hashes = [ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash")]
 
         if link_style in [LinkStyle("static"), LinkStyle("static_pic")]:
             dyn_osuf, dyn_hisuf = output_extensions(LinkStyle("shared"), enable_profiling)
@@ -132,9 +135,16 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
             object_path = paths.replace_extension(src.short_path, "." + dyn_osuf)
             object = ctx.actions.declare_output("mod-" + suffix, object_path)
             objects.append(object)
+            hashes.append(ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash"))
 
         stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
-        modules[module_name] = _Module(source = src, interfaces = interfaces, objects = objects, stub_dir = stub_dir, prefix_dir = "mod-" + suffix)
+        modules[module_name] = _Module(
+            source = src,
+            interfaces = interfaces,
+            hashes = hashes,
+            objects = objects,
+            stub_dir = stub_dir,
+            prefix_dir = "mod-" + suffix)
 
     return modules
 
@@ -420,6 +430,7 @@ def compile_args(
         result = CompileResultInfo(
             objects = [objects],
             hi = [hi],
+            hashes = [],
             stubs = stubs,
             producing_indices = producing_indices,
             module_tsets = None,
@@ -478,6 +489,7 @@ def _compile_module_args(
         result = CompileResultInfo(
             objects = objects,
             hi = his,
+            hashes = [],
             stubs = stubs,
             producing_indices = producing_indices,
             module_tsets = module_tsets,
@@ -566,6 +578,22 @@ def _compile_module(
         dyn_object_dot_o = ctx.actions.declare_output("dot-o", paths.replace_extension(object.short_path, ".o"))
         ctx.actions.symlink_file(dyn_object_dot_o, object)
 
+    ctx.actions.run(
+        cmd_args(
+            "bash", "-c",
+            cmd_args(
+                haskell_toolchain.compiler,
+                "--show-iface",
+                outputs[module.interfaces[0]],
+                "| grep 'ABI hash:' >",
+                outputs[module.hashes[0]].as_output(),
+                delimiter=" ",
+            ),
+        ),
+        category = "haskell_compile_hash_" + artifact_suffix.replace("-", "_"),
+        identifier = module_name,
+    )
+
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
@@ -623,6 +651,7 @@ def compile(
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
     objects = [object for module in modules.values() for object in module.objects]
     stub_dirs = [module.stub_dir for module in modules.values()]
+    abi_hashes = [hash for module in modules.values() for hash in module.hashes]
 
     dyn_module_tsets = ctx.actions.dynamic_output(
         dynamic = [md_file],
@@ -636,7 +665,7 @@ def compile(
             ]
         ],
         inputs = ctx.attrs.srcs,
-        outputs = [o.as_output() for o in interfaces + objects + stub_dirs],
+        outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
         f = do_compile)
 
     stubs_dir = ctx.actions.declare_output("stubs-" + artifact_suffix, dir=True)
@@ -662,6 +691,7 @@ def compile(
     return CompileResultInfo(
         objects = objects,
         hi = interfaces,
+        hashes = abi_hashes,
         stubs = stubs_dir,
         producing_indices = False,
         module_tsets = dyn_module_tsets,

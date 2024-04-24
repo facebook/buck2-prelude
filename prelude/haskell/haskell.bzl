@@ -739,6 +739,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
                 prof_hlink_infos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlib, children = [li.prof_info[link_style] for li in hlis])
                 prof_link_infos[link_style] = hlib_build_out.link_infos
             else:
+                sub_targets['hashes'] = [DefaultInfo(default_outputs = compiled.hashes)]
                 hlib_infos[link_style] = hlib
                 hlink_infos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlib, children = [li.info[link_style] for li in hlis])
                 link_infos[link_style] = hlib_build_out.link_infos
