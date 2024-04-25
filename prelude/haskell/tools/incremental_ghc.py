@@ -9,9 +9,33 @@ import graphlib
 import json
 import os
 from pathlib import Path
+from pprint import pprint
 import subprocess
 import tempfile
 import sys
+
+# this class keeps track of a path of a file and its corresponding digest
+class FileDigest:
+    def __init__(self, path, digest):
+        self.path = path
+        self.digest = digest
+
+    def __hash__(self):
+        return hash((self.path, self.digest))
+
+    def __eq__(self, other):
+        return self.path == other.path and self.digest == other.digest
+
+    def __repr__(self):
+        return f"FileDigest({self.path}, {self.digest})"
+    
+    @staticmethod
+    def from_dict(d):
+        return FileDigest(d['path'], d['digest'])
+    
+    def to_dict(self):
+        return {'path': self.path, 'digest': self.digest}
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -26,6 +50,7 @@ def main():
     parser.add_argument(
         "--abi",
         type=str,
+        default=[],
         action="append",
         help="File with ABI hash for a interface file.")
     parser.add_argument(
@@ -41,14 +66,15 @@ def main():
     needs_recompilation = True
 
     if metadata_file:
-        # open metadata file as json
         with open(metadata_file) as f:
-            digests = json.load(f)
+            metadata = json.load(f)
+            
             # check version
-            assert digests.get('version') == 1
+            assert metadata.get('version') == 1
 
-            json.dump(digests, sys.stderr, indent=True)
-            print(file=sys.stderr)
+            digests = set([FileDigest.from_dict(entry) for entry in metadata['digests']])
+
+            pprint(digests, stream=sys.stderr)
 
     if not needs_recompilation: return
 

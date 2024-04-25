@@ -570,7 +570,7 @@ def _compile_module(
         children = [cross_package_modules] + this_package_modules,
     )
 
-    compile_cmd.hidden(dependency_modules.project_as_args("abi"))
+    compile_cmd.add(cmd_args(dependency_modules.project_as_args("abi"), format="--abi={}"))
     compile_cmd.hidden(dependency_modules.project_as_args("interfaces"))
     if enable_th:
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
