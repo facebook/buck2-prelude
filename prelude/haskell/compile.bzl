@@ -576,6 +576,8 @@ def _compile_module(
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
         compile_cmd.add(cross_package_modules.project_as_args("dyn_objects_dot_o"))
 
+    state = ctx.actions.declare_output("state-{}_{}.json".format(module_name, artifact_suffix))
+    compile_cmd.add("--state", state.as_output())
     ctx.actions.run(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
         metadata_env_var = "ACTION_METADATA",
