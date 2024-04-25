@@ -5,7 +5,6 @@
 """
 
 import argparse
-import graphlib
 import json
 import os
 from pathlib import Path
@@ -28,11 +27,11 @@ class FileDigest:
 
     def __repr__(self):
         return f"FileDigest({self.path}, {self.digest})"
-    
+
     @staticmethod
     def from_dict(d):
         return FileDigest(Path(d['path']), d['digest'])
-    
+
     def to_dict(self):
         return {'path': str(self.path), 'digest': self.digest}
 
@@ -77,34 +76,39 @@ def main():
 
     metadata_file = os.environ['ACTION_METADATA']
 
-    needs_recompilation = True
+    with open(metadata_file) as f:
+        metadata = json.load(f)
+
+        # check version
+        version = metadata.get('version')
+        if version != 1:
+            sys.exit("version of metadata file not supported: {}".format(version))
+
+        digests = set([FileDigest.from_dict(entry) for entry in metadata['digests']])
 
     if os.path.exists(args.state):
         with open(args.state) as f:
             old_state = json.load(f)
 
-            print(old_state, file=sys.stderr)
+        old_state = set([FileDigest.from_dict(entry) for entry in old_state])
 
-        # 1. delete file
+        # delete file
         os.remove(args.state)
     else:
-        old_state = []
-
-    with open(metadata_file) as f:
-        metadata = json.load(f)
-
-        # check version
-        assert metadata.get('version') == 1
-
-        digests = set([FileDigest.from_dict(entry) for entry in metadata['digests']])
-
-        pprint(digests, stream=sys.stderr)
+        old_state = set()
 
     # filter out all files that have a corresponding ABI hash file, remove the `.hash` extension
     hi_files = set([abi.with_suffix('') for abi in args.abi])
 
     digests = set([d for d in digests if d.path not in hi_files])
-        
+
+    diff = digests ^ old_state # changed, newly added, removed
+    if diff:
+        print("Files that changed:", file=sys.stderr)
+        pprint(diff, stream=sys.stderr)
+
+    needs_recompilation = digests != old_state
+
     if needs_recompilation:
         cmd = [
             args.ghc,
@@ -112,6 +116,8 @@ def main():
         ] + ghc_args
 
         subprocess.check_call(cmd)
+    else:
+        print("No recompilation needed", file=sys.stderr)
 
     # 2. write file
     try:
