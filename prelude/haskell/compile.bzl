@@ -40,7 +40,7 @@ load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_t
 load("@prelude//utils:strings.bzl", "strip_prefix")
 
 CompiledModuleInfo = provider(fields = {
-    "abi": provider_field(list[Artifact]),
+    "abi": provider_field(Artifact),
     "interfaces": provider_field(list[Artifact]),
     "objects": provider_field(list[Artifact]),
     "dyn_object_dot_o": provider_field(Artifact),
@@ -101,7 +101,7 @@ PackagesInfo = record(
 _Module = record(
     source = field(Artifact),
     interfaces = field(list[Artifact]),
-    hashes = field(list[Artifact]),
+    hash = field(Artifact),
     objects = field(list[Artifact]),
     stub_dir = field(Artifact),
     prefix_dir = field(str),
@@ -130,7 +130,7 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
         object_path = paths.replace_extension(src.short_path, "." + osuf)
         object = ctx.actions.declare_output("mod-" + suffix, object_path)
         objects = [object]
-        hashes = [ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash")]
+        hash = ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash")
 
         if link_style in [LinkStyle("static"), LinkStyle("static_pic")]:
             dyn_osuf, dyn_hisuf = output_extensions(LinkStyle("shared"), enable_profiling)
@@ -140,13 +140,12 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
             object_path = paths.replace_extension(src.short_path, "." + dyn_osuf)
             object = ctx.actions.declare_output("mod-" + suffix, object_path)
             objects.append(object)
-            hashes.append(ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash"))
 
         stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
         modules[module_name] = _Module(
             source = src,
             interfaces = interfaces,
-            hashes = hashes,
+            hash = hash,
             objects = objects,
             stub_dir = stub_dir,
             prefix_dir = "mod-" + suffix)
@@ -494,7 +493,7 @@ def _compile_module_args(
         result = CompileResultInfo(
             objects = objects,
             hi = his,
-            hashes = [],
+            hashes = [module.hash],
             stubs = stubs,
             producing_indices = producing_indices,
             module_tsets = module_tsets,
@@ -600,7 +599,7 @@ def _compile_module(
                 "--show-iface",
                 outputs[module.interfaces[0]],
                 "| grep 'ABI hash:' >",
-                outputs[module.hashes[0]].as_output(),
+                outputs[module.hash].as_output(),
                 delimiter=" ",
             ),
         ),
@@ -611,7 +610,7 @@ def _compile_module(
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
-            abi = module.hashes,
+            abi = module.hash,
             interfaces = module.interfaces,
             objects = module.objects,
             dyn_object_dot_o = dyn_object_dot_o,
@@ -666,7 +665,7 @@ def compile(
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
     objects = [object for module in modules.values() for object in module.objects]
     stub_dirs = [module.stub_dir for module in modules.values()]
-    abi_hashes = [hash for module in modules.values() for hash in module.hashes]
+    abi_hashes = [module.hash for module in modules.values()]
 
     dyn_module_tsets = ctx.actions.dynamic_output(
         dynamic = [md_file],
