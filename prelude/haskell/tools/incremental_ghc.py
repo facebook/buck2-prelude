@@ -28,13 +28,22 @@ class FileDigest:
 
     def __repr__(self):
         return f"FileDigest({self.path}, {self.digest})"
-
+    
     @staticmethod
     def from_dict(d):
-        return FileDigest(d['path'], d['digest'])
-
+        return FileDigest(Path(d['path']), d['digest'])
+    
     def to_dict(self):
-        return {'path': self.path, 'digest': self.digest}
+        return {'path': str(self.path), 'digest': self.digest}
+
+
+class FileDigestEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, FileDigest):
+            return o.to_dict()
+        elif isinstance(o, set):
+            return [self.default(e) for e in o]
+        return super().default(o)
 
 
 def main():
@@ -54,7 +63,7 @@ def main():
         help="Path to the Haskell compiler GHC.")
     parser.add_argument(
         "--abi",
-        type=str,
+        type=Path,
         default=[],
         action="append",
         help="File with ABI hash for a interface file.")
@@ -66,7 +75,7 @@ def main():
 
     args, ghc_args = parser.parse_known_args()
 
-    metadata_file = os.environ.get('ACTION_METADATA')
+    metadata_file = os.environ['ACTION_METADATA']
 
     needs_recompilation = True
 
@@ -79,19 +88,23 @@ def main():
         # 1. delete file
         os.remove(args.state)
     else:
-        old_state = {'digests': []}
+        old_state = []
 
-    if metadata_file:
-        with open(metadata_file) as f:
-            metadata = json.load(f)
+    with open(metadata_file) as f:
+        metadata = json.load(f)
 
-            # check version
-            assert metadata.get('version') == 1
+        # check version
+        assert metadata.get('version') == 1
 
-            digests = set([FileDigest.from_dict(entry) for entry in metadata['digests']])
+        digests = set([FileDigest.from_dict(entry) for entry in metadata['digests']])
 
-            pprint(digests, stream=sys.stderr)
+        pprint(digests, stream=sys.stderr)
 
+    # filter out all files that have a corresponding ABI hash file, remove the `.hash` extension
+    hi_files = set([abi.with_suffix('') for abi in args.abi])
+
+    digests = set([d for d in digests if d.path not in hi_files])
+        
     if needs_recompilation:
         cmd = [
             args.ghc,
@@ -101,9 +114,13 @@ def main():
         subprocess.check_call(cmd)
 
     # 2. write file
-    with open(args.state, 'w') as f:
-        json.dump(old_state, f)
-
+    try:
+        with open(args.state, 'w') as f:
+            json.dump(digests, f, cls=FileDigestEncoder, indent=2)
+    except Exception as e:
+        # remove incomplete state file
+        os.remove(args.state)
+        raise e
 
 if __name__ == "__main__":
     main()
