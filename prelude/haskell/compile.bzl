@@ -480,7 +480,7 @@ def _compile_module_args(
         compile_args.add("-dyno", objects[1].as_output())
         compile_args.add("-dynohi", his[1].as_output())
 
-    srcs = cmd_args("--source", module.source)
+    srcs = cmd_args(module.source)
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
         # hs-boot files aren't expected to be an argument to compiler but does need
         # to be included in the directory of the associated src file
@@ -569,19 +569,28 @@ def _compile_module(
         children = [cross_package_modules] + this_package_modules,
     )
 
-    compile_cmd.add(cmd_args(dependency_modules.project_as_args("abi"), format="--abi={}"))
-    compile_cmd.hidden(dependency_modules.project_as_args("interfaces"))
+    abi_tag = ctx.actions.artifact_tag()
+
+    compile_cmd.hidden(
+        abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")))
     if enable_th:
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
         compile_cmd.add(cross_package_modules.project_as_args("dyn_objects_dot_o"))
 
-    state = ctx.actions.declare_output("state-{}_{}.json".format(module_name, artifact_suffix))
-    compile_cmd.add("--state", state.as_output())
+    dep_file = ctx.actions.declare_output("dep-{}_{}".format(module_name, artifact_suffix)).as_output()
+
+    tagged_dep_file = abi_tag.tag_artifacts(dep_file)
+
+    compile_cmd.add(abi_tag.tag_artifacts(cmd_args(dependency_modules.project_as_args("abi"), format="--abi={}")))
+    compile_cmd.add("--buck2-dep", tagged_dep_file)
+
     ctx.actions.run(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
         metadata_env_var = "ACTION_METADATA",
         metadata_path = "ghc_{}.json".format(module_name),
-        no_outputs_cleanup = True,
+        dep_files = {
+            "abi": abi_tag,
+        }
     )
 
     object = module.objects[-1]
