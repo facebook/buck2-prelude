@@ -581,14 +581,12 @@ def _compile_module(
 
     tagged_dep_file = abi_tag.tag_artifacts(dep_file)
 
-    compile_cmd.add(abi_tag.tag_artifacts(cmd_args(dependency_modules.project_as_args("abi"), format="--abi={}")))
     compile_cmd.add("--buck2-dep", tagged_dep_file)
     compile_cmd.add("--abi-out", outputs[module.hash].as_output())
+    compile_cmd.hidden(dependency_modules.project_as_args("abi"))
 
     ctx.actions.run(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
-        metadata_env_var = "ACTION_METADATA",
-        metadata_path = "ghc_{}.json".format(module_name),
         dep_files = {
             "abi": abi_tag,
         }

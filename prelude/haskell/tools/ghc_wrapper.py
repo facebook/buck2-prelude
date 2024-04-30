@@ -12,9 +12,7 @@ import argparse
 import json
 import os
 from pathlib import Path
-from pprint import pprint
 import subprocess
-import tempfile
 import sys
 
 
@@ -31,13 +29,6 @@ def main():
         "--ghc", required=True, type=str, help="Path to the Haskell compiler GHC."
     )
     parser.add_argument(
-        "--abi",
-        type=Path,
-        default=[],
-        action="append",
-        help="File with ABI hash for a interface file.",
-    )
-    parser.add_argument(
         "--abi-out",
         required=True,
         type=Path,
@@ -46,34 +37,16 @@ def main():
 
     args, ghc_args = parser.parse_known_args()
 
-    metadata_file = os.environ["ACTION_METADATA"]
-
-    with open(metadata_file) as f:
-        metadata = json.load(f)
-
-        # check version
-        version = metadata.get("version")
-        if version != 1:
-            sys.exit("version of metadata file not supported: {}".format(version))
-
-        inputs = set(Path(entry["path"]) for entry in metadata["digests"])
-
-    # get interface files that have a corresponding ABI hash file
-    hi_files = set([abi.with_suffix("") for abi in args.abi])
-
-    # all inputs are used *except* the hi files
-    used_inputs = inputs - hi_files
-
     cmd = [args.ghc] + ghc_args
 
     subprocess.check_call(cmd)
 
     recompute_abi_hash(args.ghc, args.abi_out)
 
-    # write the dep file
+    # write an empty dep file, to signal that all tagged files are unused
     try:
         with open(args.buck2_dep, "w") as f:
-            f.write("\n".join(map(str, used_inputs)))
+            f.write("\n")
 
     except Exception as e:
         # remove incomplete dep file
