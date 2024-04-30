@@ -574,8 +574,7 @@ def _compile_module(
     compile_cmd.hidden(
         abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")))
     if enable_th:
-        compile_cmd.hidden(dependency_modules.project_as_args("objects"))
-        compile_cmd.add(cross_package_modules.project_as_args("dyn_objects_dot_o"))
+        compile_cmd.add(dependency_modules.project_as_args("dyn_objects_dot_o"))
 
     dep_file = ctx.actions.declare_output("dep-{}_{}".format(module_name, artifact_suffix)).as_output()
 
