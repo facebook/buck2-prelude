@@ -5,7 +5,7 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
-load("@prelude//haskell:compile.bzl", "compile_args", "CompileResultInfo", "CompiledModuleTSet", "DynamicCompileResultInfo")
+load("@prelude//haskell:compile.bzl", "CompileResultInfo", "CompiledModuleTSet", "DynamicCompileResultInfo")
 load("@prelude//haskell:link_info.bzl", "cxx_toolchain_link_style")
 load(
     "@prelude//haskell:toolchain.bzl",
