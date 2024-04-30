@@ -194,8 +194,9 @@ def target_metadata(
         *,
         pkgname: str,
         sources: list[Artifact],
+        suffix: str = "",
     ) -> Artifact:
-    md_file = ctx.actions.declare_output(ctx.attrs.name + ".md.json")
+    md_file = ctx.actions.declare_output(ctx.attrs.name + suffix + ".md.json")
     md_gen = ctx.attrs._generate_target_metadata[RunInfo]
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -252,7 +253,7 @@ def target_metadata(
         _attr_deps_haskell_lib_package_name_and_prefix(ctx),
     )
 
-    ctx.actions.run(md_args, category = "haskell_metadata")
+    ctx.actions.run(md_args, category = "haskell_metadata", identifier = suffix if suffix else None)
 
     return md_file
 
@@ -436,7 +437,7 @@ def compile_args(
     compile_cmd.add(ctx.attrs.compiler_flags)
 
     # TODO[CB] use the empty lib once using hi haddock
-    _, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, use_empty_lib = False)
+    _, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, use_empty_lib = True)
 
     if getattr(ctx.attrs, "main", None) != None:
         compile_args.add(["-main-is", ctx.attrs.main])
