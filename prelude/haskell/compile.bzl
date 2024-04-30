@@ -524,7 +524,7 @@ def _compile_module(
     module = modules[module_name]
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    compile_cmd = cmd_args(ctx.attrs._incremental_ghc[RunInfo])
+    compile_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
     compile_cmd.add("--ghc", haskell_toolchain.compiler)
 
     args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, resolved, pkgname, package_deps = package_deps)

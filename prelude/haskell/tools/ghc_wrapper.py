@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
-"""Helper script to compile haskell modules incrementally
+"""Wrapper script to call ghc.
+
+It accepts a dep file where all used inputs are written to. For any passed ABI
+hash file, the corresponding interface is marked as unused, so these can change
+without triggering compilation actions.
 
 """
 
