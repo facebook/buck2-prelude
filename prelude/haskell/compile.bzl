@@ -583,6 +583,7 @@ def _compile_module(
 
     compile_cmd.add(abi_tag.tag_artifacts(cmd_args(dependency_modules.project_as_args("abi"), format="--abi={}")))
     compile_cmd.add("--buck2-dep", tagged_dep_file)
+    compile_cmd.add("--abi-out", outputs[module.hash].as_output())
 
     ctx.actions.run(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
@@ -599,22 +600,6 @@ def _compile_module(
     else:
         dyn_object_dot_o = ctx.actions.declare_output("dot-o", paths.replace_extension(object.short_path, ".o"))
         ctx.actions.symlink_file(dyn_object_dot_o, object)
-
-    ctx.actions.run(
-        cmd_args(
-            "bash", "-c",
-            cmd_args(
-                haskell_toolchain.compiler,
-                "--show-iface",
-                outputs[module.interfaces[0]],
-                "| grep 'ABI hash:' >",
-                outputs[module.hash].as_output(),
-                delimiter=" ",
-            ),
-        ),
-        category = "haskell_compile_hash_" + artifact_suffix.replace("-", "_"),
-        identifier = module_name,
-    )
 
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
