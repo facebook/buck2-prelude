@@ -63,6 +63,14 @@ def _compiled_module_project_as_package_deps(mod: CompiledModuleInfo) -> cmd_arg
     # TODO[AH] avoid duplicate package flags
     return cmd_args(mod.package_deps)
 
+def _compiled_module_reduce_as_package_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
+    # TODO[AH] is there a better way to avoid duplicate -package flags?
+    #   Using a project instead would produce duplicates.
+    result = {pkg: None for pkg in mod.package_deps} if mod else {}
+    for child in children:
+        result.update(child)
+    return result
+
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
@@ -70,6 +78,9 @@ CompiledModuleTSet = transitive_set(
         "objects": _compiled_module_project_as_objects,
         "dyn_objects_dot_o": _compiled_module_project_as_dyn_objects_dot_o,
         "package_deps": _compiled_module_project_as_package_deps,
+    },
+    reductions = {
+        "package_deps": _compiled_module_reduce_as_package_deps,
     },
 )
 
@@ -618,7 +629,7 @@ def _compile_module(
     if enable_th:
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
         compile_cmd.add(dependency_modules.project_as_args("dyn_objects_dot_o"))
-        compile_cmd.add(cmd_args(dependency_modules.project_as_args("package_deps"), prepend = "-package"))
+        compile_cmd.add(cmd_args(dependency_modules.reduce("package_deps").keys(), prepend = "-package"))
 
     dep_file = ctx.actions.declare_output("dep-{}_{}".format(module_name, artifact_suffix)).as_output()
 
