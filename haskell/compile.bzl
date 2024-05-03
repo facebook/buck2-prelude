@@ -152,6 +152,31 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
     return modules
 
+def _toolchain_library_catalog_impl(ctx: AnalysisContext) -> list[Provider]:
+    ghc_pkg = ctx.attrs.toolchain[HaskellToolchainInfo].packager
+    catalog_gen = ctx.attrs.generate_toolchain_library_catalog[RunInfo]
+    catalog = ctx.actions.declare_output("haskell_toolchain_libraries.json")
+    ctx.actions.run(
+        cmd_args(catalog_gen, "--ghc-pkg", ghc_pkg, "--output", catalog.as_output()),
+        category = "haskell_toolchain_library_catalog",
+    )
+    return [DefaultInfo(default_output = catalog)]
+
+_toolchain_library_catalog = anon_rule(
+    impl = _toolchain_library_catalog_impl,
+    attrs = {
+        "toolchain": attrs.dep(
+            providers = [HaskellToolchainInfo],
+        ),
+        "generate_toolchain_library_catalog": attrs.dep(
+            providers = [RunInfo],
+        ),
+    },
+    artifact_promise_mappings = {
+        "catalog": lambda x: x[DefaultInfo].default_outputs[0],
+    }
+)
+
 def target_metadata(
         ctx: AnalysisContext,
         *,
@@ -167,6 +192,11 @@ def target_metadata(
         for dep in ctx.attrs.deps
         if HaskellToolchainLibrary in dep
     ]
+
+    toolchain_libs_catalog = ctx.actions.anon_target(_toolchain_library_catalog, {
+        "toolchain": ctx.attrs._haskell_toolchain,
+        "generate_toolchain_library_catalog": ctx.attrs._generate_toolchain_library_catalog,
+    })
 
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
