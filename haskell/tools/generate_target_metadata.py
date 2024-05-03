@@ -70,7 +70,13 @@ def main():
 
     result = obtain_target_metadata(args)
 
-    json.dump(result, args.output, indent=4)
+    json.dump(result, args.output, indent=4, default=json_default_handler)
+
+
+def json_default_handler(o):
+    if isinstance(o, set):
+        return sorted(o)
+    raise TypeError(f'Object of type {o.__class__.__name__} is not JSON serializable')
 
 
 def obtain_target_metadata(args):
@@ -188,7 +194,7 @@ def interpret_ghc_depends(ghc_depends, source_prefix, package_prefixes, toolchai
         for pkg, mods in extdeps.items():
             extgraph.setdefault(module_name, {}).setdefault(pkg, []).extend(mods)
         for pkg in toolchaindeps:
-            toolchaingraph.setdefault(module_name, []).append(pkg)
+            toolchaingraph.setdefault(module_name, set()).add(pkg)
 
         ext = os.path.splitext(k)[1]
 
