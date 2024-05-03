@@ -12,6 +12,7 @@ The result is a JSON object with the following fields:
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
 * `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
+* `toolchain_deps`": Toolchain library dependencies, `dict[modname, pkgname]`.
 """
 
 import argparse
@@ -75,16 +76,23 @@ def main():
 def obtain_target_metadata(args):
     ghc_depends, ghc_options = run_ghc_depends(args.ghc, args.ghc_arg, args.source)
     th_modules = determine_th_modules(ghc_options, args.source_prefix)
+    toolchain_packages = load_toolchain_packages(args.toolchain_libs)
     package_prefixes = calc_package_prefixes(args.package)
-    module_mapping, module_graph, package_deps = interpret_ghc_depends(
-        ghc_depends, args.source_prefix, package_prefixes)
+    module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
+        ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
     return {
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
         "package_deps": package_deps,
+        "toolchain_deps": toolchain_deps,
         "raw": ghc_depends,
     }
+
+
+def load_toolchain_packages(filepath):
+    with open(filepath, "r") as f:
+        return json.load(f)
 
 
 def determine_th_modules(ghc_options, source_prefix):
@@ -138,6 +146,17 @@ def calc_package_prefixes(package_specs):
     return result
 
 
+def lookup_toolchain_dep(module_dep, toolchain_packages):
+    module_path = Path(module_dep)
+    layer = toolchain_packages
+    for part in module_path.parts:
+        if (layer := layer.get(part)) is None:
+            return None
+
+        if (pkgname := layer.get("//pkgname")) is not None:
+            return pkgname
+
+
 def lookup_package_dep(module_dep, package_prefixes):
     """Look up a cross-packge module dependency.
 
@@ -155,18 +174,21 @@ def lookup_package_dep(module_dep, package_prefixes):
             return pkgname, modname
 
 
-def interpret_ghc_depends(ghc_depends, source_prefix, package_prefixes):
+def interpret_ghc_depends(ghc_depends, source_prefix, package_prefixes, toolchain_packages):
     mapping = {}
     graph = {}
     extgraph = {}
+    toolchaingraph = {}
 
     for k, vs in ghc_depends.items():
         module_name = src_to_module_name(k)
-        intdeps, extdeps = parse_module_deps(vs, package_prefixes)
+        intdeps, extdeps, toolchaindeps = parse_module_deps(vs, package_prefixes, toolchain_packages)
 
         graph.setdefault(module_name, []).extend(intdeps)
         for pkg, mods in extdeps.items():
             extgraph.setdefault(module_name, {}).setdefault(pkg, []).extend(mods)
+        for pkg in toolchaindeps:
+            toolchaingraph.setdefault(module_name, []).append(pkg)
 
         ext = os.path.splitext(k)[1]
 
@@ -188,18 +210,20 @@ def interpret_ghc_depends(ghc_depends, source_prefix, package_prefixes):
         if hs_module_name != module_name:
             mapping[hs_module_name] = module_name
 
-    return mapping, graph, extgraph
+    return mapping, graph, extgraph, toolchaingraph
 
 
-def parse_module_deps(module_deps, package_prefixes):
+def parse_module_deps(module_deps, package_prefixes, toolchain_packages):
     internal_deps = []
     external_deps = {}
+    toolchain_deps = set()
 
     for module_dep in module_deps:
         if is_haskell_src(module_dep):
             continue
 
-        if os.path.isabs(module_dep):
+        if (tooldep := lookup_toolchain_dep(module_dep, toolchain_packages)) is not None:
+            toolchain_deps.add(tooldep)
             continue
 
         if (pkgdep := lookup_package_dep(module_dep, package_prefixes)) is not None:
@@ -209,7 +233,7 @@ def parse_module_deps(module_deps, package_prefixes):
 
         internal_deps.append(src_to_module_name(module_dep))
 
-    return internal_deps, external_deps
+    return internal_deps, external_deps, toolchain_deps
 
 
 def src_to_module_name(x):
