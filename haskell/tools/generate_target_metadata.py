@@ -92,7 +92,6 @@ def obtain_target_metadata(args):
         "module_graph": module_graph,
         "package_deps": package_deps,
         "toolchain_deps": toolchain_deps,
-        "raw": ghc_depends,
     }
 
 
