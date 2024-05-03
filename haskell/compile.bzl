@@ -59,10 +59,6 @@ def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
 def _compiled_module_project_as_dyn_objects_dot_o(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.dyn_object_dot_o)
 
-def _compiled_module_project_as_package_deps(mod: CompiledModuleInfo) -> cmd_args:
-    # TODO[AH] avoid duplicate package flags
-    return cmd_args(mod.package_deps)
-
 def _compiled_module_reduce_as_package_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
     # TODO[AH] is there a better way to avoid duplicate -package flags?
     #   Using a project instead would produce duplicates.
@@ -77,7 +73,6 @@ CompiledModuleTSet = transitive_set(
         "interfaces": _compiled_module_project_as_interfaces,
         "objects": _compiled_module_project_as_objects,
         "dyn_objects_dot_o": _compiled_module_project_as_dyn_objects_dot_o,
-        "package_deps": _compiled_module_project_as_package_deps,
     },
     reductions = {
         "package_deps": _compiled_module_reduce_as_package_deps,
