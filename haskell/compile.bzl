@@ -363,7 +363,8 @@ def _common_compile_args(
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
     compile_args.add("-hide-all-packages")
-    compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
+    if not modname:
+        compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
 
     if enable_profiling:
         compile_args.add("-prof")
@@ -389,8 +390,8 @@ def _common_compile_args(
         pkgname = pkgname,
     )
 
-    compile_args.add(packages_info.exposed_package_args)
     if not modname:
+        compile_args.add(packages_info.exposed_package_args)
         compile_args.hidden(packages_info.exposed_package_imports)
     compile_args.add(packages_info.packagedb_args)
     if enable_th:
@@ -607,6 +608,9 @@ def _compile_module(
         children = [cross_package_modules] + this_package_modules,
     )
 
+    module_packages = package_deps.keys() + toolchain_deps
+    compile_cmd.add(cmd_args(module_packages, prepend = "-package"))
+
     abi_tag = ctx.actions.artifact_tag()
 
     compile_cmd.hidden(
@@ -614,6 +618,7 @@ def _compile_module(
     if enable_th:
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
         compile_cmd.add(dependency_modules.project_as_args("dyn_objects_dot_o"))
+        compile_cmd.add(cmd_args(dependency_modules.project_as_args("package_deps"), prepend = "-package"))
 
     dep_file = ctx.actions.declare_output("dep-{}_{}".format(module_name, artifact_suffix)).as_output()
 
@@ -644,7 +649,7 @@ def _compile_module(
             interfaces = module.interfaces,
             objects = module.objects,
             dyn_object_dot_o = dyn_object_dot_o,
-            package_deps = package_deps.keys() + toolchain_deps,
+            package_deps = module_packages,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
