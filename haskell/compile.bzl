@@ -60,6 +60,7 @@ def _compiled_module_project_as_dyn_objects_dot_o(mod: CompiledModuleInfo) -> cm
     return cmd_args(mod.dyn_object_dot_o)
 
 def _compiled_module_project_as_package_deps(mod: CompiledModuleInfo) -> cmd_args:
+    # TODO[AH] avoid duplicate package flags
     return cmd_args(mod.package_deps)
 
 CompiledModuleTSet = transitive_set(
