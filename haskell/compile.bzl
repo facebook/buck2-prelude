@@ -44,6 +44,7 @@ CompiledModuleInfo = provider(fields = {
     "interfaces": provider_field(list[Artifact]),
     "objects": provider_field(list[Artifact]),
     "dyn_object_dot_o": provider_field(Artifact),
+    "package_deps": provider_field(list[str]),
 })
 
 def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
@@ -58,12 +59,16 @@ def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
 def _compiled_module_project_as_dyn_objects_dot_o(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.dyn_object_dot_o)
 
+def _compiled_module_project_as_package_deps(mod: CompiledModuleInfo) -> cmd_args:
+    return cmd_args(mod.package_deps)
+
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
         "interfaces": _compiled_module_project_as_interfaces,
         "objects": _compiled_module_project_as_objects,
         "dyn_objects_dot_o": _compiled_module_project_as_dyn_objects_dot_o,
+        "package_deps": _compiled_module_project_as_package_deps,
     },
 )
 
@@ -547,6 +552,7 @@ def _compile_module(
     md_file: Artifact,
     graph: dict[str, list[str]],
     package_deps: dict[str, list[str]],
+    toolchain_deps: list[str],
     outputs: dict[Artifact, Artifact],
     resolved: dict[DynamicValue, ResolvedDynamicValue],
     artifact_suffix: str,
@@ -637,6 +643,7 @@ def _compile_module(
             interfaces = module.interfaces,
             objects = module.objects,
             dyn_object_dot_o = dyn_object_dot_o,
+            package_deps = package_deps.keys() + toolchain_deps,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
@@ -661,6 +668,7 @@ def compile(
         module_map = md["module_mapping"]
         graph = md["module_graph"]
         package_deps = md["package_deps"]
+        toolchain_deps = md["toolchain_deps"]
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
         module_tsets = {}
@@ -676,6 +684,7 @@ def compile(
                 module_tsets = module_tsets,
                 graph = graph,
                 package_deps = package_deps.get(module_name, {}),
+                toolchain_deps = toolchain_deps.get(module_name, []),
                 outputs = outputs,
                 resolved = resolved,
                 md_file=md_file,
