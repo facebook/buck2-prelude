@@ -46,6 +46,10 @@ def _scripts_arg():
             providers = [RunInfo],
             default = "prelude//haskell/tools:generate_target_metadata",
         ),
+        "_generate_toolchain_library_catalog": attrs.dep(
+            providers = [RunInfo],
+            default = "prelude//haskell/tools:generate_target_metadata",
+        ),
         "_ghc_wrapper": attrs.dep(
             providers = [RunInfo],
             default = "prelude//haskell/tools:ghc_wrapper",
