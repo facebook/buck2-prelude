@@ -32,6 +32,11 @@ def main():
         type=argparse.FileType("w"),
         help="Write package metadata to this file in JSON format.")
     parser.add_argument(
+        "--toolchain-libs",
+        required=True,
+        type=str,
+        help="Path to the toolchain libraries catalog file.")
+    parser.add_argument(
         "--ghc",
         required=True,
         type=str,

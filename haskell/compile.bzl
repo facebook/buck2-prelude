@@ -227,6 +227,7 @@ def target_metadata(
 
     md_args = cmd_args(md_gen)
     md_args.add("--output", md_file.as_output())
+    md_args.add("--toolchain-libs", toolchain_libs_catalog.artifact("catalog"))
     md_args.add("--ghc", haskell_toolchain.compiler)
     md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
     md_args.add(
