@@ -835,6 +835,23 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     #    )]
     pp = []
 
+    haddock, = haskell_haddock_lib(
+        ctx,
+        pkgname,
+        non_profiling_hlib[LinkStyle("shared")].compiled,
+        md_file,
+    ),
+
+    sub_targets.update({
+        "haddock": [DefaultInfo(
+            default_outputs = haddock.html,
+            sub_targets = {
+                html.short_path: [DefaultInfo(default_output = html)]
+                for html in haddock.html
+            }
+        )]
+    })
+
     providers = [
         DefaultInfo(
             default_outputs = default_output,
@@ -859,12 +876,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
             shared_libs,
             shared_library_infos,
         ),
-        haskell_haddock_lib(
-            ctx,
-            pkgname,
-            non_profiling_hlib[LinkStyle("shared")].compiled,
-            md_file,
-        ),
+        haddock,
     ]
 
     if indexing_tsets:
