@@ -842,11 +842,26 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
         md_file,
     ),
 
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    styles = [
+        ctx.actions.declare_output("haddock-html", file)
+        for file in "synopsis.png linuwial.css quick-jump.css haddock-bundle.min.js".split()
+    ]
+    ctx.actions.run(
+        cmd_args(
+            haskell_toolchain.haddock,
+            "--gen-index",
+            "-o", cmd_args(styles[0].as_output(), parent=1),
+            hidden=[file.as_output() for file in styles]
+        ),
+        category = "haddock_styles",
+    )
     sub_targets.update({
         "haddock": [DefaultInfo(
             default_outputs = haddock.html,
             sub_targets = {
-                html.short_path: [DefaultInfo(default_output = html)]
+                html.short_path: [DefaultInfo(default_output = html, other_outputs=styles)]
                 for html in haddock.html
             }
         )]
