@@ -9,11 +9,9 @@ without triggering compilation actions.
 """
 
 import argparse
-import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 
 
 def main():
@@ -63,7 +61,9 @@ def main():
     path = env.get("PATH", "")
     env["PATH"] = os.pathsep.join([path] + aux_paths)
 
-    subprocess.check_call(cmd, env=env)
+    returncode = subprocess.call(cmd, env=env)
+    if returncode != 0:
+        return returncode
 
     recompute_abi_hash(args.ghc, args.abi_out)
 
@@ -90,6 +90,8 @@ def main():
         os.remove(args.buck2_packagedb_dep)
         raise e
 
+    return 0
+
 
 def recompute_abi_hash(ghc, abi_out):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
@@ -102,7 +104,7 @@ def recompute_abi_hash(ghc, abi_out):
             with open(abi_out, "w") as outfile:
                 print(hash, file=outfile)
             return
-    raise "ABI hash not found in ghc output"
+    raise RuntimeError("ABI hash not found in ghc output")
 
 
 if __name__ == "__main__":
