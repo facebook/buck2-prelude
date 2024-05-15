@@ -44,6 +44,7 @@ CompiledModuleInfo = provider(fields = {
     "interfaces": provider_field(list[Artifact]),
     "objects": provider_field(list[Artifact]),
     "dyn_object_dot_o": provider_field(Artifact),
+    "package_deps": provider_field(list[str]),
 })
 
 def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
@@ -58,12 +59,23 @@ def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
 def _compiled_module_project_as_dyn_objects_dot_o(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.dyn_object_dot_o)
 
+def _compiled_module_reduce_as_package_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
+    # TODO[AH] is there a better way to avoid duplicate -package flags?
+    #   Using a project instead would produce duplicates.
+    result = {pkg: None for pkg in mod.package_deps} if mod else {}
+    for child in children:
+        result.update(child)
+    return result
+
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
         "interfaces": _compiled_module_project_as_interfaces,
         "objects": _compiled_module_project_as_objects,
         "dyn_objects_dot_o": _compiled_module_project_as_dyn_objects_dot_o,
+    },
+    reductions = {
+        "package_deps": _compiled_module_reduce_as_package_deps,
     },
 )
 
@@ -152,6 +164,31 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
     return modules
 
+def _toolchain_library_catalog_impl(ctx: AnalysisContext) -> list[Provider]:
+    ghc_pkg = ctx.attrs.toolchain[HaskellToolchainInfo].packager
+    catalog_gen = ctx.attrs.generate_toolchain_library_catalog[RunInfo]
+    catalog = ctx.actions.declare_output("haskell_toolchain_libraries.json")
+    ctx.actions.run(
+        cmd_args(catalog_gen, "--ghc-pkg", ghc_pkg, "--output", catalog.as_output()),
+        category = "haskell_toolchain_library_catalog",
+    )
+    return [DefaultInfo(default_output = catalog)]
+
+_toolchain_library_catalog = anon_rule(
+    impl = _toolchain_library_catalog_impl,
+    attrs = {
+        "toolchain": attrs.dep(
+            providers = [HaskellToolchainInfo],
+        ),
+        "generate_toolchain_library_catalog": attrs.dep(
+            providers = [RunInfo],
+        ),
+    },
+    artifact_promise_mappings = {
+        "catalog": lambda x: x[DefaultInfo].default_outputs[0],
+    }
+)
+
 def target_metadata(
         ctx: AnalysisContext,
         *,
@@ -167,6 +204,11 @@ def target_metadata(
         for dep in ctx.attrs.deps
         if HaskellToolchainLibrary in dep
     ]
+
+    toolchain_libs_catalog = ctx.actions.anon_target(_toolchain_library_catalog, {
+        "toolchain": ctx.attrs._haskell_toolchain,
+        "generate_toolchain_library_catalog": ctx.attrs._generate_toolchain_library_catalog,
+    })
 
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
@@ -197,6 +239,7 @@ def target_metadata(
 
     md_args = cmd_args(md_gen)
     md_args.add("--output", md_file.as_output())
+    md_args.add("--toolchain-libs", toolchain_libs_catalog.artifact("catalog"))
     md_args.add("--ghc", haskell_toolchain.compiler)
     md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
     md_args.add(
@@ -326,7 +369,8 @@ def _common_compile_args(
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
     compile_args.add("-hide-all-packages")
-    compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
+    if not modname:
+        compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
 
     if enable_profiling:
         compile_args.add("-prof")
@@ -352,8 +396,8 @@ def _common_compile_args(
         pkgname = pkgname,
     )
 
-    compile_args.add(packages_info.exposed_package_args)
     if not modname:
+        compile_args.add(packages_info.exposed_package_args)
         compile_args.hidden(packages_info.exposed_package_imports)
     compile_args.add(packages_info.packagedb_args)
     if enable_th:
@@ -516,6 +560,7 @@ def _compile_module(
     md_file: Artifact,
     graph: dict[str, list[str]],
     package_deps: dict[str, list[str]],
+    toolchain_deps: list[str],
     outputs: dict[Artifact, Artifact],
     resolved: dict[DynamicValue, ResolvedDynamicValue],
     artifact_suffix: str,
@@ -569,6 +614,9 @@ def _compile_module(
         children = [cross_package_modules] + this_package_modules,
     )
 
+    module_packages = package_deps.keys() + toolchain_deps
+    compile_cmd.add(cmd_args(module_packages, prepend = "-package"))
+
     abi_tag = ctx.actions.artifact_tag()
 
     compile_cmd.hidden(
@@ -576,6 +624,7 @@ def _compile_module(
     if enable_th:
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
         compile_cmd.add(dependency_modules.project_as_args("dyn_objects_dot_o"))
+        compile_cmd.add(cmd_args(dependency_modules.reduce("package_deps").keys(), prepend = "-package"))
 
     dep_file = ctx.actions.declare_output("dep-{}_{}".format(module_name, artifact_suffix)).as_output()
 
@@ -606,6 +655,7 @@ def _compile_module(
             interfaces = module.interfaces,
             objects = module.objects,
             dyn_object_dot_o = dyn_object_dot_o,
+            package_deps = module_packages,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
@@ -630,6 +680,7 @@ def compile(
         module_map = md["module_mapping"]
         graph = md["module_graph"]
         package_deps = md["package_deps"]
+        toolchain_deps = md["toolchain_deps"]
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
         module_tsets = {}
@@ -645,6 +696,7 @@ def compile(
                 module_tsets = module_tsets,
                 graph = graph,
                 package_deps = package_deps.get(module_name, {}),
+                toolchain_deps = toolchain_deps.get(module_name, []),
                 outputs = outputs,
                 resolved = resolved,
                 md_file=md_file,
