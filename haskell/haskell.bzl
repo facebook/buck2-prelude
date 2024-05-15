@@ -619,7 +619,7 @@ def _build_haskell_lib(
             False: non_profiling_hlib.compiled.objects,
         }
         all_libs = libs + non_profiling_hlib.libs
-        stub_dirs = []  #[compiled.stubs] + [non_profiling_hlib.compiled.stubs]
+        stub_dirs = [compiled.stubs] + [non_profiling_hlib.compiled.stubs]
     else:
         dynamic = {
             False: compiled.module_tsets,
@@ -631,7 +631,7 @@ def _build_haskell_lib(
             False: compiled.objects,
         }
         all_libs = libs
-        stub_dirs = []  #compiled.stubs]
+        stub_dirs = [compiled.stubs]
 
     db = _make_package(
         ctx,

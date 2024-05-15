@@ -87,7 +87,7 @@ DynamicCompileResultInfo = provider(fields = {
 CompileResultInfo = record(
     objects = field(list[Artifact]),
     hi = field(list[Artifact]),
-    #stubs = field(Artifact),
+    stubs = field(Artifact),
     hashes = field(list[Artifact]),
     producing_indices = field(bool),
     module_tsets = field(None | list[CompiledModuleTSet] | DynamicValue),
@@ -467,7 +467,7 @@ def _compile_module_args(
             objects = objects,
             hi = his,
             hashes = [module.hash],
-            #stubs = stubs,
+            stubs = stubs,
             producing_indices = producing_indices,
             module_tsets = module_tsets,
         ),
@@ -679,7 +679,7 @@ def compile(
         objects = objects,
         hi = interfaces,
         hashes = abi_hashes,
-        #stubs = stubs_dir,
+        stubs = stubs_dir,
         producing_indices = False,
         module_tsets = dyn_module_tsets,
     )
