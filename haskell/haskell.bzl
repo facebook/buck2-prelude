@@ -760,6 +760,10 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
                     default_outputs = libs,
                 )]
 
+                sub_targets.update(_haskell_module_sub_targets(
+                    compiled = compiled,
+                ))
+
     pic_behavior = ctx.attrs._cxx_toolchain[CxxToolchainInfo].pic_behavior
     link_style = cxx_toolchain_link_style(ctx)
     output_style = get_lib_output_style(
@@ -1205,8 +1209,16 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         )
         run.hidden(symlink_dir)
 
+    sub_targets = {}
+    sub_targets.update(_haskell_module_sub_targets(
+        compiled = compiled,
+    ))
+
     providers = [
-        DefaultInfo(default_output = output),
+        DefaultInfo(
+            default_output = output,
+            sub_targets = sub_targets,
+        ),
         RunInfo(args = run),
     ]
 
@@ -1214,3 +1226,15 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         providers.append(HaskellIndexInfo(info = indexing_tsets))
 
     return providers
+
+def _haskell_module_sub_targets(*, compiled):
+    return {
+        "interfaces": [DefaultInfo(sub_targets = {
+            src_to_module_name(hi.short_path): [DefaultInfo(default_output = hi)]
+            for hi in compiled.hi
+        })],
+        "objects": [DefaultInfo(sub_targets = {
+            src_to_module_name(o.short_path): [DefaultInfo(default_output = o)]
+            for o in compiled.objects
+        })],
+    }
