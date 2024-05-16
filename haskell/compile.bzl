@@ -422,6 +422,7 @@ def _compile_module_args(
         module: _Module,
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_haddock: bool,
         enable_th: bool,
         outputs: dict[Artifact, Artifact],
         resolved: dict[DynamicValue, ResolvedDynamicValue],
@@ -436,6 +437,9 @@ def _compile_module_args(
     # be parsed when inside an argsfile.
     compile_cmd.add(ctx.attrs.compiler_flags)
     compile_cmd.add("-c")
+
+    if enable_haddock:
+        compile_cmd.add("-haddock")
 
     module_tsets, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, package_deps = package_deps)
 
@@ -482,6 +486,7 @@ def _compile_module(
     *,
     link_style: LinkStyle,
     enable_profiling: bool,
+    enable_haddock: bool,
     enable_th: bool,
     module_name: str,
     modules: dict[str, _Module],
@@ -501,7 +506,18 @@ def _compile_module(
     compile_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
     compile_cmd.add("--ghc", haskell_toolchain.compiler)
 
-    args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, resolved, pkgname, package_deps = package_deps)
+    args = _compile_module_args(
+        ctx,
+        module,
+        link_style,
+        enable_profiling,
+        enable_haddock,
+        enable_th,
+        outputs,
+        resolved,
+        pkgname,
+        package_deps = package_deps
+    )
 
     if args.args_for_file:
         if haskell_toolchain.use_argsfile:
@@ -597,6 +613,7 @@ def compile(
         ctx: AnalysisContext,
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_haddock: bool,
         md_file: Artifact,
         pkgname: str | None = None) -> CompileResultInfo:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
@@ -619,6 +636,7 @@ def compile(
                 ctx,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
+                enable_haddock = enable_haddock,
                 enable_th = module_name in th_modules,
                 module_name = module_name,
                 modules = mapped_modules,

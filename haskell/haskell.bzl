@@ -513,6 +513,7 @@ def _build_haskell_lib(
         nlis: list[MergedLinkInfo],  # native link infos from all deps
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_haddock: bool,
         md_file: Artifact,
         # The non-profiling artifacts are also needed to build the package for
         # profiling, so it should be passed when `enable_profiling` is True.
@@ -527,6 +528,7 @@ def _build_haskell_lib(
         ctx,
         link_style,
         enable_profiling = enable_profiling,
+        enable_haddock = enable_haddock,
         md_file = md_file,
         pkgname = pkgname,
     )
@@ -724,6 +726,8 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
                 nlis = nlis,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
+                # enable haddock only for the first non-profiling hlib
+                enable_haddock = not enable_profiling and not non_profiling_hlib,
                 md_file = md_file,
                 non_profiling_hlib = non_profiling_hlib.get(link_style),
             )
@@ -1015,6 +1019,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         ctx,
         link_style,
         enable_profiling = enable_profiling,
+        enable_haddock = False,
         md_file = md_file,
     )
 
