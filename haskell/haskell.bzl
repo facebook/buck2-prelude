@@ -859,10 +859,10 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     )
     sub_targets.update({
         "haddock": [DefaultInfo(
-            default_outputs = haddock.html,
+            default_outputs = haddock.html.values(),
             sub_targets = {
-                html.short_path: [DefaultInfo(default_output = html, other_outputs=styles)]
-                for html in haddock.html
+                module: [DefaultInfo(default_output = html, other_outputs=styles)]
+                for module, html in haddock.html.items()
             }
         )]
     })

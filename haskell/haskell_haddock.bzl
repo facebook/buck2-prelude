@@ -21,7 +21,7 @@ load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
 
 HaskellHaddockInfo = provider(
     fields = {
-        "html": provider_field(list[typing.Any], default = []),
+        "html": provider_field(dict[str, typing.Any], default = {}),
         "interfaces": provider_field(list[typing.Any], default = []),
     },
 )
@@ -183,7 +183,7 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileRes
 
     return HaskellHaddockInfo(
         interfaces = [i.haddock for i in haddock_infos.values()],
-        html = [i.html for i in haddock_infos.values()],
+        html = {module: i.html for module, i in haddock_infos.items()},
     )
 
 def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
@@ -206,7 +206,7 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
         if hi != None:
             cmd.add(cmd_args(hi.interfaces, format="--read-interface={}"))
             if hi.html:
-                dep_htmls.extend(hi.html)
+                dep_htmls.extend(hi.html.values())
 
     cmd.add(ctx.attrs.haddock_flags)
 
