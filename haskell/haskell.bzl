@@ -88,6 +88,7 @@ load(
     "attr_deps_shared_library_infos",
     "get_artifact_suffix",
     "is_haskell_src",
+    "output_extensions",
     "src_to_module_name",
     "srcs_to_pairs",
 )
@@ -758,6 +759,11 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
                 sub_targets[link_style.value.replace("_", "-")] = [DefaultInfo(
                     default_outputs = libs,
+                    sub_targets = _haskell_module_sub_targets(
+                        compiled = compiled,
+                        link_style = link_style,
+                        enable_profiling = enable_profiling,
+                    ),
                 )]
 
     pic_behavior = ctx.attrs._cxx_toolchain[CxxToolchainInfo].pic_behavior
@@ -1205,8 +1211,18 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         )
         run.hidden(symlink_dir)
 
+    sub_targets = {}
+    sub_targets.update(_haskell_module_sub_targets(
+        compiled = compiled,
+        link_style = link_style,
+        enable_profiling = enable_profiling,
+    ))
+
     providers = [
-        DefaultInfo(default_output = output),
+        DefaultInfo(
+            default_output = output,
+            sub_targets = sub_targets,
+        ),
         RunInfo(args = run),
     ]
 
@@ -1214,3 +1230,18 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         providers.append(HaskellIndexInfo(info = indexing_tsets))
 
     return providers
+
+def _haskell_module_sub_targets(*, compiled, link_style, enable_profiling):
+    (osuf, hisuf) = output_extensions(link_style, enable_profiling)
+    return {
+        "interfaces": [DefaultInfo(sub_targets = {
+            src_to_module_name(hi.short_path): [DefaultInfo(default_output = hi)]
+            for hi in compiled.hi
+            if hi.extension[1:] == hisuf
+        })],
+        "objects": [DefaultInfo(sub_targets = {
+            src_to_module_name(o.short_path): [DefaultInfo(default_output = o)]
+            for o in compiled.objects
+            if o.extension[1:] == osuf
+        })],
+    }
