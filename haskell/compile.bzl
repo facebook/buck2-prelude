@@ -460,7 +460,7 @@ def _compile_module_args(
         if not is_haskell_src(path):
             srcs.hidden(src)
 
-    producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags
+    producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags + haskell_toolchain.compiler_flags
 
     return CompileArgsInfo(
         result = CompileResultInfo(
