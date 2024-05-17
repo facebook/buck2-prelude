@@ -231,6 +231,9 @@ def parse_module_deps(module_deps, package_prefixes, toolchain_packages):
             toolchain_deps.add(tooldep)
             continue
 
+        if os.path.isabs(module_dep):
+            raise RuntimeError(f"Unexpected module dependency `{module_dep}`. Perhaps a missing `haskell_toolchain_library`?")
+
         if (pkgdep := lookup_package_dep(module_dep, package_prefixes)) is not None:
             pkgname, modname = pkgdep
             external_deps.setdefault(pkgname, []).append(modname)

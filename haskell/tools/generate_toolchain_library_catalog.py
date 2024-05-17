@@ -71,6 +71,9 @@ def _parse_ghc_pkg_dump(lines):
         elif current_key == "import-dirs" and line.strip():
             current_package.setdefault("import-dirs", []).append(line.strip())
 
+    if current_package:
+        yield current_package
+
 
 def _construct_import_path_trie(packages):
     result = {}
