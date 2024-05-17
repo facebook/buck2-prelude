@@ -80,9 +80,10 @@ def json_default_handler(o):
 
 
 def obtain_target_metadata(args):
-    ghc_depends, ghc_options = run_ghc_depends(args.ghc, args.ghc_arg, args.source)
-    th_modules = determine_th_modules(ghc_options, args.source_prefix)
     toolchain_packages = load_toolchain_packages(args.toolchain_libs)
+    ghc_args = fix_ghc_args(args.ghc_arg, toolchain_packages)
+    ghc_depends, ghc_options = run_ghc_depends(args.ghc, ghc_args, args.source)
+    th_modules = determine_th_modules(ghc_options, args.source_prefix)
     package_prefixes = calc_package_prefixes(args.package)
     module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
         ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
@@ -114,6 +115,40 @@ __TH_EXTENSIONS = ["TemplateHaskell", "TemplateHaskellQuotes", "QuasiQuotes"]
 def uses_th(opts):
     """Determine if a Template Haskell extension is enabled."""
     return any([f"-X{ext}" in opts for ext in __TH_EXTENSIONS])
+
+
+def fix_ghc_args(ghc_args, toolchain_packages):
+    """Replaces -package flags by -package-id where applicable.
+
+    Packages that have hidden internal packages cause failures of the form:
+
+        Could not load module ‘Data.Attoparsec.Text’.
+        It is a member of the hidden package ‘attoparsec-0.14.4’.
+
+    This can be avoided by specifying the corresponding packages by package-id
+    rather than package name.
+
+    The toolchain libraries catalog tracks a mapping from package name to
+    package id. We apply it here to any toolchain library dependencies.
+    """
+    result = []
+    mapping = toolchain_packages["by-package-name"]
+
+    args_iter = iter(ghc_args)
+    for arg in args_iter:
+        if arg == "-package":
+            package_name = next(args_iter)
+            if package_name is None:
+                raise RuntimeError("Missing package name argument for -package flag")
+
+            if (package_id := mapping.get(package_name, None)) is not None:
+                result.extend(["-package-id", package_id])
+            else:
+                result.extend(["-package", package_name])
+        else:
+            result.append(arg)
+
+    return result
 
 
 def run_ghc_depends(ghc, ghc_args, sources):
