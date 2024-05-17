@@ -18,7 +18,6 @@ The result is a JSON object with the following fields:
 import argparse
 import json
 import os
-from os.path import isabs
 from pathlib import Path
 import subprocess
 import tempfile
