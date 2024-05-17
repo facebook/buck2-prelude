@@ -4,6 +4,7 @@
 
 The result is a JSON object with the following fields:
 * `by-import-dirs`: A trie mapping import directory prefixes to package names. Encoded as nested dictionaries with leafs denoted by the special key `//pkgid`.
+* `by-package-name`: A mapping from package name to package id.
 """
 
 import argparse
@@ -30,7 +31,7 @@ def main():
 
     with subprocess.Popen(_ghc_pkg_command(args.ghc_pkg), stdout=subprocess.PIPE, text=True) as proc:
         packages = list(_parse_ghc_pkg_dump(proc.stdout))
-        result = _construct_import_path_trie(packages)
+        result = _construct_package_mappings(packages)
 
     json.dump(result, args.output)
 
@@ -83,12 +84,16 @@ def _parse_ghc_pkg_dump(lines):
         yield current_package
 
 
-def _construct_import_path_trie(packages):
-    result = {}
+def _construct_package_mappings(packages):
+    result = {
+        "by-import-dirs": {},
+        "by-package-name": {},
+    }
 
     for package in packages:
+        result["by-package-name"][package["name"]] = package["id"]
         for import_dir in package.get("import-dirs", []):
-            layer = result
+            layer = result["by-import-dirs"]
 
             for part in Path(import_dir).parts:
                 layer = layer.setdefault(part, {})

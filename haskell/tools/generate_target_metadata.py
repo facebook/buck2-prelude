@@ -153,7 +153,7 @@ def calc_package_prefixes(package_specs):
 
 def lookup_toolchain_dep(module_dep, toolchain_packages):
     module_path = Path(module_dep)
-    layer = toolchain_packages
+    layer = toolchain_packages["by-import-dirs"]
     for part in module_path.parts:
         if (layer := layer.get(part)) is None:
             return None
