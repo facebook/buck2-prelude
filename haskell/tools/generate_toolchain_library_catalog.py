@@ -61,15 +61,23 @@ def _parse_ghc_pkg_dump(lines):
 
             if key == "name":
                 current_key = "name"
-                current_package["name"] = value
+                if value:
+                    current_package["name"] = value
+            elif key == "id":
+                current_key = "id"
+                if value:
+                    current_package["id"] = value
             elif key == "import-dirs":
                 current_key = "import-dirs"
                 if value:
                     current_package.setdefault("import-dirs", []).append(value)
             else:
                 current_key = None
-        elif current_key == "import-dirs" and line.strip():
-            current_package.setdefault("import-dirs", []).append(line.strip())
+        elif line.strip():
+            if current_key in ["name", "id"]:
+                current_package[current_key] = line.strip()
+            elif current_key == "import-dirs":
+                current_package.setdefault("import-dirs", []).append(line.strip())
 
     if current_package:
         yield current_package
