@@ -18,6 +18,7 @@ The result is a JSON object with the following fields:
 import argparse
 import json
 import os
+from os.path import isabs
 from pathlib import Path
 import subprocess
 import tempfile
@@ -230,6 +231,9 @@ def parse_module_deps(module_deps, package_prefixes, toolchain_packages):
         if (tooldep := lookup_toolchain_dep(module_dep, toolchain_packages)) is not None:
             toolchain_deps.add(tooldep)
             continue
+
+        if os.path.isabs(module_dep):
+            raise RuntimeError(f"Unexpected module dependency `{module_dep}`. Perhaps a missing `haskell_toolchain_library`?")
 
         if (pkgdep := lookup_package_dep(module_dep, package_prefixes)) is not None:
             pkgname, modname = pkgdep
