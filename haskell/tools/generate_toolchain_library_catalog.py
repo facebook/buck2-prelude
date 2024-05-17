@@ -3,7 +3,7 @@
 """Helper script to generate a mapping from interface paths to toolchain library names.
 
 The result is a JSON object with the following fields:
-* `by-import-dirs`: A trie mapping import directory prefixes to package names. Encoded as nested dictionaries with leafs denoted by the special key `//pkgname`.
+* `by-import-dirs`: A trie mapping import directory prefixes to package names. Encoded as nested dictionaries with leafs denoted by the special key `//pkgid`.
 """
 
 import argparse
@@ -93,7 +93,7 @@ def _construct_import_path_trie(packages):
             for part in Path(import_dir).parts:
                 layer = layer.setdefault(part, {})
 
-            layer["//pkgname"] = package["name"]
+            layer["//pkgid"] = package["id"]
 
     return result
 

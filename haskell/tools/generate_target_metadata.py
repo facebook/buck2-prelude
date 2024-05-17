@@ -158,8 +158,8 @@ def lookup_toolchain_dep(module_dep, toolchain_packages):
         if (layer := layer.get(part)) is None:
             return None
 
-        if (pkgname := layer.get("//pkgname")) is not None:
-            return pkgname
+        if (pkgid := layer.get("//pkgid")) is not None:
+            return pkgid
 
 
 def lookup_package_dep(module_dep, package_prefixes):
