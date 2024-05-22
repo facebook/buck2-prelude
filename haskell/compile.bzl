@@ -45,6 +45,7 @@ CompiledModuleInfo = provider(fields = {
     "objects": provider_field(list[Artifact]),
     "dyn_object_dot_o": provider_field(Artifact),
     "package_deps": provider_field(list[str]),
+    "toolchain_deps": provider_field(list[str]),
 })
 
 def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
@@ -67,6 +68,14 @@ def _compiled_module_reduce_as_package_deps(children: list[dict[str, None]], mod
         result.update(child)
     return result
 
+def _compiled_module_reduce_as_toolchain_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
+    # TODO[AH] is there a better way to avoid duplicate -package-id flags?
+    #   Using a project instead would produce duplicates.
+    result = {pkg: None for pkg in mod.toolchain_deps} if mod else {}
+    for child in children:
+        result.update(child)
+    return result
+
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
@@ -76,6 +85,7 @@ CompiledModuleTSet = transitive_set(
     },
     reductions = {
         "package_deps": _compiled_module_reduce_as_package_deps,
+        "toolchain_deps": _compiled_module_reduce_as_toolchain_deps,
     },
 )
 
@@ -614,8 +624,8 @@ def _compile_module(
         children = [cross_package_modules] + this_package_modules,
     )
 
-    module_packages = package_deps.keys() + toolchain_deps
-    compile_cmd.add(cmd_args(module_packages, prepend = "-package"))
+    compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package-id"))
+    compile_cmd.add(cmd_args(package_deps.keys(), prepend = "-package"))
 
     abi_tag = ctx.actions.artifact_tag()
 
@@ -625,6 +635,7 @@ def _compile_module(
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
         compile_cmd.add(dependency_modules.project_as_args("dyn_objects_dot_o"))
         compile_cmd.add(cmd_args(dependency_modules.reduce("package_deps").keys(), prepend = "-package"))
+        compile_cmd.add(cmd_args(dependency_modules.reduce("toolchain_deps").keys(), prepend = "-package-id"))
 
     dep_file = ctx.actions.declare_output("dep-{}_{}".format(module_name, artifact_suffix)).as_output()
 
@@ -655,7 +666,8 @@ def _compile_module(
             interfaces = module.interfaces,
             objects = module.objects,
             dyn_object_dot_o = dyn_object_dot_o,
-            package_deps = module_packages,
+            package_deps = package_deps.keys(),
+            toolchain_deps = toolchain_deps,
         ),
         children = [cross_package_modules] + this_package_modules,
     )

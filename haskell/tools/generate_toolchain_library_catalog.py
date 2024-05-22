@@ -3,7 +3,8 @@
 """Helper script to generate a mapping from interface paths to toolchain library names.
 
 The result is a JSON object with the following fields:
-* `by-import-dirs`: A trie mapping import directory prefixes to package names. Encoded as nested dictionaries with leafs denoted by the special key `//pkgname`.
+* `by-import-dirs`: A trie mapping import directory prefixes to package names. Encoded as nested dictionaries with leafs denoted by the special key `//pkgid`.
+* `by-package-name`: A mapping from package name to package id.
 """
 
 import argparse
@@ -30,7 +31,7 @@ def main():
 
     with subprocess.Popen(_ghc_pkg_command(args.ghc_pkg), stdout=subprocess.PIPE, text=True) as proc:
         packages = list(_parse_ghc_pkg_dump(proc.stdout))
-        result = _construct_import_path_trie(packages)
+        result = _construct_package_mappings(packages)
 
     json.dump(result, args.output)
 
@@ -61,31 +62,43 @@ def _parse_ghc_pkg_dump(lines):
 
             if key == "name":
                 current_key = "name"
-                current_package["name"] = value
+                if value:
+                    current_package["name"] = value
+            elif key == "id":
+                current_key = "id"
+                if value:
+                    current_package["id"] = value
             elif key == "import-dirs":
                 current_key = "import-dirs"
                 if value:
                     current_package.setdefault("import-dirs", []).append(value)
             else:
                 current_key = None
-        elif current_key == "import-dirs" and line.strip():
-            current_package.setdefault("import-dirs", []).append(line.strip())
+        elif line.strip():
+            if current_key in ["name", "id"]:
+                current_package[current_key] = line.strip()
+            elif current_key == "import-dirs":
+                current_package.setdefault("import-dirs", []).append(line.strip())
 
     if current_package:
         yield current_package
 
 
-def _construct_import_path_trie(packages):
-    result = {}
+def _construct_package_mappings(packages):
+    result = {
+        "by-import-dirs": {},
+        "by-package-name": {},
+    }
 
     for package in packages:
+        result["by-package-name"][package["name"]] = package["id"]
         for import_dir in package.get("import-dirs", []):
-            layer = result
+            layer = result["by-import-dirs"]
 
             for part in Path(import_dir).parts:
                 layer = layer.setdefault(part, {})
 
-            layer["//pkgname"] = package["name"]
+            layer["//pkgid"] = package["id"]
 
     return result
 
