@@ -64,8 +64,8 @@ load(
 load(
     "@prelude//haskell:library_info.bzl",
     "HaskellLibraryInfo",
-    "HaskellLibraryProvider",
     "HaskellLibraryInfoTSet",
+    "HaskellLibraryProvider",
 )
 load(
     "@prelude//haskell:link_info.bzl",
@@ -281,11 +281,13 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
         hlibinfos[link_style] = hlibinfo
         hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlibinfo, children = [
-            lib.info[link_style] for lib in haskell_infos
+            lib.info[link_style]
+            for lib in haskell_infos
         ])
         prof_hlibinfos[link_style] = prof_hlibinfo
         prof_hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = prof_hlibinfo, children = [
-            lib.prof_info[link_style] for lib in haskell_infos
+            lib.prof_info[link_style]
+            for lib in haskell_infos
         ])
         link_infos[link_style] = LinkInfos(
             default = LinkInfo(
@@ -426,7 +428,7 @@ def _make_package(
         art_suff = get_artifact_suffix(link_style, profiled)
         return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + "\""
 
-    import_dirs = [ mk_artifact_dir("mod", profiled) for profiled in profiling ]
+    import_dirs = [mk_artifact_dir("mod", profiled) for profiled in profiling]
 
     conf = [
         "name: " + pkgname,
@@ -451,7 +453,7 @@ def _make_package(
             # following this logic (https://fburl.com/code/3gmobm5x) and will fail.
             libname += "_p"
 
-        library_dirs = [ mk_artifact_dir("lib", profiled) for profiled in profiling ]
+        library_dirs = [mk_artifact_dir("lib", profiled) for profiled in profiling]
         conf.append("library-dirs:" + ", ".join(library_dirs))
         conf.append("extra-libraries: " + libname)
 
@@ -512,6 +514,7 @@ def _build_haskell_lib(
         nlis: list[MergedLinkInfo],  # native link infos from all deps
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_haddock: bool,
         md_file: Artifact,
         # The non-profiling artifacts are also needed to build the package for
         # profiling, so it should be passed when `enable_profiling` is True.
@@ -526,6 +529,7 @@ def _build_haskell_lib(
         ctx,
         link_style,
         enable_profiling = enable_profiling,
+        enable_haddock = enable_haddock,
         md_file = md_file,
         pkgname = pkgname,
     )
@@ -553,7 +557,7 @@ def _build_haskell_lib(
         link.add(haskell_toolchain.linker_flags)
         link.add(ctx.attrs.linker_flags)
         link.add("-hide-all-packages")
-        link.add(cmd_args(toolchain_libs, prepend="-package"))
+        link.add(cmd_args(toolchain_libs, prepend = "-package"))
         link.add("-o", lib.as_output())
         link.add(
             get_shared_library_flags(linker_info.type),
@@ -658,7 +662,7 @@ def _build_haskell_lib(
         db = db,
         empty_db = empty_db,
         id = pkgname,
-        dynamic = dynamic, # TODO(ah) refine with dynamic projections
+        dynamic = dynamic,  # TODO(ah) refine with dynamic projections
         import_dirs = import_artifacts,
         objects = object_artifacts,
         stub_dirs = stub_dirs,
@@ -702,7 +706,6 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
     md_file = target_metadata(
         ctx,
-        pkgname = pkgname,
         sources = ctx.attrs.srcs,
     )
 
@@ -724,6 +727,8 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
                 nlis = nlis,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
+                # enable haddock only for the first non-profiling hlib
+                enable_haddock = not enable_profiling and not non_profiling_hlib,
                 md_file = md_file,
                 non_profiling_hlib = non_profiling_hlib.get(link_style),
             )
@@ -840,6 +845,38 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     #    )]
     pp = []
 
+    haddock, = haskell_haddock_lib(
+        ctx,
+        pkgname,
+        non_profiling_hlib[LinkStyle("shared")].compiled,
+        md_file,
+    ),
+
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    styles = [
+        ctx.actions.declare_output("haddock-html", file)
+        for file in "synopsis.png linuwial.css quick-jump.css haddock-bundle.min.js".split()
+    ]
+    ctx.actions.run(
+        cmd_args(
+            haskell_toolchain.haddock,
+            "--gen-index",
+            "-o", cmd_args(styles[0].as_output(), parent=1),
+            hidden=[file.as_output() for file in styles]
+        ),
+        category = "haddock_styles",
+    )
+    sub_targets.update({
+        "haddock": [DefaultInfo(
+            default_outputs = haddock.html.values(),
+            sub_targets = {
+                module: [DefaultInfo(default_output = html, other_outputs=styles)]
+                for module, html in haddock.html.items()
+            }
+        )]
+    })
+
     providers = [
         DefaultInfo(
             default_outputs = default_output,
@@ -864,7 +901,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
             shared_libs,
             shared_library_infos,
         ),
-        haskell_haddock_lib(ctx, pkgname),
+        haddock,
     ]
 
     if indexing_tsets:
@@ -982,12 +1019,13 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     if enable_profiling and link_style == LinkStyle("shared"):
         link_style = LinkStyle("static")
 
-    md_file = target_metadata(ctx, pkgname = "", sources = ctx.attrs.srcs)
+    md_file = target_metadata(ctx, sources = ctx.attrs.srcs)
 
     compiled = compile(
         ctx,
         link_style,
         enable_profiling = enable_profiling,
+        enable_haddock = False,
         md_file = md_file,
     )
 
@@ -1008,7 +1046,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     output = ctx.actions.declare_output(ctx.attrs.name)
     link = cmd_args(haskell_toolchain.compiler)
     link.add("-hide-all-packages")
-    link.add(cmd_args(toolchain_libs, prepend="-package"))
+    link.add(cmd_args(toolchain_libs, prepend = "-package"))
     link.add(cmd_args(packages_info.exposed_package_args))
     link.add(packages_info.packagedb_args)
     link.add("-o", output.as_output())
@@ -1018,6 +1056,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     link.hidden(packages_info.exposed_package_libs)
 
     objects = {}
+
     # only add the first object per module
     # TODO[CB] restructure this to use a record / dict for compiled.objects
     for obj in compiled.objects:
@@ -1189,7 +1228,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
             linkable_artifacts,
         )
 
-        link.add(cmd_args(db, prepend="-package-db"))
+        link.add(cmd_args(db, prepend = "-package-db"))
         link.add("-package", pkgname)
         link.hidden(linkable_artifacts)
     else:

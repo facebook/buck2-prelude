@@ -36,7 +36,7 @@ load(
     "LinkStyle",
 )
 load("@prelude//:paths.bzl", "paths")
-load("@prelude//utils:graph_utils.bzl", "post_order_traversal", "breadth_first_traversal")
+load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
 
 CompiledModuleInfo = provider(fields = {
@@ -202,10 +202,10 @@ _toolchain_library_catalog = anon_rule(
 def target_metadata(
         ctx: AnalysisContext,
         *,
-        pkgname: str,
         sources: list[Artifact],
+        suffix: str = "",
     ) -> Artifact:
-    md_file = ctx.actions.declare_output(ctx.attrs.name + ".md.json")
+    md_file = ctx.actions.declare_output(ctx.attrs.name + suffix + ".md.json")
     md_gen = ctx.attrs._generate_target_metadata[RunInfo]
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -262,7 +262,7 @@ def target_metadata(
         _attr_deps_haskell_lib_package_name_and_prefix(ctx),
     )
 
-    ctx.actions.run(md_args, category = "haskell_metadata")
+    ctx.actions.run(md_args, category = "haskell_metadata", identifier = suffix if suffix else None)
 
     return md_file
 
@@ -296,8 +296,7 @@ def get_packages_info(
         enable_profiling: bool,
         use_empty_lib: bool,
         resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
-        package_deps: None | dict[str, list[str]] = None,
-        pkgname: str | None = None) -> PackagesInfo:
+        package_deps: None | dict[str, list[str]] = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     # Collect library dependencies. Note that these don't need to be in a
@@ -403,7 +402,6 @@ def _common_compile_args(
         use_empty_lib = use_empty_lib,
         resolved = resolved,
         package_deps = package_deps,
-        pkgname = pkgname,
     )
 
     if not modname:
@@ -428,81 +426,13 @@ def _common_compile_args(
 
     return module_tsets, compile_args
 
-# NOTE this function is currently only used by `haskell_haddock_lib`
-def compile_args(
-        ctx: AnalysisContext,
-        link_style: LinkStyle,
-        enable_profiling: bool,
-        enable_th: bool,
-        pkgname = None,
-        suffix: str = "") -> CompileArgsInfo:
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
-    compile_cmd = cmd_args()
-    compile_cmd.add(haskell_toolchain.compiler_flags)
-
-    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
-    # be parsed when inside an argsfile.
-    compile_cmd.add(ctx.attrs.compiler_flags)
-
-    # TODO[CB] use the empty lib once using hi haddock
-    _, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, use_empty_lib = False)
-
-    if getattr(ctx.attrs, "main", None) != None:
-        compile_args.add(["-main-is", ctx.attrs.main])
-
-    artifact_suffix = get_artifact_suffix(link_style, enable_profiling, suffix)
-
-    # TODO[AH] These are only used for haddock and conflict with tracking
-    # per-module outputs individually. Rework the Haddock part to support this.
-    objects = ctx.actions.declare_output(
-        "objects-" + artifact_suffix,
-        dir = True,
-    )
-    hi = ctx.actions.declare_output("hi-" + artifact_suffix, dir = True)
-    stubs = ctx.actions.declare_output("stubs-" + artifact_suffix, dir = True)
-
-    compile_args.add(
-        "-odir",
-        objects.as_output(),
-        "-hidir",
-        hi.as_output(),
-        "-hiedir",
-        hi.as_output(),
-        "-stubdir",
-        stubs.as_output(),
-    )
-
-    srcs = cmd_args()
-    for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
-        # hs-boot files aren't expected to be an argument to compiler but does need
-        # to be included in the directory of the associated src file
-        if is_haskell_src(path):
-            srcs.add(src)
-        else:
-            srcs.hidden(src)
-
-    producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags
-
-    return CompileArgsInfo(
-        result = CompileResultInfo(
-            objects = [objects],
-            hi = [hi],
-            hashes = [],
-            stubs = stubs,
-            producing_indices = producing_indices,
-            module_tsets = None,
-        ),
-        srcs = srcs,
-        args_for_cmd = compile_cmd,
-        args_for_file = compile_args,
-    )
 
 def _compile_module_args(
         ctx: AnalysisContext,
         module: _Module,
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_haddock: bool,
         enable_th: bool,
         outputs: dict[Artifact, Artifact],
         resolved: dict[DynamicValue, ResolvedDynamicValue],
@@ -517,6 +447,9 @@ def _compile_module_args(
     # be parsed when inside an argsfile.
     compile_cmd.add(ctx.attrs.compiler_flags)
     compile_cmd.add("-c")
+
+    if enable_haddock:
+        compile_cmd.add("-haddock")
 
     module_tsets, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, package_deps = package_deps)
 
@@ -541,7 +474,7 @@ def _compile_module_args(
         if not is_haskell_src(path):
             srcs.hidden(src)
 
-    producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags
+    producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags + haskell_toolchain.compiler_flags
 
     return CompileArgsInfo(
         result = CompileResultInfo(
@@ -563,6 +496,7 @@ def _compile_module(
     *,
     link_style: LinkStyle,
     enable_profiling: bool,
+    enable_haddock: bool,
     enable_th: bool,
     module_name: str,
     modules: dict[str, _Module],
@@ -582,7 +516,18 @@ def _compile_module(
     compile_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
     compile_cmd.add("--ghc", haskell_toolchain.compiler)
 
-    args = _compile_module_args(ctx, module, link_style, enable_profiling, enable_th, outputs, resolved, pkgname, package_deps = package_deps)
+    args = _compile_module_args(
+        ctx,
+        module,
+        link_style,
+        enable_profiling,
+        enable_haddock,
+        enable_th,
+        outputs,
+        resolved,
+        pkgname,
+        package_deps = package_deps
+    )
 
     if args.args_for_file:
         if haskell_toolchain.use_argsfile:
@@ -680,6 +625,7 @@ def compile(
         ctx: AnalysisContext,
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_haddock: bool,
         md_file: Artifact,
         pkgname: str | None = None) -> CompileResultInfo:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
@@ -702,6 +648,7 @@ def compile(
                 ctx,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
+                enable_haddock = enable_haddock,
                 enable_th = module_name in th_modules,
                 module_name = module_name,
                 modules = mapped_modules,
