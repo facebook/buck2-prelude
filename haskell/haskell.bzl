@@ -482,7 +482,7 @@ def _make_package(
         ]),
         category = "haskell_package_" + artifact_suffix.replace("-", "_"),
         identifier = "empty" if use_empty_lib else "final",
-        env = {"GHC_PACKAGE_PATH": ghc_package_path},
+        env = {"GHC_PACKAGE_PATH": ghc_package_path} if db_deps else {},
     )
 
     return db
