@@ -64,15 +64,23 @@ def _compiled_module_project_as_dyn_objects_dot_o(mod: CompiledModuleInfo) -> cm
 
 def _compiled_module_reduce_as_package_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
     # TODO[AH] is there a better way to avoid duplicate -package flags?
-    #   Using a project instead would produce duplicates.
+    #   Using a projection instead would produce duplicates.
     result = {pkg: None for pkg in mod.package_deps} if mod else {}
+    for child in children:
+        result.update(child)
+    return result
+
+def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None]], mod: CompiledModuleInfo | None) -> dict[Artifact, None]:
+    # TODO[AH] is there a better way to avoid duplicate package-dbs?
+    #   Using a projection instead would produce duplicates.
+    result = {db: None for db in mod.db_deps} if mod else {}
     for child in children:
         result.update(child)
     return result
 
 def _compiled_module_reduce_as_toolchain_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
     # TODO[AH] is there a better way to avoid duplicate -package-id flags?
-    #   Using a project instead would produce duplicates.
+    #   Using a projection instead would produce duplicates.
     result = {pkg: None for pkg in mod.toolchain_deps} if mod else {}
     for child in children:
         result.update(child)
@@ -87,6 +95,7 @@ CompiledModuleTSet = transitive_set(
     },
     reductions = {
         "package_deps": _compiled_module_reduce_as_package_deps,
+        "packagedb_deps": _compiled_module_reduce_as_packagedb_deps,
         "toolchain_deps": _compiled_module_reduce_as_toolchain_deps,
     },
 )
