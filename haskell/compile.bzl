@@ -539,8 +539,8 @@ def _compile_module_args(
         enable_th: bool,
         outputs: dict[Artifact, Artifact],
         resolved: dict[DynamicValue, ResolvedDynamicValue],
-        pkgname = None,
-        package_deps: None | dict[str, list[str]] = None) -> CompileArgsInfo:
+        pkgname: str,
+        package_deps: dict[str, list[str]]) -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     compile_cmd = cmd_args()
