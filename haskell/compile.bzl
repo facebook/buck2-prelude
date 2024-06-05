@@ -424,8 +424,9 @@ def _common_compile_args(
         "global-package-db",
         delimiter = "\n",
     )
+    packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
     package_env.add(cmd_args(
-        packages_info.packagedb_args,
+        packagedb_args,
         format = "package-db {}",
     ).relative_to(package_env_file, parent = 1))
     ctx.actions.write(
@@ -435,7 +436,7 @@ def _common_compile_args(
     compile_args.add(cmd_args(
         packagedb_tag.tag_artifacts(package_env_file),
         prepend = "-package-env",
-        hidden = packages_info.packagedb_args,
+        hidden = packagedb_args,
     ))
 
     dep_file = ctx.actions.declare_output(".".join([
