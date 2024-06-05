@@ -425,15 +425,14 @@ def _common_compile_args(
         packages_info.packagedb_args,
         format = "package-db {}",
     ).relative_to(package_env_file, parent = 1))
-    _, package_env_inputs = ctx.actions.write(
+    ctx.actions.write(
         package_env_file,
         package_env,
-        allow_args = True,
     )
     compile_args.add(cmd_args(
         package_env_file,
         prepend = "-package-env",
-        hidden = package_env_inputs,
+        hidden = packages_info.packagedb_args,
     ))
 
     if enable_th:
