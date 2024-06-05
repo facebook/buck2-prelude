@@ -213,33 +213,6 @@ _toolchain_library_catalog = anon_rule(
     }
 )
 
-def _package_env_file_impl(ctx: AnalysisContext) -> list[Provider]:
-    package_env_file = ctx.actions.declare_output("package-db.env")
-    package_env = cmd_args(
-        "clear-package-db",
-        "global-package-db",
-        delimiter = "\n",
-    )
-    package_env.add(cmd_args(
-        ctx.attrs.package_dbs,
-        format = "package-db {}",
-    ).relative_to(package_env_file, parent = 1))
-    ctx.actions.write(
-        package_env_file,
-        package_env,
-    )
-    return [DefaultInfo(default_output = package_env_file)]
-
-_package_env_file = anon_rule(
-    impl = _package_env_file_impl,
-    attrs = {
-        "package_dbs": attrs.list(attrs.source()),
-    },
-    artifact_promise_mappings = {
-        "env_file": lambda x: x[DefaultInfo].default_outputs[0],
-    },
-)
-
 def target_metadata(
         ctx: AnalysisContext,
         *,
@@ -455,15 +428,34 @@ def _common_compile_args(
         compile_args.add(packages_info.exposed_package_args)
         compile_args.hidden(packages_info.exposed_package_imports)
 
-    packagedb_env_file = ctx.actions.anon_target(_package_env_file, {
-        "package_dbs": list(packages_info.packagedb_args.inputs),
-    }).artifact("env_file")
-
     packagedb_tag = ctx.actions.artifact_tag()
+
+    # TODO[AH] Avoid duplicates and share identical env files.
+    package_env_file = ctx.actions.declare_output(".".join([
+        ctx.label.name,
+        modname or "pkg",
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "env",
+    ]))
+    package_env = cmd_args(
+        "clear-package-db",
+        "global-package-db",
+        delimiter = "\n",
+    )
+    packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
+    package_env.add(cmd_args(
+        packagedb_args,
+        format = "package-db {}",
+    ).relative_to(package_env_file, parent = 1))
+    ctx.actions.write(
+        package_env_file,
+        package_env,
+    )
     compile_args.add(cmd_args(
-        packagedb_tag.tag_artifacts(packagedb_env_file),
+        packagedb_tag.tag_artifacts(package_env_file),
         prepend = "-package-env",
-        hidden = packagedb_tag.tag_artifacts(packages_info.packagedb_args),
+        hidden = packagedb_args,
     ))
 
     dep_file = ctx.actions.declare_output(".".join([
