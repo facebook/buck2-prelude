@@ -44,6 +44,8 @@ CompiledModuleInfo = provider(fields = {
     "interfaces": provider_field(list[Artifact]),
     "objects": provider_field(list[Artifact]),
     "dyn_object_dot_o": provider_field(Artifact),
+    # TODO[AH] track this module's package-name/id & package-db instead.
+    "db_deps": provider_field(list[Artifact]),
     "package_deps": provider_field(list[str]),
     "toolchain_deps": provider_field(list[str]),
 })
@@ -109,6 +111,7 @@ CompileArgsInfo = record(
     args_for_cmd = field(cmd_args),
     args_for_file = field(cmd_args),
     packagedb_tag = field(ArtifactTag),
+    packagedbs = field(list[Artifact]),
 )
 
 PackagesInfo = record(
@@ -117,6 +120,7 @@ PackagesInfo = record(
     exposed_package_objects = field(list[Artifact]),
     exposed_package_libs = cmd_args,
     exposed_package_args = cmd_args,
+    exposed_package_dbs = field(list[Artifact]),
     packagedb_args = cmd_args,
     transitive_deps = field(HaskellLibraryInfoTSet),
 )
@@ -315,6 +319,7 @@ def get_packages_info(
     exposed_package_objects = []
     exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
+    exposed_package_dbs = []
 
     if resolved != None and package_deps != None:
         exposed_package_modules = []
@@ -327,6 +332,10 @@ def get_packages_info(
 
             for mod in package_deps.get(direct.name, []):
                 exposed_package_modules.append(dynamic_info.modules[mod])
+
+            if direct.name in package_deps:
+                db = direct.empty_db if use_empty_lib else direct.db
+                exposed_package_dbs.append(db)
     else:
         for lib in libs.traverse():
             exposed_package_imports.extend(lib.import_dirs[enable_profiling])
@@ -359,6 +368,7 @@ def get_packages_info(
         exposed_package_objects = exposed_package_objects,
         exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
+        exposed_package_dbs = exposed_package_dbs,
         packagedb_args = packagedb_args,
         transitive_deps = libs,
     )
@@ -373,7 +383,7 @@ def _common_compile_args(
         modname: str | None = None,
         resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
         package_deps: None | dict[str, list[str]] = None,
-        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args, ArtifactTag):
+        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args, ArtifactTag, list[Artifact]):
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     compile_args = cmd_args()
@@ -465,7 +475,7 @@ def _common_compile_args(
 
     module_tsets = packages_info.exposed_package_modules
 
-    return module_tsets, compile_args, packagedb_tag
+    return module_tsets, compile_args, packagedb_tag, packages_info.exposed_package_dbs
 
 
 def _compile_module_args(
@@ -492,7 +502,7 @@ def _compile_module_args(
     if enable_haddock:
         compile_cmd.add("-haddock")
 
-    module_tsets, compile_args, packagedb_tag = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, package_deps = package_deps)
+    module_tsets, compile_args, packagedb_tag, exposed_package_dbs = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, package_deps = package_deps)
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
@@ -530,6 +540,7 @@ def _compile_module_args(
         args_for_cmd = compile_cmd,
         args_for_file = compile_args,
         packagedb_tag = packagedb_tag,
+        packagedbs = exposed_package_dbs,
     )
 
 
@@ -656,6 +667,7 @@ def _compile_module(
             dyn_object_dot_o = dyn_object_dot_o,
             package_deps = package_deps.keys(),
             toolchain_deps = toolchain_deps,
+            db_deps = args.packagedbs,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
