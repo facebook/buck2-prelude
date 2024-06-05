@@ -443,7 +443,7 @@ def _common_compile_args(
         pkgname: str | None,
         modname: str,
         resolved: dict[DynamicValue, ResolvedDynamicValue],
-        package_deps: dict[str, list[str]]) -> (None | list[CompiledModuleTSet], cmd_args, ArtifactTag, list[Artifact]):
+        package_deps: dict[str, list[str]]) -> (list[CompiledModuleTSet], cmd_args, ArtifactTag, list[Artifact]):
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
     compile_args.add("-hide-all-packages")
