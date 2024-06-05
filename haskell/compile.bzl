@@ -440,11 +440,10 @@ def _common_compile_args(
         link_style: LinkStyle,
         enable_profiling: bool,
         enable_th: bool,
-        pkgname: str | None,
+        pkgname: str,
         modname: str,
-        resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
-        package_deps: None | dict[str, list[str]] = None,
-        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args, ArtifactTag, list[Artifact]):
+        resolved: dict[DynamicValue, ResolvedDynamicValue],
+        package_deps: dict[str, list[str]]) -> (None | list[CompiledModuleTSet], cmd_args, ArtifactTag, list[Artifact]):
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
     compile_args.add("-hide-all-packages")
@@ -467,7 +466,7 @@ def _common_compile_args(
         link_style,
         specify_pkg_version = False,
         enable_profiling = enable_profiling,
-        use_empty_lib = use_empty_lib,
+        use_empty_lib = True,
         resolved = resolved,
         package_deps = package_deps,
     )
@@ -513,8 +512,6 @@ def _common_compile_args(
 
     if enable_th:
         compile_args.add(packages_info.exposed_package_libs)
-        if not modname:
-            compile_args.hidden(packages_info.exposed_package_objects)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
@@ -522,8 +519,7 @@ def _common_compile_args(
     pre_args = pre.set.project_as_args("args")
     compile_args.add(cmd_args(pre_args, format = "-optP={}"))
 
-    if pkgname:
-        compile_args.add(["-this-unit-id", pkgname])
+    compile_args.add(["-this-unit-id", pkgname])
 
     module_tsets = packages_info.exposed_package_modules
 
