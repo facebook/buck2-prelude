@@ -440,7 +440,7 @@ def _common_compile_args(
         link_style: LinkStyle,
         enable_profiling: bool,
         enable_th: bool,
-        pkgname: str,
+        pkgname: str | None,
         modname: str,
         resolved: dict[DynamicValue, ResolvedDynamicValue],
         package_deps: dict[str, list[str]]) -> (None | list[CompiledModuleTSet], cmd_args, ArtifactTag, list[Artifact]):
@@ -519,7 +519,8 @@ def _common_compile_args(
     pre_args = pre.set.project_as_args("args")
     compile_args.add(cmd_args(pre_args, format = "-optP={}"))
 
-    compile_args.add(["-this-unit-id", pkgname])
+    if pkgname:
+        compile_args.add(["-this-unit-id", pkgname])
 
     module_tsets = packages_info.exposed_package_modules
 
@@ -535,7 +536,7 @@ def _compile_module_args(
         enable_th: bool,
         outputs: dict[Artifact, Artifact],
         resolved: dict[DynamicValue, ResolvedDynamicValue],
-        pkgname: str,
+        pkgname: str | None,
         package_deps: dict[str, list[str]]) -> CompileArgsInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
