@@ -113,7 +113,7 @@ CompileResultInfo = record(
     stubs = field(Artifact),
     hashes = field(list[Artifact]),
     producing_indices = field(bool),
-    module_tsets = field(None | list[CompiledModuleTSet] | DynamicValue),
+    module_tsets = field(list[CompiledModuleTSet] | DynamicValue),
 )
 
 CompileArgsInfo = record(
