@@ -408,6 +408,7 @@ def _common_compile_args(
         compile_args.add(packages_info.exposed_package_args)
         compile_args.hidden(packages_info.exposed_package_imports)
 
+    # TODO[AH] Avoid duplicates and share identical env files.
     package_env_file = ctx.actions.declare_output(".".join([
         ctx.label.name,
         modname or "pkg",
