@@ -315,8 +315,6 @@ def get_packages_info(
     exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
 
-    packagedb_args = cmd_args()
-
     if resolved != None and package_deps != None:
         exposed_package_modules = []
 
@@ -336,6 +334,7 @@ def get_packages_info(
             # we're using Template Haskell:
             exposed_package_libs.hidden(lib.libs)
 
+    packagedb_args = cmd_args()
     packagedb_args.add(libs.project_as_args("empty_package_db" if use_empty_lib else "package_db"))
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
