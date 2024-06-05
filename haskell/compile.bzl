@@ -431,6 +431,9 @@ def _common_compile_args(
     packagedb_tag = ctx.actions.artifact_tag()
 
     # TODO[AH] Avoid duplicates and share identical env files.
+    #   The set of package-dbs can be known at the package level, not just the
+    #   module level. So, we could generate this file outside of the
+    #   dynamic_output action.
     package_env_file = ctx.actions.declare_output(".".join([
         ctx.label.name,
         modname or "pkg",
