@@ -31,6 +31,13 @@ def main():
         help="Path to the dep file.",
     )
     parser.add_argument(
+        "--buck2-package-db",
+        required=False,
+        nargs="*",
+        default=[],
+        help="Path to a package db that is used during the module compilation",
+    )
+    parser.add_argument(
         "--ghc", required=True, type=str, help="Path to the Haskell compiler GHC."
     )
     parser.add_argument(
@@ -61,7 +68,10 @@ def main():
     # write an empty dep file, to signal that all tagged files are unused
     try:
         with open(args.buck2_packagedb_dep, "w") as f:
-            f.write("\n")
+            for db in args.buck2_package_db:
+                f.write(db + "\n")
+            if not args.buck2_package_db:
+                f.write("\n")
 
     except Exception as e:
         # remove incomplete dep file
