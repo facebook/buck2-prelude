@@ -244,7 +244,7 @@ def target_metadata(
     ghc_args.add(package_flag, "base")
     ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
     ghc_args.add(cmd_args(packages_info.exposed_package_args))
-    ghc_args.add(packages_info.packagedb_args)
+    ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
     ghc_args.add(ctx.attrs.compiler_flags)
 
     md_args = cmd_args(md_gen)
@@ -334,10 +334,9 @@ def get_packages_info(
             # we're using Template Haskell:
             exposed_package_libs.hidden(lib.libs)
 
-    packagedb_args = cmd_args(
-        libs.project_as_args("empty_package_db" if use_empty_lib else "package_db"),
-        prepend = "-package-db"
-    )
+    packagedb_args = cmd_args(libs.project_as_args(
+        "empty_package_db" if use_empty_lib else "package_db",
+    ))
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
@@ -408,7 +407,7 @@ def _common_compile_args(
     if not modname:
         compile_args.add(packages_info.exposed_package_args)
         compile_args.hidden(packages_info.exposed_package_imports)
-    compile_args.add(packages_info.packagedb_args)
+    compile_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
     if enable_th:
         compile_args.add(packages_info.exposed_package_libs)
         if not modname:
