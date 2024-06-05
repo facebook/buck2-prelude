@@ -334,8 +334,10 @@ def get_packages_info(
             # we're using Template Haskell:
             exposed_package_libs.hidden(lib.libs)
 
-    packagedb_args = cmd_args()
-    packagedb_args.add(libs.project_as_args("empty_package_db" if use_empty_lib else "package_db"))
+    packagedb_args = cmd_args(
+        libs.project_as_args("empty_package_db" if use_empty_lib else "package_db"),
+        prepend = "-package-db"
+    )
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,

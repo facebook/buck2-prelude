@@ -49,10 +49,10 @@ HaskellLibraryInfo = record(
 )
 
 def _project_as_package_db(lib: HaskellLibraryInfo):
-  return cmd_args("-package-db", lib.db)
+  return cmd_args(lib.db)
 
 def _project_as_empty_package_db(lib: HaskellLibraryInfo):
-  return cmd_args("-package-db", lib.empty_db)
+  return cmd_args(lib.empty_db)
 
 HaskellLibraryInfoTSet = transitive_set(
     args_projections = {
