@@ -1048,7 +1048,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     link.add("-hide-all-packages")
     link.add(cmd_args(toolchain_libs, prepend = "-package"))
     link.add(cmd_args(packages_info.exposed_package_args))
-    link.add(packages_info.packagedb_args)
+    link.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
     link.add("-o", output.as_output())
     link.add(haskell_toolchain.linker_flags)
     link.add(ctx.attrs.linker_flags)

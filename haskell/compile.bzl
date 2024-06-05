@@ -427,7 +427,7 @@ def _common_compile_args(
     if not modname:
         compile_args.add(packages_info.exposed_package_args)
         compile_args.hidden(packages_info.exposed_package_imports)
-        compile_args.add(packages_info.packagedb_args)
+        compile_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
 
     if modname:
         packagedb_tag = ctx.actions.artifact_tag()
