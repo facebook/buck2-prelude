@@ -407,7 +407,34 @@ def _common_compile_args(
     if not modname:
         compile_args.add(packages_info.exposed_package_args)
         compile_args.hidden(packages_info.exposed_package_imports)
-    compile_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+
+    package_env_file = ctx.actions.declare_output(".".join([
+        ctx.label.name,
+        modname or "pkg",
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "env",
+    ]))
+    package_env = cmd_args(
+        "clear-package-db",
+        "global-package-db",
+        delimiter = "\n",
+    )
+    package_env.add(cmd_args(
+        packages_info.packagedb_args,
+        format = "package-db {}",
+    ).relative_to(package_env_file, parent = 1))
+    _, package_env_inputs = ctx.actions.write(
+        package_env_file,
+        package_env,
+        allow_args = True,
+    )
+    compile_args.add(cmd_args(
+        package_env_file,
+        prepend = "-package-env",
+        hidden = package_env_inputs,
+    ))
+
     if enable_th:
         compile_args.add(packages_info.exposed_package_libs)
         if not modname:
