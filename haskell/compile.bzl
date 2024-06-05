@@ -44,6 +44,8 @@ CompiledModuleInfo = provider(fields = {
     "interfaces": provider_field(list[Artifact]),
     "objects": provider_field(list[Artifact]),
     "dyn_object_dot_o": provider_field(Artifact),
+    # TODO[AH] track this module's package-name/id & package-db instead.
+    "db_deps": provider_field(list[Artifact]),
     "package_deps": provider_field(list[str]),
     "toolchain_deps": provider_field(list[str]),
 })
@@ -62,15 +64,23 @@ def _compiled_module_project_as_dyn_objects_dot_o(mod: CompiledModuleInfo) -> cm
 
 def _compiled_module_reduce_as_package_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
     # TODO[AH] is there a better way to avoid duplicate -package flags?
-    #   Using a project instead would produce duplicates.
+    #   Using a projection instead would produce duplicates.
     result = {pkg: None for pkg in mod.package_deps} if mod else {}
+    for child in children:
+        result.update(child)
+    return result
+
+def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None]], mod: CompiledModuleInfo | None) -> dict[Artifact, None]:
+    # TODO[AH] is there a better way to avoid duplicate package-dbs?
+    #   Using a projection instead would produce duplicates.
+    result = {db: None for db in mod.db_deps} if mod else {}
     for child in children:
         result.update(child)
     return result
 
 def _compiled_module_reduce_as_toolchain_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
     # TODO[AH] is there a better way to avoid duplicate -package-id flags?
-    #   Using a project instead would produce duplicates.
+    #   Using a projection instead would produce duplicates.
     result = {pkg: None for pkg in mod.toolchain_deps} if mod else {}
     for child in children:
         result.update(child)
@@ -85,6 +95,7 @@ CompiledModuleTSet = transitive_set(
     },
     reductions = {
         "package_deps": _compiled_module_reduce_as_package_deps,
+        "packagedb_deps": _compiled_module_reduce_as_packagedb_deps,
         "toolchain_deps": _compiled_module_reduce_as_toolchain_deps,
     },
 )
@@ -108,6 +119,8 @@ CompileArgsInfo = record(
     srcs = field(cmd_args),
     args_for_cmd = field(cmd_args),
     args_for_file = field(cmd_args),
+    packagedb_tag = field(ArtifactTag),
+    packagedbs = field(list[Artifact]),
 )
 
 PackagesInfo = record(
@@ -116,6 +129,7 @@ PackagesInfo = record(
     exposed_package_objects = field(list[Artifact]),
     exposed_package_libs = cmd_args,
     exposed_package_args = cmd_args,
+    exposed_package_dbs = field(list[Artifact]),
     packagedb_args = cmd_args,
     transitive_deps = field(HaskellLibraryInfoTSet),
 )
@@ -244,7 +258,7 @@ def target_metadata(
     ghc_args.add(package_flag, "base")
     ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
     ghc_args.add(cmd_args(packages_info.exposed_package_args))
-    ghc_args.add(packages_info.packagedb_args)
+    ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
     ghc_args.add(ctx.attrs.compiler_flags)
 
     md_args = cmd_args(md_gen)
@@ -314,8 +328,7 @@ def get_packages_info(
     exposed_package_objects = []
     exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
-
-    packagedb_args = cmd_args()
+    exposed_package_dbs = []
 
     if resolved != None and package_deps != None:
         exposed_package_modules = []
@@ -328,6 +341,10 @@ def get_packages_info(
 
             for mod in package_deps.get(direct.name, []):
                 exposed_package_modules.append(dynamic_info.modules[mod])
+
+            if direct.name in package_deps:
+                db = direct.empty_db if use_empty_lib else direct.db
+                exposed_package_dbs.append(db)
     else:
         for lib in libs.traverse():
             exposed_package_imports.extend(lib.import_dirs[enable_profiling])
@@ -336,7 +353,9 @@ def get_packages_info(
             # we're using Template Haskell:
             exposed_package_libs.hidden(lib.libs)
 
-    packagedb_args.add(libs.project_as_args("empty_package_db" if use_empty_lib else "package_db"))
+    packagedb_args = cmd_args(libs.project_as_args(
+        "empty_package_db" if use_empty_lib else "package_db",
+    ))
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
@@ -358,6 +377,7 @@ def get_packages_info(
         exposed_package_objects = exposed_package_objects,
         exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
+        exposed_package_dbs = exposed_package_dbs,
         packagedb_args = packagedb_args,
         transitive_deps = libs,
     )
@@ -372,7 +392,7 @@ def _common_compile_args(
         modname: str | None = None,
         resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
         package_deps: None | dict[str, list[str]] = None,
-        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args):
+        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args, None | ArtifactTag, list[Artifact]):
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     compile_args = cmd_args()
@@ -407,7 +427,54 @@ def _common_compile_args(
     if not modname:
         compile_args.add(packages_info.exposed_package_args)
         compile_args.hidden(packages_info.exposed_package_imports)
-    compile_args.add(packages_info.packagedb_args)
+        compile_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+
+    if modname:
+        packagedb_tag = ctx.actions.artifact_tag()
+
+        # TODO[AH] Avoid duplicates and share identical env files.
+        #   The set of package-dbs can be known at the package level, not just the
+        #   module level. So, we could generate this file outside of the
+        #   dynamic_output action.
+        package_env_file = ctx.actions.declare_output(".".join([
+            ctx.label.name,
+            modname or "pkg",
+            "package-db",
+            output_extensions(link_style, enable_profiling)[1],
+            "env",
+        ]))
+        package_env = cmd_args(
+            "clear-package-db",
+            "global-package-db",
+            delimiter = "\n",
+        )
+        packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
+        package_env.add(cmd_args(
+            packagedb_args,
+            format = "package-db {}",
+        ).relative_to(package_env_file, parent = 1))
+        ctx.actions.write(
+            package_env_file,
+            package_env,
+        )
+        compile_args.add(cmd_args(
+            packagedb_tag.tag_artifacts(package_env_file),
+            prepend = "-package-env",
+            hidden = packagedb_args,
+        ))
+
+        dep_file = ctx.actions.declare_output(".".join([
+            ctx.label.name,
+            modname or "pkg",
+            "package-db",
+            output_extensions(link_style, enable_profiling)[1],
+            "dep",
+        ])).as_output()
+        tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
+        compile_args.add("--buck2-packagedb-dep", tagged_dep_file)
+    else:
+        packagedb_tag = None
+
     if enable_th:
         compile_args.add(packages_info.exposed_package_libs)
         if not modname:
@@ -424,7 +491,7 @@ def _common_compile_args(
 
     module_tsets = packages_info.exposed_package_modules
 
-    return module_tsets, compile_args
+    return module_tsets, compile_args, packagedb_tag, packages_info.exposed_package_dbs
 
 
 def _compile_module_args(
@@ -451,7 +518,7 @@ def _compile_module_args(
     if enable_haddock:
         compile_cmd.add("-haddock")
 
-    module_tsets, compile_args = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, package_deps = package_deps)
+    module_tsets, compile_args, packagedb_tag, exposed_package_dbs = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, package_deps = package_deps)
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
@@ -488,6 +555,8 @@ def _compile_module_args(
         srcs = srcs,
         args_for_cmd = compile_cmd,
         args_for_file = compile_args,
+        packagedb_tag = packagedb_tag,
+        packagedbs = exposed_package_dbs,
     )
 
 
@@ -582,6 +651,8 @@ def _compile_module(
         compile_cmd.add(cmd_args(dependency_modules.reduce("package_deps").keys(), prepend = "-package"))
         compile_cmd.add(cmd_args(dependency_modules.reduce("toolchain_deps").keys(), prepend = "-package-id"))
 
+    compile_cmd.add(cmd_args(dependency_modules.reduce("packagedb_deps").keys(), prepend = "--buck2-package-db"))
+
     dep_file = ctx.actions.declare_output("dep-{}_{}".format(module_name, artifact_suffix)).as_output()
 
     tagged_dep_file = abi_tag.tag_artifacts(dep_file)
@@ -594,6 +665,7 @@ def _compile_module(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
         dep_files = {
             "abi": abi_tag,
+            "packagedb": args.packagedb_tag,
         }
     )
 
@@ -613,6 +685,7 @@ def _compile_module(
             dyn_object_dot_o = dyn_object_dot_o,
             package_deps = package_deps.keys(),
             toolchain_deps = toolchain_deps,
+            db_deps = args.packagedbs,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
