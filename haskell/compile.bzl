@@ -389,17 +389,13 @@ def _common_compile_args(
         enable_profiling: bool,
         enable_th: bool,
         pkgname: str | None,
-        modname: str | None = None,
+        modname: str,
         resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
         package_deps: None | dict[str, list[str]] = None,
-        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args, None | ArtifactTag, list[Artifact]):
-    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
-
+        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args, ArtifactTag, list[Artifact]):
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
     compile_args.add("-hide-all-packages")
-    if not modname:
-        compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
 
     if enable_profiling:
         compile_args.add("-prof")
@@ -424,52 +420,44 @@ def _common_compile_args(
         package_deps = package_deps,
     )
 
-    if not modname:
-        compile_args.add(packages_info.exposed_package_args)
-        compile_args.hidden(packages_info.exposed_package_imports)
-        compile_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+    packagedb_tag = ctx.actions.artifact_tag()
 
-    if modname:
-        packagedb_tag = ctx.actions.artifact_tag()
+    # TODO[AH] Avoid duplicates and share identical env files.
+    #   The set of package-dbs can be known at the package level, not just the
+    #   module level. So, we could generate this file outside of the
+    #   dynamic_output action.
+    package_env_file = ctx.actions.declare_output(".".join([
+        ctx.label.name,
+        modname or "pkg",
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "env",
+    ]))
+    package_env = cmd_args(delimiter = "\n")
+    packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
+    package_env.add(cmd_args(
+        packagedb_args,
+        format = "package-db {}",
+    ).relative_to(package_env_file, parent = 1))
+    ctx.actions.write(
+        package_env_file,
+        package_env,
+    )
+    compile_args.add(cmd_args(
+        packagedb_tag.tag_artifacts(package_env_file),
+        prepend = "-package-env",
+        hidden = packagedb_args,
+    ))
 
-        # TODO[AH] Avoid duplicates and share identical env files.
-        #   The set of package-dbs can be known at the package level, not just the
-        #   module level. So, we could generate this file outside of the
-        #   dynamic_output action.
-        package_env_file = ctx.actions.declare_output(".".join([
-            ctx.label.name,
-            modname or "pkg",
-            "package-db",
-            output_extensions(link_style, enable_profiling)[1],
-            "env",
-        ]))
-        package_env = cmd_args(delimiter = "\n")
-        packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
-        package_env.add(cmd_args(
-            packagedb_args,
-            format = "package-db {}",
-        ).relative_to(package_env_file, parent = 1))
-        ctx.actions.write(
-            package_env_file,
-            package_env,
-        )
-        compile_args.add(cmd_args(
-            packagedb_tag.tag_artifacts(package_env_file),
-            prepend = "-package-env",
-            hidden = packagedb_args,
-        ))
-
-        dep_file = ctx.actions.declare_output(".".join([
-            ctx.label.name,
-            modname or "pkg",
-            "package-db",
-            output_extensions(link_style, enable_profiling)[1],
-            "dep",
-        ])).as_output()
-        tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
-        compile_args.add("--buck2-packagedb-dep", tagged_dep_file)
-    else:
-        packagedb_tag = None
+    dep_file = ctx.actions.declare_output(".".join([
+        ctx.label.name,
+        modname or "pkg",
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "dep",
+    ])).as_output()
+    tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
+    compile_args.add("--buck2-packagedb-dep", tagged_dep_file)
 
     if enable_th:
         compile_args.add(packages_info.exposed_package_libs)
