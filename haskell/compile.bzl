@@ -443,11 +443,7 @@ def _common_compile_args(
             output_extensions(link_style, enable_profiling)[1],
             "env",
         ]))
-        package_env = cmd_args(
-            "clear-package-db",
-            "global-package-db",
-            delimiter = "\n",
-        )
+        package_env = cmd_args(delimiter = "\n")
         packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
         package_env.add(cmd_args(
             packagedb_args,
