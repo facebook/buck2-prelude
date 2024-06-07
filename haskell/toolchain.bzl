@@ -49,6 +49,7 @@ HaskellToolchainLibrary = provider(
 
 HaskellPackagesInfo = record(
     package_db = Artifact,
+    dynamic = DynamicValue,
 )
 
 HaskellPackageDbTSet = transitive_set()
