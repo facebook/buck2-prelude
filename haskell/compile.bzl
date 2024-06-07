@@ -243,16 +243,6 @@ def target_metadata(
         "generate_toolchain_library_catalog": ctx.attrs._generate_toolchain_library_catalog,
     })
 
-    # Add -package-db and -package/-expose-package flags for each Haskell
-    # library dependency.
-    packages_info = get_packages_info(
-        ctx,
-        LinkStyle("shared"),
-        specify_pkg_version = False,
-        enable_profiling = False,
-        use_empty_lib = True,
-    )
-
     # The object and interface file paths are depending on the real module name
     # as inferred by GHC, not the source file path; currently this requires the
     # module name to correspond to the source file path as otherwise GHC will
@@ -261,31 +251,64 @@ def target_metadata(
     #
     # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
 
-    package_flag = _package_flag(haskell_toolchain)
-    ghc_args = cmd_args()
-    ghc_args.add("-hide-all-packages")
-    ghc_args.add(package_flag, "base")
-    ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
-    ghc_args.add(cmd_args(packages_info.exposed_package_args))
-    ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
-    ghc_args.add(ctx.attrs.compiler_flags)
+    catalog = toolchain_libs_catalog.artifact("catalog")
 
-    md_args = cmd_args(md_gen)
-    md_args.add("--output", md_file.as_output())
-    md_args.add("--toolchain-libs", toolchain_libs_catalog.artifact("catalog"))
-    md_args.add("--ghc", haskell_toolchain.compiler)
-    md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
-    md_args.add(
-        "--source-prefix",
-        _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
+    def get_metadata(ctx, _artifacts, resolved, outputs, catalog=catalog):
+
+        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+
+        # Add -package-db and -package/-expose-package flags for each Haskell
+        # library dependency.
+
+        packages_info = get_packages_info(
+            ctx,
+            LinkStyle("shared"),
+            specify_pkg_version = False,
+            enable_profiling = False,
+            use_empty_lib = True,
+            resolved = resolved,
+        )
+        package_flag = _package_flag(haskell_toolchain)
+        ghc_args = cmd_args()
+        ghc_args.add("-hide-all-packages")
+        ghc_args.add(package_flag, "base")
+
+        package_dbs = ctx.actions.tset(
+            HaskellPackageDbTSet,
+            children = [package_db[name] for name in toolchain_libs if name in package_db]
+        )
+
+        ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
+        ghc_args.add(cmd_args(packages_info.exposed_package_args))
+        ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+        ghc_args.add(cmd_args(package_dbs.project_as_args("package_db"), prepend="-package-db"))
+        ghc_args.add(ctx.attrs.compiler_flags)
+
+        md_args = cmd_args(md_gen)
+        md_args.add("--toolchain-libs", catalog)
+        md_args.add("--ghc", haskell_toolchain.compiler)
+        md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
+        md_args.add(
+            "--source-prefix",
+            _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
+        )
+        md_args.add(cmd_args(sources, format="--source={}"))
+
+        md_args.add(
+            _attr_deps_haskell_lib_package_name_and_prefix(ctx),
+        )
+        md_args.add("--output", outputs[md_file].as_output())
+
+        ctx.actions.run(md_args, category = "haskell_metadata", identifier = suffix if suffix else None)
+
+    ctx.actions.dynamic_output(
+        dynamic = [],
+        promises = [haskell_toolchain.packages.dynamic],
+        inputs = [],
+        outputs = [md_file.as_output()],
+        f = get_metadata,
     )
-    md_args.add(cmd_args(sources, format="--source={}"))
-
-    md_args.add(
-        _attr_deps_haskell_lib_package_name_and_prefix(ctx),
-    )
-
-    ctx.actions.run(md_args, category = "haskell_metadata", identifier = suffix if suffix else None)
 
     return md_file
 
@@ -390,7 +413,7 @@ def get_packages_info(
 
         packagedb_args.add(package_db_tset.project_as_args("package_db"))
     else:
-        packagedb_args.add("-package-db", haskell_toolchain.packages.package_db)
+        packagedb_args.add(haskell_toolchain.packages.package_db)
 
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
