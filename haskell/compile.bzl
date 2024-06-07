@@ -19,6 +19,8 @@ load(
     "@prelude//haskell:toolchain.bzl",
     "HaskellToolchainInfo",
     "HaskellToolchainLibrary",
+    "DynamicHaskellPackageDbInfo",
+    "HaskellPackageDbTSet",
 )
 load(
     "@prelude//haskell:util.bzl",
@@ -370,8 +372,24 @@ def get_packages_info(
         enable_profiling,
     )
 
-    # TODO[CB] use individual package db for each package
-    if haskell_toolchain.packages:
+    if haskell_toolchain.packages and resolved != None:
+        haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+
+        toolchain_libs = [
+            dep[HaskellToolchainLibrary].name
+            for dep in ctx.attrs.deps
+            if HaskellToolchainLibrary in dep
+        ] + libs.reduce("packages")
+
+        package_db_tset = ctx.actions.tset(
+            HaskellPackageDbTSet,
+            children = [package_db[name] for name in toolchain_libs if name in package_db]
+        )
+
+        packagedb_args.add(package_db_tset.project_as_args("package_db"))
+    else:
         packagedb_args.add("-package-db", haskell_toolchain.packages.package_db)
 
     # Expose only the packages we depend on directly
@@ -733,6 +751,8 @@ def compile(
 
         return [DynamicCompileResultInfo(modules = module_tsets)]
 
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
     objects = [object for module in modules.values() for object in module.objects]
     stub_dirs = [module.stub_dir for module in modules.values()]
@@ -748,7 +768,7 @@ def compile(
                 if enable_profiling else
                 lib.info[link_style]
             ]
-        ],
+        ] + [ haskell_toolchain.packages.dynamic ],
         inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
         f = do_compile)
