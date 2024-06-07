@@ -5,6 +5,8 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
+load("@prelude//utils:utils.bzl", "flatten", "dedupe_by_value")
+
 # If the target is a haskell library, the HaskellLibraryProvider
 # contains its HaskellLibraryInfo. (in contrast to a HaskellLinkInfo,
 # which contains the HaskellLibraryInfo for all the transitive
@@ -46,6 +48,8 @@ HaskellLibraryInfo = record(
     version = str,
     is_prebuilt = bool,
     profiling_enabled = bool,
+    # Package dependencies
+    dependencies = list[str],
 )
 
 def _project_as_package_db(lib: HaskellLibraryInfo):
@@ -54,9 +58,18 @@ def _project_as_package_db(lib: HaskellLibraryInfo):
 def _project_as_empty_package_db(lib: HaskellLibraryInfo):
   return cmd_args(lib.empty_db)
 
+def _get_package_deps(children: list[list[str]], lib: HaskellLibraryInfo | None):
+    flatted = flatten(children)
+    if lib:
+        flatted.extend(lib.dependencies)
+    return dedupe_by_value(flatted)
+
 HaskellLibraryInfoTSet = transitive_set(
     args_projections = {
         "package_db": _project_as_package_db,
         "empty_package_db": _project_as_empty_package_db,
+    },
+    reductions = {
+        "packages": _get_package_deps,
     },
 )

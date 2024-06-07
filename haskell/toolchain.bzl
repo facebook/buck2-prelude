@@ -37,6 +37,7 @@ HaskellToolchainInfo = provider(
         "ghci_packager": provider_field(typing.Any, default = None),
         "cache_links": provider_field(typing.Any, default = None),
         "script_template_processor": provider_field(typing.Any, default = None),
+        "packages": provider_field(typing.Any, default = None),
     },
 )
 
@@ -45,3 +46,21 @@ HaskellToolchainLibrary = provider(
         "name": provider_field(str),
     },
 )
+
+HaskellPackagesInfo = record(
+    package_db = Artifact,
+    dynamic = DynamicValue,
+)
+
+def _haskell_package_info_as_package_db(p: Artifact):
+    return cmd_args(p)
+
+HaskellPackageDbTSet = transitive_set(
+    args_projections = {
+        "package_db": _haskell_package_info_as_package_db,
+    }
+)
+
+DynamicHaskellPackageDbInfo = provider(fields = {
+    "packages": dict[str, HaskellPackageDbTSet],
+})

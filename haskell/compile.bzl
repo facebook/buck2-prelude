@@ -19,6 +19,8 @@ load(
     "@prelude//haskell:toolchain.bzl",
     "HaskellToolchainInfo",
     "HaskellToolchainLibrary",
+    "DynamicHaskellPackageDbInfo",
+    "HaskellPackageDbTSet",
 )
 load(
     "@prelude//haskell:util.bzl",
@@ -189,13 +191,20 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
     return modules
 
 def _toolchain_library_catalog_impl(ctx: AnalysisContext) -> list[Provider]:
-    ghc_pkg = ctx.attrs.toolchain[HaskellToolchainInfo].packager
+    haskell_toolchain = ctx.attrs.toolchain[HaskellToolchainInfo]
+
+    ghc_pkg = haskell_toolchain.packager
+
     catalog_gen = ctx.attrs.generate_toolchain_library_catalog[RunInfo]
     catalog = ctx.actions.declare_output("haskell_toolchain_libraries.json")
-    ctx.actions.run(
-        cmd_args(catalog_gen, "--ghc-pkg", ghc_pkg, "--output", catalog.as_output()),
-        category = "haskell_toolchain_library_catalog",
-    )
+
+    cmd = cmd_args(catalog_gen, "--ghc-pkg", ghc_pkg, "--output", catalog.as_output())
+
+    if haskell_toolchain.packages:
+        cmd.add("--package-db", haskell_toolchain.packages.package_db)
+
+    ctx.actions.run(cmd, category = "haskell_toolchain_library_catalog")
+
     return [DefaultInfo(default_output = catalog)]
 
 _toolchain_library_catalog = anon_rule(
@@ -234,16 +243,6 @@ def target_metadata(
         "generate_toolchain_library_catalog": ctx.attrs._generate_toolchain_library_catalog,
     })
 
-    # Add -package-db and -package/-expose-package flags for each Haskell
-    # library dependency.
-    packages_info = get_packages_info(
-        ctx,
-        LinkStyle("shared"),
-        specify_pkg_version = False,
-        enable_profiling = False,
-        use_empty_lib = True,
-    )
-
     # The object and interface file paths are depending on the real module name
     # as inferred by GHC, not the source file path; currently this requires the
     # module name to correspond to the source file path as otherwise GHC will
@@ -252,31 +251,64 @@ def target_metadata(
     #
     # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
 
-    package_flag = _package_flag(haskell_toolchain)
-    ghc_args = cmd_args()
-    ghc_args.add("-hide-all-packages")
-    ghc_args.add(package_flag, "base")
-    ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
-    ghc_args.add(cmd_args(packages_info.exposed_package_args))
-    ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
-    ghc_args.add(ctx.attrs.compiler_flags)
+    catalog = toolchain_libs_catalog.artifact("catalog")
 
-    md_args = cmd_args(md_gen)
-    md_args.add("--output", md_file.as_output())
-    md_args.add("--toolchain-libs", toolchain_libs_catalog.artifact("catalog"))
-    md_args.add("--ghc", haskell_toolchain.compiler)
-    md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
-    md_args.add(
-        "--source-prefix",
-        _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
+    def get_metadata(ctx, _artifacts, resolved, outputs, catalog=catalog):
+
+        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+
+        # Add -package-db and -package/-expose-package flags for each Haskell
+        # library dependency.
+
+        packages_info = get_packages_info(
+            ctx,
+            LinkStyle("shared"),
+            specify_pkg_version = False,
+            enable_profiling = False,
+            use_empty_lib = True,
+            resolved = resolved,
+        )
+        package_flag = _package_flag(haskell_toolchain)
+        ghc_args = cmd_args()
+        ghc_args.add("-hide-all-packages")
+        ghc_args.add(package_flag, "base")
+
+        package_dbs = ctx.actions.tset(
+            HaskellPackageDbTSet,
+            children = [package_db[name] for name in toolchain_libs if name in package_db]
+        )
+
+        ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
+        ghc_args.add(cmd_args(packages_info.exposed_package_args))
+        ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+        ghc_args.add(cmd_args(package_dbs.project_as_args("package_db"), prepend="-package-db"))
+        ghc_args.add(ctx.attrs.compiler_flags)
+
+        md_args = cmd_args(md_gen)
+        md_args.add("--toolchain-libs", catalog)
+        md_args.add("--ghc", haskell_toolchain.compiler)
+        md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
+        md_args.add(
+            "--source-prefix",
+            _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
+        )
+        md_args.add(cmd_args(sources, format="--source={}"))
+
+        md_args.add(
+            _attr_deps_haskell_lib_package_name_and_prefix(ctx),
+        )
+        md_args.add("--output", outputs[md_file].as_output())
+
+        ctx.actions.run(md_args, category = "haskell_metadata", identifier = suffix if suffix else None)
+
+    ctx.actions.dynamic_output(
+        dynamic = [],
+        promises = [haskell_toolchain.packages.dynamic],
+        inputs = [],
+        outputs = [md_file.as_output()],
+        f = get_metadata,
     )
-    md_args.add(cmd_args(sources, format="--source={}"))
-
-    md_args.add(
-        _attr_deps_haskell_lib_package_name_and_prefix(ctx),
-    )
-
-    ctx.actions.run(md_args, category = "haskell_metadata", identifier = suffix if suffix else None)
 
     return md_file
 
@@ -363,6 +395,26 @@ def get_packages_info(
         enable_profiling,
     )
 
+    if haskell_toolchain.packages and resolved != None:
+        haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+
+        toolchain_libs = [
+            dep[HaskellToolchainLibrary].name
+            for dep in ctx.attrs.deps
+            if HaskellToolchainLibrary in dep
+        ] + libs.reduce("packages")
+
+        package_db_tset = ctx.actions.tset(
+            HaskellPackageDbTSet,
+            children = [package_db[name] for name in toolchain_libs if name in package_db]
+        )
+
+        packagedb_args.add(package_db_tset.project_as_args("package_db"))
+    else:
+        packagedb_args.add(haskell_toolchain.packages.package_db)
+
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
         pkg_name = lib.name
@@ -389,17 +441,13 @@ def _common_compile_args(
         enable_profiling: bool,
         enable_th: bool,
         pkgname: str | None,
-        modname: str | None = None,
+        modname: str,
         resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
         package_deps: None | dict[str, list[str]] = None,
-        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args, None | ArtifactTag, list[Artifact]):
-    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
-
+        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args, ArtifactTag, list[Artifact]):
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
     compile_args.add("-hide-all-packages")
-    if not modname:
-        compile_args.add(cmd_args(toolchain_libs, prepend="-package"))
 
     if enable_profiling:
         compile_args.add("-prof")
@@ -424,52 +472,44 @@ def _common_compile_args(
         package_deps = package_deps,
     )
 
-    if not modname:
-        compile_args.add(packages_info.exposed_package_args)
-        compile_args.hidden(packages_info.exposed_package_imports)
-        compile_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+    packagedb_tag = ctx.actions.artifact_tag()
 
-    if modname:
-        packagedb_tag = ctx.actions.artifact_tag()
+    # TODO[AH] Avoid duplicates and share identical env files.
+    #   The set of package-dbs can be known at the package level, not just the
+    #   module level. So, we could generate this file outside of the
+    #   dynamic_output action.
+    package_env_file = ctx.actions.declare_output(".".join([
+        ctx.label.name,
+        modname or "pkg",
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "env",
+    ]))
+    package_env = cmd_args(delimiter = "\n")
+    packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
+    package_env.add(cmd_args(
+        packagedb_args,
+        format = "package-db {}",
+    ).relative_to(package_env_file, parent = 1))
+    ctx.actions.write(
+        package_env_file,
+        package_env,
+    )
+    compile_args.add(cmd_args(
+        packagedb_tag.tag_artifacts(package_env_file),
+        prepend = "-package-env",
+        hidden = packagedb_args,
+    ))
 
-        # TODO[AH] Avoid duplicates and share identical env files.
-        #   The set of package-dbs can be known at the package level, not just the
-        #   module level. So, we could generate this file outside of the
-        #   dynamic_output action.
-        package_env_file = ctx.actions.declare_output(".".join([
-            ctx.label.name,
-            modname or "pkg",
-            "package-db",
-            output_extensions(link_style, enable_profiling)[1],
-            "env",
-        ]))
-        package_env = cmd_args(delimiter = "\n")
-        packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
-        package_env.add(cmd_args(
-            packagedb_args,
-            format = "package-db {}",
-        ).relative_to(package_env_file, parent = 1))
-        ctx.actions.write(
-            package_env_file,
-            package_env,
-        )
-        compile_args.add(cmd_args(
-            packagedb_tag.tag_artifacts(package_env_file),
-            prepend = "-package-env",
-            hidden = packagedb_args,
-        ))
-
-        dep_file = ctx.actions.declare_output(".".join([
-            ctx.label.name,
-            modname or "pkg",
-            "package-db",
-            output_extensions(link_style, enable_profiling)[1],
-            "dep",
-        ])).as_output()
-        tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
-        compile_args.add("--buck2-packagedb-dep", tagged_dep_file)
-    else:
-        packagedb_tag = None
+    dep_file = ctx.actions.declare_output(".".join([
+        ctx.label.name,
+        modname or "pkg",
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "dep",
+    ])).as_output()
+    tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
+    compile_args.add("--buck2-packagedb-dep", tagged_dep_file)
 
     if enable_th:
         compile_args.add(packages_info.exposed_package_libs)
@@ -734,6 +774,8 @@ def compile(
 
         return [DynamicCompileResultInfo(modules = module_tsets)]
 
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
     objects = [object for module in modules.values() for object in module.objects]
     stub_dirs = [module.stub_dir for module in modules.values()]
@@ -749,7 +791,7 @@ def compile(
                 if enable_profiling else
                 lib.info[link_style]
             ]
-        ],
+        ] + [ haskell_toolchain.packages.dynamic ],
         inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
         f = do_compile)
