@@ -568,6 +568,10 @@ def _build_haskell_lib(
             ),
         )
 
+        # TODO[CB] use individual package db for each package
+        if haskell_toolchain.packages:
+            link.add("-package-db", haskell_toolchain.packages.package_db)
+
         link.add(compiled.objects)
 
         infos = get_link_args_for_strategy(

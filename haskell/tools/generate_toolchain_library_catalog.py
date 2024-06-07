@@ -27,16 +27,21 @@ def main():
         required=True,
         type=str,
         help="Path to the Haskell compiler's ghc-pkg utilty.")
+    parser.add_argument(
+        "--package-db",
+        required=False,
+        type=str,
+        help="Path to the package db including all haskell libraries.")
     args = parser.parse_args()
 
-    with subprocess.Popen(_ghc_pkg_command(args.ghc_pkg), stdout=subprocess.PIPE, text=True) as proc:
+    with subprocess.Popen(_ghc_pkg_command(args.ghc_pkg, args.package_db), stdout=subprocess.PIPE, text=True) as proc:
         packages = list(_parse_ghc_pkg_dump(proc.stdout))
         result = _construct_package_mappings(packages)
 
     json.dump(result, args.output)
 
 
-def _ghc_pkg_command(ghc_pkg):
+def _ghc_pkg_command(ghc_pkg, package_db):
     return [
         ghc_pkg,
         "dump",
@@ -44,7 +49,7 @@ def _ghc_pkg_command(ghc_pkg):
         "--no-user-package-db",
         "--simple-output",
         "--expand-pkgroot",
-    ]
+    ] + (["--package-db", package_db] if package_db else [])
 
 
 def _parse_ghc_pkg_dump(lines):

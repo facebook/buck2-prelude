@@ -189,13 +189,20 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
     return modules
 
 def _toolchain_library_catalog_impl(ctx: AnalysisContext) -> list[Provider]:
-    ghc_pkg = ctx.attrs.toolchain[HaskellToolchainInfo].packager
+    haskell_toolchain = ctx.attrs.toolchain[HaskellToolchainInfo]
+
+    ghc_pkg = haskell_toolchain.packager
+
     catalog_gen = ctx.attrs.generate_toolchain_library_catalog[RunInfo]
     catalog = ctx.actions.declare_output("haskell_toolchain_libraries.json")
-    ctx.actions.run(
-        cmd_args(catalog_gen, "--ghc-pkg", ghc_pkg, "--output", catalog.as_output()),
-        category = "haskell_toolchain_library_catalog",
-    )
+
+    cmd = cmd_args(catalog_gen, "--ghc-pkg", ghc_pkg, "--output", catalog.as_output())
+
+    if haskell_toolchain.packages:
+        cmd.add("--package-db", haskell_toolchain.packages.package_db)
+
+    ctx.actions.run(cmd, category = "haskell_toolchain_library_catalog")
+
     return [DefaultInfo(default_output = catalog)]
 
 _toolchain_library_catalog = anon_rule(
@@ -362,6 +369,10 @@ def get_packages_info(
         link_style,
         enable_profiling,
     )
+
+    # TODO[CB] use individual package db for each package
+    if haskell_toolchain.packages:
+        packagedb_args.add("-package-db", haskell_toolchain.packages.package_db)
 
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
