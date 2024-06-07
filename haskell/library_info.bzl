@@ -46,6 +46,8 @@ HaskellLibraryInfo = record(
     version = str,
     is_prebuilt = bool,
     profiling_enabled = bool,
+    # Package dependencies
+    dependencies = list[str],
 )
 
 def _project_as_package_db(lib: HaskellLibraryInfo):
