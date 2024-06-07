@@ -46,3 +46,7 @@ HaskellToolchainLibrary = provider(
         "name": provider_field(str),
     },
 )
+
+HaskellPackagesInfo = record(
+    package_db = Artifact,
+)
