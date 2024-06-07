@@ -78,6 +78,8 @@ load(
     "@prelude//haskell:toolchain.bzl",
     "HaskellToolchainInfo",
     "HaskellToolchainLibrary",
+    "HaskellPackageDbTSet",
+    "DynamicHaskellPackageDbInfo",
 )
 load(
     "@prelude//haskell:util.bzl",
@@ -1040,27 +1042,8 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
-    # Add -package-db and -package/-expose-package flags for each Haskell
-    # library dependency.
-    packages_info = get_packages_info(
-        ctx,
-        link_style,
-        specify_pkg_version = False,
-        enable_profiling = enable_profiling,
-        use_empty_lib = False,
-    )
-
     output = ctx.actions.declare_output(ctx.attrs.name)
     link = cmd_args(haskell_toolchain.compiler)
-    link.add("-hide-all-packages")
-    link.add(cmd_args(toolchain_libs, prepend = "-package"))
-    link.add(cmd_args(packages_info.exposed_package_args))
-    link.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
-    link.add("-o", output.as_output())
-    link.add(haskell_toolchain.linker_flags)
-    link.add(ctx.attrs.linker_flags)
-
-    link.hidden(packages_info.exposed_package_libs)
 
     objects = {}
 
@@ -1241,7 +1224,48 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     else:
         link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
 
-    ctx.actions.run(link, category = "haskell_link")
+    def do_link(ctx, artifacts, resolved, outputs, output=output, objects=objects):
+        link_cmd = link.copy() # link is already frozen, make a copy
+
+        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+
+        # Add -package-db and -package/-expose-package flags for each Haskell
+        # library dependency.
+        packages_info = get_packages_info(
+            ctx,
+            link_style,
+            resolved = resolved,
+            specify_pkg_version = False,
+            enable_profiling = enable_profiling,
+            use_empty_lib = False,
+        )
+
+        link_cmd.add("-hide-all-packages")
+        link_cmd.add(cmd_args(toolchain_libs, prepend = "-package"))
+        link_cmd.add(cmd_args(packages_info.exposed_package_args))
+        link_cmd.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+        link_cmd.add(haskell_toolchain.linker_flags)
+        link_cmd.add(ctx.attrs.linker_flags)
+
+        link_cmd.hidden(packages_info.exposed_package_libs)
+
+        package_db_tset = ctx.actions.tset(
+            HaskellPackageDbTSet,
+            children = [package_db[name] for name in toolchain_libs if name in package_db]
+        )
+
+        link_cmd.add("-o", outputs[output].as_output())
+
+        ctx.actions.run(link_cmd, category = "haskell_link")
+
+    ctx.actions.dynamic_output(
+        dynamic = [],
+        promises = [haskell_toolchain.packages.dynamic],
+        inputs = objects.values(),
+        outputs = [output.as_output()],
+        f = do_link,
+    )
 
     run = cmd_args(output)
 
