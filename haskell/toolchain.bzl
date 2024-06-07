@@ -50,3 +50,9 @@ HaskellToolchainLibrary = provider(
 HaskellPackagesInfo = record(
     package_db = Artifact,
 )
+
+HaskellPackageDbTSet = transitive_set()
+
+DynamicHaskellPackageDbInfo = provider(fields = {
+    "packages": dict[str, HaskellPackageDbTSet],
+})
