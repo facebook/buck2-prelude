@@ -557,36 +557,52 @@ def _build_haskell_lib(
 
     if link_style == LinkStyle("shared"):
         lib = ctx.actions.declare_output(lib_short_path)
-        link = cmd_args(haskell_toolchain.linker)
-        link.add(haskell_toolchain.linker_flags)
-        link.add(ctx.attrs.linker_flags)
-        link.add("-hide-all-packages")
-        link.add(cmd_args(toolchain_libs, prepend = "-package"))
-        link.add("-o", lib.as_output())
-        link.add(
-            get_shared_library_flags(linker_info.type),
-            "-dynamic",
-            cmd_args(
-                _get_haskell_shared_library_name_linker_flags(linker_info.type, libfile),
-                prepend = "-optl",
-            ),
-        )
 
-        # TODO[CB] use individual package db for each package
-        if haskell_toolchain.packages:
-            link.add("-package-db", haskell_toolchain.packages.package_db)
+        def do_link(ctx, artifacts, resolved, outputs, lib=lib, objects=compiled.objects):
+            pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+            package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
 
-        link.add(compiled.objects)
+            package_db_tset = ctx.actions.tset(
+                HaskellPackageDbTSet,
+                children = [package_db[name] for name in toolchain_libs if name in package_db]
+            )
 
-        infos = get_link_args_for_strategy(
-            ctx,
-            nlis,
-            to_link_strategy(link_style),
-        )
-        link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
-        ctx.actions.run(
-            link,
-            category = "haskell_link" + artifact_suffix.replace("-", "_"),
+            link = cmd_args(haskell_toolchain.linker)
+            link.add(haskell_toolchain.linker_flags)
+            link.add(ctx.attrs.linker_flags)
+            link.add("-hide-all-packages")
+            link.add(cmd_args(toolchain_libs, prepend = "-package"))
+            link.add(cmd_args(package_db_tset.project_as_args("package_db"), prepend="-package-db"))
+            link.add("-o", outputs[lib].as_output())
+            link.add(
+                get_shared_library_flags(linker_info.type),
+                "-dynamic",
+                cmd_args(
+                    _get_haskell_shared_library_name_linker_flags(linker_info.type, libfile),
+                    prepend = "-optl",
+                ),
+            )
+
+            link.add(objects)
+
+            infos = get_link_args_for_strategy(
+                ctx,
+                nlis,
+                to_link_strategy(link_style),
+            )
+            link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
+
+            ctx.actions.run(
+                link,
+                category = "haskell_link" + artifact_suffix.replace("-", "_"),
+            )
+
+        ctx.actions.dynamic_output(
+            dynamic = [],
+            promises = [haskell_toolchain.packages.dynamic],
+            inputs = compiled.objects,
+            outputs = [lib.as_output()],
+            f = do_link,
         )
 
         solibs[libfile] = LinkedObject(output = lib, unstripped_output = lib)
