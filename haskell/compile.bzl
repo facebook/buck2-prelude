@@ -246,9 +246,6 @@ def target_metadata(
 
     def get_metadata(ctx, _artifacts, resolved, outputs, catalog=catalog):
 
-        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
-
         # Add -package-db and -package/-expose-package flags for each Haskell
         # library dependency.
 
@@ -265,15 +262,9 @@ def target_metadata(
         ghc_args.add("-hide-all-packages")
         ghc_args.add(package_flag, "base")
 
-        package_dbs = ctx.actions.tset(
-            HaskellPackageDbTSet,
-            children = [package_db[name] for name in toolchain_libs if name in package_db]
-        )
-
         ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
         ghc_args.add(cmd_args(packages_info.exposed_package_args))
         ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
-        ghc_args.add(cmd_args(package_dbs.project_as_args("package_db"), prepend="-package-db"))
         ghc_args.add(ctx.attrs.compiler_flags)
 
         md_args = cmd_args(md_gen)
