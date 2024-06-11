@@ -125,6 +125,7 @@ PackagesInfo = record(
     exposed_package_dbs = field(list[Artifact]),
     packagedb_args = cmd_args,
     transitive_deps = field(HaskellLibraryInfoTSet),
+    bin_paths = cmd_args,
 )
 
 _Module = record(
@@ -268,6 +269,7 @@ def target_metadata(
         ghc_args.add(ctx.attrs.compiler_flags)
 
         md_args = cmd_args(md_gen)
+        md_args.add(packages_info.bin_paths)
         md_args.add("--toolchain-libs", catalog)
         md_args.add("--ghc", haskell_toolchain.compiler)
         md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
@@ -394,8 +396,10 @@ def get_packages_info(
         )
 
         packagedb_args.add(package_db_tset.project_as_args("package_db"))
+        bin_paths = cmd_args(package_db_tset.project_as_args("path"), format="--bin-path={}/bin")
     else:
         packagedb_args.add(haskell_toolchain.packages.package_db)
+        bin_paths = cmd_args()
 
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
@@ -414,6 +418,7 @@ def get_packages_info(
         exposed_package_dbs = exposed_package_dbs,
         packagedb_args = packagedb_args,
         transitive_deps = libs,
+        bin_paths = bin_paths,
     )
 
 def _compile_module(
@@ -538,6 +543,7 @@ def _compile_module(
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
     compile_args_for_file.add("-stubdir", stubs.as_output())
+    compile_args_for_file.add(packages_info.bin_paths)
 
     if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
         compile_args_for_file.add("-dynamic-too")
