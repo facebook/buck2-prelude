@@ -66,6 +66,13 @@ def main():
         action="append",
         default=[],
         help="Package dependencies formated as `NAME:PREFIX_PATH`.")
+    parser.add_argument(
+        "--bin-path",
+        type=Path,
+        action="append",
+        default=[],
+        help="Add given path to PATH.",
+    )
     args = parser.parse_args()
 
     result = obtain_target_metadata(args)
@@ -82,7 +89,8 @@ def json_default_handler(o):
 def obtain_target_metadata(args):
     toolchain_packages = load_toolchain_packages(args.toolchain_libs)
     ghc_args = fix_ghc_args(args.ghc_arg, toolchain_packages)
-    ghc_depends, ghc_options = run_ghc_depends(args.ghc, ghc_args, args.source)
+    paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
+    ghc_depends, ghc_options = run_ghc_depends(args.ghc, ghc_args, args.source, paths)
     th_modules = determine_th_modules(ghc_options, args.source_prefix)
     package_prefixes = calc_package_prefixes(args.package)
     module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
@@ -151,7 +159,7 @@ def fix_ghc_args(ghc_args, toolchain_packages):
     return result
 
 
-def run_ghc_depends(ghc, ghc_args, sources):
+def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
     with tempfile.TemporaryDirectory() as dname:
         json_fname = os.path.join(dname, "depends.json")
         opt_json_fname = os.path.join(dname, "options.json")
@@ -165,7 +173,12 @@ def run_ghc_depends(ghc, ghc_args, sources):
             "-opt-json", opt_json_fname,
             "-dep-makefile", make_fname,
         ] + ghc_args + sources
-        subprocess.run(args, check=True)
+
+        env = os.environ.copy()
+        path = env.get("PATH", "")
+        env["PATH"] = os.pathsep.join([path] + aux_paths)
+
+        subprocess.run(args, env=env, check=True)
 
         with open(json_fname) as f, open(opt_json_fname) as o:
             return json.load(f), json.load(o)
