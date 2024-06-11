@@ -52,12 +52,21 @@ HaskellPackagesInfo = record(
     dynamic = DynamicValue,
 )
 
-def _haskell_package_info_as_package_db(p: Artifact):
-    return cmd_args(p)
+HaskellPackage = record(
+    db = Artifact,
+    path = Artifact,
+)
+
+def _haskell_package_info_as_package_db(p: HaskellPackage):
+    return cmd_args(p.db)
+
+def _haskell_package_info_as_package_path(p: HaskellPackage):
+    return cmd_args(p.path)
 
 HaskellPackageDbTSet = transitive_set(
     args_projections = {
         "package_db": _haskell_package_info_as_package_db,
+        "path": _haskell_package_info_as_package_path,
     }
 )
 
