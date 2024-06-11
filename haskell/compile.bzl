@@ -458,6 +458,7 @@ def _compile_module_args(
     if enable_haddock:
         compile_cmd.add("-haddock")
 
+    # These compiler arguments can be passed in a response file.
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
     compile_args.add("-hide-all-packages")
