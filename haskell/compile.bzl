@@ -472,20 +472,20 @@ def _compile_module(
         compile_cmd.add("-haddock")
 
     # These compiler arguments can be passed in a response file.
-    compile_args = cmd_args()
-    compile_args.add("-no-link", "-i")
-    compile_args.add("-hide-all-packages")
+    compile_args_for_file = cmd_args()
+    compile_args_for_file.add("-no-link", "-i")
+    compile_args_for_file.add("-hide-all-packages")
 
     if enable_profiling:
-        compile_args.add("-prof")
+        compile_args_for_file.add("-prof")
 
     if link_style == LinkStyle("shared"):
-        compile_args.add("-dynamic", "-fPIC")
+        compile_args_for_file.add("-dynamic", "-fPIC")
     elif link_style == LinkStyle("static_pic"):
-        compile_args.add("-fPIC", "-fexternal-dynamic-refs")
+        compile_args_for_file.add("-fPIC", "-fexternal-dynamic-refs")
 
     osuf, hisuf = output_extensions(link_style, enable_profiling)
-    compile_args.add("-osuf", osuf, "-hisuf", hisuf)
+    compile_args_for_file.add("-osuf", osuf, "-hisuf", hisuf)
 
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
@@ -524,7 +524,7 @@ def _compile_module(
         package_env_file,
         package_env,
     )
-    compile_args.add(cmd_args(
+    compile_args_for_file.add(cmd_args(
         packagedb_tag.tag_artifacts(package_env_file),
         prepend = "-package-env",
         hidden = packagedb_args,
@@ -538,19 +538,19 @@ def _compile_module(
         "dep",
     ])).as_output()
     tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
-    compile_args.add("--buck2-packagedb-dep", tagged_dep_file)
+    compile_args_for_file.add("--buck2-packagedb-dep", tagged_dep_file)
 
     if enable_th:
-        compile_args.add(packages_info.exposed_package_libs)
+        compile_args_for_file.add(packages_info.exposed_package_libs)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
     pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
     pre_args = pre.set.project_as_args("args")
-    compile_args.add(cmd_args(pre_args, format = "-optP={}"))
+    compile_args_for_file.add(cmd_args(pre_args, format = "-optP={}"))
 
     if pkgname:
-        compile_args.add(["-this-unit-id", pkgname])
+        compile_args_for_file.add(["-this-unit-id", pkgname])
 
     module_tsets_ = packages_info.exposed_package_modules
 
@@ -558,15 +558,15 @@ def _compile_module(
     his = [outputs[hi] for hi in module.interfaces]
     stubs = outputs[module.stub_dir]
 
-    compile_args.add("-outputdir", cmd_args([cmd_args(stubs.as_output()).parent(), module.prefix_dir], delimiter="/"))
-    compile_args.add("-o", objects[0].as_output())
-    compile_args.add("-ohi", his[0].as_output())
-    compile_args.add("-stubdir", stubs.as_output())
+    compile_args_for_file.add("-outputdir", cmd_args([cmd_args(stubs.as_output()).parent(), module.prefix_dir], delimiter="/"))
+    compile_args_for_file.add("-o", objects[0].as_output())
+    compile_args_for_file.add("-ohi", his[0].as_output())
+    compile_args_for_file.add("-stubdir", stubs.as_output())
 
     if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
-        compile_args.add("-dynamic-too")
-        compile_args.add("-dyno", objects[1].as_output())
-        compile_args.add("-dynohi", his[1].as_output())
+        compile_args_for_file.add("-dynamic-too")
+        compile_args_for_file.add("-dyno", objects[1].as_output())
+        compile_args_for_file.add("-dynohi", his[1].as_output())
 
     srcs = cmd_args(module.source)
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
@@ -588,24 +588,24 @@ def _compile_module(
         ),
         srcs = srcs,
         args_for_cmd = cmd_args(),
-        args_for_file = compile_args,
+        args_for_file = cmd_args(),
         packagedb_tag = packagedb_tag,
         packagedbs = packages_info.exposed_package_dbs,
     )
 
     # ------------------------------------------------------------
 
-    if args.args_for_file:
+    if compile_args_for_file:
         if haskell_toolchain.use_argsfile:
             argsfile = ctx.actions.declare_output(
                 "haskell_compile_" + artifact_suffix + ".argsfile",
             )
-            for_file = cmd_args(args.args_for_file).add(args.srcs)
+            for_file = cmd_args(compile_args_for_file).add(args.srcs)
             ctx.actions.write(argsfile.as_output(), for_file, allow_args = True)
             compile_cmd.add(cmd_args(argsfile, format = "@{}"))
             compile_cmd.hidden(for_file)
         else:
-            compile_cmd.add(args.args_for_file)
+            compile_cmd.add(compile_args_for_file)
             compile_cmd.add(args.srcs)
 
     compile_cmd.add(
