@@ -461,18 +461,15 @@ def _compile_module(
 
     # ------------------------------------------------------------
 
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
-    compile_cmd_ = cmd_args()
-    compile_cmd_.add(haskell_toolchain.compiler_flags)
+    compile_cmd.add(haskell_toolchain.compiler_flags)
 
     # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
     # be parsed when inside an argsfile.
-    compile_cmd_.add(ctx.attrs.compiler_flags)
-    compile_cmd_.add("-c")
+    compile_cmd.add(ctx.attrs.compiler_flags)
+    compile_cmd.add("-c")
 
     if enable_haddock:
-        compile_cmd_.add("-haddock")
+        compile_cmd.add("-haddock")
 
     # These compiler arguments can be passed in a response file.
     compile_args = cmd_args()
@@ -590,7 +587,7 @@ def _compile_module(
             module_tsets = module_tsets_,
         ),
         srcs = srcs,
-        args_for_cmd = compile_cmd_,
+        args_for_cmd = cmd_args(),
         args_for_file = compile_args,
         packagedb_tag = packagedb_tag,
         packagedbs = packages_info.exposed_package_dbs,
@@ -610,8 +607,6 @@ def _compile_module(
         else:
             compile_cmd.add(args.args_for_file)
             compile_cmd.add(args.srcs)
-
-    compile_cmd.add(args.args_for_cmd)
 
     compile_cmd.add(
         cmd_args(
