@@ -551,7 +551,7 @@ def _compile_module(
         exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
         exposed_package_dbs = exposed_package_dbs,
-        packagedb_args = packagedb_args,
+        packagedb_args = cmd_args(),
         transitive_deps = libs,
     )
 
@@ -571,9 +571,9 @@ def _compile_module(
         "env",
     ]))
     package_env = cmd_args(delimiter = "\n")
-    packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
+    packagedb_args_tagged = packagedb_tag.tag_artifacts(packagedb_args)
     package_env.add(cmd_args(
-        packagedb_args,
+        packagedb_args_tagged,
         format = "package-db {}",
     ).relative_to(package_env_file, parent = 1))
     ctx.actions.write(
@@ -583,7 +583,7 @@ def _compile_module(
     compile_args_for_file.add(cmd_args(
         packagedb_tag.tag_artifacts(package_env_file),
         prepend = "-package-env",
-        hidden = packagedb_args,
+        hidden = packagedb_args_tagged,
     ))
 
     dep_file = ctx.actions.declare_output(".".join([
