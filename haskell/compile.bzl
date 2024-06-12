@@ -568,18 +568,17 @@ def _compile_module(
 
     # ------------------------------------------------------------
 
-    if compile_args_for_file:
-        if haskell_toolchain.use_argsfile:
-            argsfile = ctx.actions.declare_output(
-                "haskell_compile_" + artifact_suffix + ".argsfile",
-            )
-            for_file = cmd_args(compile_args_for_file).add(srcs)
-            ctx.actions.write(argsfile.as_output(), for_file, allow_args = True)
-            compile_cmd.add(cmd_args(argsfile, format = "@{}"))
-            compile_cmd.hidden(for_file)
-        else:
-            compile_cmd.add(compile_args_for_file)
-            compile_cmd.add(srcs)
+    if haskell_toolchain.use_argsfile:
+        argsfile = ctx.actions.declare_output(
+            "haskell_compile_" + artifact_suffix + ".argsfile",
+        )
+        for_file = cmd_args(compile_args_for_file).add(srcs)
+        ctx.actions.write(argsfile.as_output(), for_file, allow_args = True)
+        compile_cmd.add(cmd_args(argsfile, format = "@{}"))
+        compile_cmd.hidden(for_file)
+    else:
+        compile_cmd.add(compile_args_for_file)
+        compile_cmd.add(srcs)
 
     compile_cmd.add(
         cmd_args(
