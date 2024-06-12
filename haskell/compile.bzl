@@ -499,7 +499,6 @@ def _compile_module(
     exposed_package_modules = []
     exposed_package_imports = []
     exposed_package_objects = []
-    exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
     exposed_package_dbs = []
 
@@ -548,7 +547,7 @@ def _compile_module(
         exposed_package_modules = exposed_package_modules,
         exposed_package_imports = exposed_package_imports,
         exposed_package_objects = exposed_package_objects,
-        exposed_package_libs = exposed_package_libs,
+        exposed_package_libs = cmd_args(),
         exposed_package_args = exposed_package_args,
         exposed_package_dbs = exposed_package_dbs,
         packagedb_args = cmd_args(),
@@ -595,9 +594,6 @@ def _compile_module(
     ])).as_output()
     tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
     compile_args_for_file.add("--buck2-packagedb-dep", tagged_dep_file)
-
-    if enable_th:
-        compile_args_for_file.add(packages_info.exposed_package_libs)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
