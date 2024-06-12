@@ -568,15 +568,6 @@ def _compile_module(
 
     producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags + haskell_toolchain.compiler_flags
 
-    result = CompileResultInfo(
-        objects = objects,
-        hi = his,
-        hashes = [module.hash],
-        stubs = stubs,
-        producing_indices = producing_indices,
-        module_tsets = module_tsets_,
-    )
-
     # ------------------------------------------------------------
 
     if compile_args_for_file:
@@ -604,7 +595,7 @@ def _compile_module(
     # Transitive module dependencies from other packages.
     cross_package_modules = ctx.actions.tset(
         CompiledModuleTSet,
-        children = result.module_tsets,
+        children = module_tsets_,
     )
     # Transitive module dependencies from the same package.
     this_package_modules = [
