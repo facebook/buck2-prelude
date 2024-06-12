@@ -119,7 +119,6 @@ CompileResultInfo = record(
 PackagesInfo = record(
     exposed_package_libs = cmd_args,
     exposed_package_args = cmd_args,
-    exposed_package_dbs = field(list[Artifact]),
     packagedb_args = cmd_args,
     transitive_deps = field(HaskellLibraryInfoTSet),
     bin_paths = cmd_args,
@@ -337,7 +336,6 @@ def get_packages_info(
     package_flag = _package_flag(haskell_toolchain)
     exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
-    exposed_package_dbs = []
 
     for lib in libs.traverse():
         exposed_package_libs.hidden(lib.libs)
@@ -385,7 +383,6 @@ def get_packages_info(
     return PackagesInfo(
         exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
-        exposed_package_dbs = exposed_package_dbs,
         packagedb_args = packagedb_args,
         transitive_deps = libs,
         bin_paths = bin_paths,
