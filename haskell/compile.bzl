@@ -544,7 +544,7 @@ def _compile_module(
         exposed_package_args.add(package_flag, lib.name)
 
     packages_info = PackagesInfo(
-        exposed_package_modules = exposed_package_modules,
+        exposed_package_modules = [],
         exposed_package_imports = exposed_package_imports,
         exposed_package_objects = exposed_package_objects,
         exposed_package_libs = cmd_args(),
@@ -654,7 +654,7 @@ def _compile_module(
     # Transitive module dependencies from other packages.
     cross_package_modules = ctx.actions.tset(
         CompiledModuleTSet,
-        children = packages_info.exposed_package_modules,
+        children = exposed_package_modules,
     )
     # Transitive module dependencies from the same package.
     this_package_modules = [
