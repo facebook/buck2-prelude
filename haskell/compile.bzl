@@ -485,8 +485,6 @@ def _compile_module(
     #    resolved = resolved,
     #    package_deps = package_deps,
     #)
-    specify_pkg_version = False,
-    use_empty_lib = True,
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
@@ -520,7 +518,7 @@ def _compile_module(
                 exposed_package_modules.append(dynamic_info.modules[mod])
 
             if direct.name in package_deps:
-                db = direct.empty_db if use_empty_lib else direct.db
+                db = direct.empty_db if True else direct.db
                 exposed_package_dbs.append(db)
     else:
         for lib in libs.traverse():
@@ -531,7 +529,7 @@ def _compile_module(
             exposed_package_libs.hidden(lib.libs)
 
     packagedb_args = cmd_args(libs.project_as_args(
-        "empty_package_db" if use_empty_lib else "package_db",
+        "empty_package_db" if True else "package_db",
     ))
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
@@ -563,8 +561,6 @@ def _compile_module(
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
         pkg_name = lib.name
-        if (specify_pkg_version):
-            pkg_name += "-{}".format(lib.version)
 
         exposed_package_args.add(package_flag, pkg_name)
 
