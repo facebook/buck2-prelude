@@ -561,6 +561,8 @@ def _compile_module(
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
         # hs-boot files aren't expected to be an argument to compiler but does need
         # to be included in the directory of the associated src file
+        # TODO(ah) We should not indiscriminately include all non-hs sources,
+        #   but only those that this module actually depends on.
         if not is_haskell_src(path):
             srcs.hidden(src)
 
