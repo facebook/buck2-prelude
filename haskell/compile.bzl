@@ -557,14 +557,14 @@ def _compile_module(
         compile_args_for_file.add("-dyno", objects[1].as_output())
         compile_args_for_file.add("-dynohi", his[1].as_output())
 
-    srcs = cmd_args(module.source)
+    compile_args_for_file.add(module.source)
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
         # hs-boot files aren't expected to be an argument to compiler but does need
         # to be included in the directory of the associated src file
         # TODO(ah) We should not indiscriminately include all non-hs sources,
         #   but only those that this module actually depends on.
         if not is_haskell_src(path):
-            srcs.hidden(src)
+            compile_args_for_file.hidden(src)
 
     producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags + haskell_toolchain.compiler_flags
 
@@ -574,13 +574,11 @@ def _compile_module(
         argsfile = ctx.actions.declare_output(
             "haskell_compile_" + artifact_suffix + ".argsfile",
         )
-        for_file = cmd_args(compile_args_for_file).add(srcs)
-        ctx.actions.write(argsfile.as_output(), for_file, allow_args = True)
+        ctx.actions.write(argsfile.as_output(), compile_args_for_file, allow_args = True)
         compile_cmd.add(cmd_args(argsfile, format = "@{}"))
-        compile_cmd.hidden(for_file)
+        compile_cmd.hidden(compile_args_for_file)
     else:
         compile_cmd.add(compile_args_for_file)
-        compile_cmd.add(srcs)
 
     compile_cmd.add(
         cmd_args(
