@@ -476,15 +476,6 @@ def _compile_module(
 
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
-    #packages_info = get_packages_info(
-    #    ctx,
-    #    link_style,
-    #    specify_pkg_version = False,
-    #    enable_profiling = enable_profiling,
-    #    use_empty_lib = True,
-    #    resolved = resolved,
-    #    package_deps = package_deps,
-    #)
 
     # Collect library dependencies. Note that these don't need to be in a
     # particular order.
@@ -497,9 +488,6 @@ def _compile_module(
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
     exposed_package_modules = []
-    exposed_package_imports = []
-    exposed_package_objects = []
-    exposed_package_args = cmd_args([package_flag, "base"])
     exposed_package_dbs = []
 
     for lib in direct_deps_link_info:
@@ -538,21 +526,6 @@ def _compile_module(
     )
 
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
-
-    # Expose only the packages we depend on directly
-    for lib in haskell_direct_deps_lib_infos:
-        exposed_package_args.add(package_flag, lib.name)
-
-    packages_info = PackagesInfo(
-        exposed_package_modules = [],
-        exposed_package_imports = exposed_package_imports,
-        exposed_package_objects = exposed_package_objects,
-        exposed_package_libs = cmd_args(),
-        exposed_package_args = exposed_package_args,
-        exposed_package_dbs = [],
-        packagedb_args = cmd_args(),
-        transitive_deps = libs,
-    )
 
     # ------------------------------------------------------------
 
