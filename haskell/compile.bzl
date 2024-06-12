@@ -116,15 +116,6 @@ CompileResultInfo = record(
     module_tsets = field(list[CompiledModuleTSet] | DynamicValue),
 )
 
-CompileArgsInfo = record(
-    result = field(CompileResultInfo),
-    srcs = field(cmd_args),
-    args_for_cmd = field(cmd_args),
-    args_for_file = field(cmd_args),
-    packagedb_tag = field(ArtifactTag),
-    packagedbs = field(list[Artifact]),
-)
-
 PackagesInfo = record(
     exposed_package_modules = field(None | list[CompiledModuleTSet]),
     exposed_package_imports = field(list[Artifact]),
@@ -577,20 +568,13 @@ def _compile_module(
 
     producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags + haskell_toolchain.compiler_flags
 
-    args = CompileArgsInfo(
-        result = CompileResultInfo(
-            objects = objects,
-            hi = his,
-            hashes = [module.hash],
-            stubs = stubs,
-            producing_indices = producing_indices,
-            module_tsets = module_tsets_,
-        ),
-        srcs = cmd_args(),
-        args_for_cmd = cmd_args(),
-        args_for_file = cmd_args(),
-        packagedb_tag = packagedb_tag,
-        packagedbs = packages_info.exposed_package_dbs,
+    result = CompileResultInfo(
+        objects = objects,
+        hi = his,
+        hashes = [module.hash],
+        stubs = stubs,
+        producing_indices = producing_indices,
+        module_tsets = module_tsets_,
     )
 
     # ------------------------------------------------------------
@@ -620,7 +604,7 @@ def _compile_module(
     # Transitive module dependencies from other packages.
     cross_package_modules = ctx.actions.tset(
         CompiledModuleTSet,
-        children = args.result.module_tsets,
+        children = result.module_tsets,
     )
     # Transitive module dependencies from the same package.
     this_package_modules = [
@@ -660,7 +644,7 @@ def _compile_module(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
         dep_files = {
             "abi": abi_tag,
-            "packagedb": args.packagedb_tag,
+            "packagedb": packagedb_tag,
         }
     )
 
@@ -680,7 +664,7 @@ def _compile_module(
             dyn_object_dot_o = dyn_object_dot_o,
             package_deps = package_deps.keys(),
             toolchain_deps = toolchain_deps,
-            db_deps = args.packagedbs,
+            db_deps = packages_info.exposed_package_dbs,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
