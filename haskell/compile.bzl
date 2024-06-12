@@ -505,32 +505,22 @@ def _compile_module(
     exposed_package_args = cmd_args([package_flag, "base"])
     exposed_package_dbs = []
 
-    if True:
-        exposed_package_modules = []
+    exposed_package_modules = []
 
-        for lib in direct_deps_link_info:
-            info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-            direct = info.value
-            dynamic = direct.dynamic[enable_profiling]
-            dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
+    for lib in direct_deps_link_info:
+        info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        direct = info.value
+        dynamic = direct.dynamic[enable_profiling]
+        dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
 
-            for mod in package_deps.get(direct.name, []):
-                exposed_package_modules.append(dynamic_info.modules[mod])
+        for mod in package_deps.get(direct.name, []):
+            exposed_package_modules.append(dynamic_info.modules[mod])
 
-            if direct.name in package_deps:
-                db = direct.empty_db if True else direct.db
-                exposed_package_dbs.append(db)
-    else:
-        for lib in libs.traverse():
-            exposed_package_imports.extend(lib.import_dirs[enable_profiling])
-            exposed_package_objects.extend(lib.objects[enable_profiling])
-            # libs of dependencies might be needed at compile time if
-            # we're using Template Haskell:
-            exposed_package_libs.hidden(lib.libs)
+        if direct.name in package_deps:
+            db = direct.empty_db
+            exposed_package_dbs.append(db)
 
-    packagedb_args = cmd_args(libs.project_as_args(
-        "empty_package_db" if True else "package_db",
-    ))
+    packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
@@ -538,7 +528,7 @@ def _compile_module(
         enable_profiling,
     )
 
-    if haskell_toolchain.packages and True:
+    if haskell_toolchain.packages:
         haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
         pkg_deps = resolved[haskell_toolchain.packages.dynamic]
         package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
