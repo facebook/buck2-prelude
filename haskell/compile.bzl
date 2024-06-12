@@ -543,8 +543,6 @@ def _compile_module(
     if pkgname:
         compile_args_for_file.add(["-this-unit-id", pkgname])
 
-    module_tsets_ = packages_info.exposed_package_modules
-
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
     stubs = outputs[module.stub_dir]
@@ -595,7 +593,7 @@ def _compile_module(
     # Transitive module dependencies from other packages.
     cross_package_modules = ctx.actions.tset(
         CompiledModuleTSet,
-        children = module_tsets_,
+        children = packages_info.exposed_package_modules,
     )
     # Transitive module dependencies from the same package.
     this_package_modules = [
