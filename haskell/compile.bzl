@@ -562,8 +562,6 @@ def _compile_module(
         if not is_haskell_src(path):
             compile_args_for_file.hidden(src)
 
-    producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags + haskell_toolchain.compiler_flags
-
     if haskell_toolchain.use_argsfile:
         argsfile = ctx.actions.declare_output(
             "haskell_compile_" + artifact_suffix + ".argsfile",
