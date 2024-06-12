@@ -542,9 +542,7 @@ def _compile_module(
 
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
-        pkg_name = lib.name
-
-        exposed_package_args.add(package_flag, pkg_name)
+        exposed_package_args.add(package_flag, lib.name)
 
     packages_info = PackagesInfo(
         exposed_package_modules = exposed_package_modules,
