@@ -528,25 +528,22 @@ def _compile_module(
         enable_profiling,
     )
 
-    if haskell_toolchain.packages:
-        haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+    pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+    package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
 
-        toolchain_libs = [
-            dep[HaskellToolchainLibrary].name
-            for dep in ctx.attrs.deps
-            if HaskellToolchainLibrary in dep
-        ] + libs.reduce("packages")
+    toolchain_libs = [
+        dep[HaskellToolchainLibrary].name
+        for dep in ctx.attrs.deps
+        if HaskellToolchainLibrary in dep
+    ] + libs.reduce("packages")
 
-        package_db_tset = ctx.actions.tset(
-            HaskellPackageDbTSet,
-            children = [package_db[name] for name in toolchain_libs if name in package_db]
-        )
+    package_db_tset = ctx.actions.tset(
+        HaskellPackageDbTSet,
+        children = [package_db[name] for name in toolchain_libs if name in package_db]
+    )
 
-        packagedb_args.add(package_db_tset.project_as_args("package_db"))
-    else:
-        packagedb_args.add(haskell_toolchain.packages.package_db)
+    packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
