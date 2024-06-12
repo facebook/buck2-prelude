@@ -255,7 +255,7 @@ def target_metadata(
             LinkStyle("shared"),
             specify_pkg_version = False,
             enable_profiling = False,
-            use_empty_lib = False,
+            use_empty_lib = True,
             resolved = resolved,
         )
         package_flag = _package_flag(haskell_toolchain)
