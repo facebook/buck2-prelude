@@ -490,15 +490,13 @@ def _compile_module(
 
     packagedb_tag = ctx.actions.artifact_tag()
 
-    modname = src_to_module_name(module.source.short_path)
-
     # TODO[AH] Avoid duplicates and share identical env files.
     #   The set of package-dbs can be known at the package level, not just the
     #   module level. So, we could generate this file outside of the
     #   dynamic_output action.
     package_env_file = ctx.actions.declare_output(".".join([
         ctx.label.name,
-        modname or "pkg",
+        module_name or "pkg",
         "package-db",
         output_extensions(link_style, enable_profiling)[1],
         "env",
@@ -521,7 +519,7 @@ def _compile_module(
 
     dep_file = ctx.actions.declare_output(".".join([
         ctx.label.name,
-        modname or "pkg",
+        module_name or "pkg",
         "package-db",
         output_extensions(link_style, enable_profiling)[1],
         "dep",
