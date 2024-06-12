@@ -450,8 +450,6 @@ def _compile_module(
     compile_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
     compile_cmd.add("--ghc", haskell_toolchain.compiler)
 
-    # ------------------------------------------------------------
-
     compile_cmd.add(haskell_toolchain.compiler_flags)
 
     # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
@@ -567,8 +565,6 @@ def _compile_module(
             compile_args_for_file.hidden(src)
 
     producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags + haskell_toolchain.compiler_flags
-
-    # ------------------------------------------------------------
 
     if haskell_toolchain.use_argsfile:
         argsfile = ctx.actions.declare_output(
