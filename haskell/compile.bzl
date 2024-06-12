@@ -325,8 +325,7 @@ def get_packages_info(
         specify_pkg_version: bool,
         enable_profiling: bool,
         use_empty_lib: bool,
-        resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
-        package_deps: None | dict[str, list[str]] = None) -> PackagesInfo:
+        resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     # Collect library dependencies. Note that these don't need to be in a
@@ -346,28 +345,12 @@ def get_packages_info(
     exposed_package_args = cmd_args([package_flag, "base"])
     exposed_package_dbs = []
 
-    if resolved != None and package_deps != None:
-        exposed_package_modules = []
-
-        for lib in direct_deps_link_info:
-            info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-            direct = info.value
-            dynamic = direct.dynamic[enable_profiling]
-            dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
-
-            for mod in package_deps.get(direct.name, []):
-                exposed_package_modules.append(dynamic_info.modules[mod])
-
-            if direct.name in package_deps:
-                db = direct.empty_db if use_empty_lib else direct.db
-                exposed_package_dbs.append(db)
-    else:
-        for lib in libs.traverse():
-            exposed_package_imports.extend(lib.import_dirs[enable_profiling])
-            exposed_package_objects.extend(lib.objects[enable_profiling])
-            # libs of dependencies might be needed at compile time if
-            # we're using Template Haskell:
-            exposed_package_libs.hidden(lib.libs)
+    for lib in libs.traverse():
+        exposed_package_imports.extend(lib.import_dirs[enable_profiling])
+        exposed_package_objects.extend(lib.objects[enable_profiling])
+        # libs of dependencies might be needed at compile time if
+        # we're using Template Haskell:
+        exposed_package_libs.hidden(lib.libs)
 
     packagedb_args = cmd_args(libs.project_as_args(
         "empty_package_db" if use_empty_lib else "package_db",
