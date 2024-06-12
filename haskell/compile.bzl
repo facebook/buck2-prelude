@@ -117,7 +117,6 @@ CompileResultInfo = record(
 )
 
 PackagesInfo = record(
-    exposed_package_modules = field(None | list[CompiledModuleTSet]),
     exposed_package_imports = field(list[Artifact]),
     exposed_package_objects = field(list[Artifact]),
     exposed_package_libs = cmd_args,
@@ -338,7 +337,6 @@ def get_packages_info(
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
-    exposed_package_modules = None
     exposed_package_imports = []
     exposed_package_objects = []
     exposed_package_libs = cmd_args()
@@ -393,7 +391,6 @@ def get_packages_info(
         exposed_package_args.add(package_flag, pkg_name)
 
     return PackagesInfo(
-        exposed_package_modules = exposed_package_modules,
         exposed_package_imports = exposed_package_imports,
         exposed_package_objects = exposed_package_objects,
         exposed_package_libs = exposed_package_libs,
