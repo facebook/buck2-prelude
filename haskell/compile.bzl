@@ -549,7 +549,7 @@ def _compile_module(
         exposed_package_objects = exposed_package_objects,
         exposed_package_libs = cmd_args(),
         exposed_package_args = exposed_package_args,
-        exposed_package_dbs = exposed_package_dbs,
+        exposed_package_dbs = [],
         packagedb_args = cmd_args(),
         transitive_deps = libs,
     )
@@ -714,7 +714,7 @@ def _compile_module(
             dyn_object_dot_o = dyn_object_dot_o,
             package_deps = package_deps.keys(),
             toolchain_deps = toolchain_deps,
-            db_deps = packages_info.exposed_package_dbs,
+            db_deps = exposed_package_dbs,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
