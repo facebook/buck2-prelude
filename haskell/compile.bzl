@@ -486,8 +486,6 @@ def _compile_module(
     #    package_deps = package_deps,
     #)
 
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
     # Collect library dependencies. Note that these don't need to be in a
     # particular order.
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
@@ -498,14 +496,12 @@ def _compile_module(
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
-    exposed_package_modules = None
+    exposed_package_modules = []
     exposed_package_imports = []
     exposed_package_objects = []
     exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
     exposed_package_dbs = []
-
-    exposed_package_modules = []
 
     for lib in direct_deps_link_info:
         info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
@@ -528,7 +524,6 @@ def _compile_module(
         enable_profiling,
     )
 
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     pkg_deps = resolved[haskell_toolchain.packages.dynamic]
     package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
 
