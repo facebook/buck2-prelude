@@ -434,29 +434,45 @@ def get_packages_info(
         transitive_deps = libs,
     )
 
-def _compile_module_args(
-        ctx: AnalysisContext,
-        module: _Module,
-        link_style: LinkStyle,
-        enable_profiling: bool,
-        enable_haddock: bool,
-        enable_th: bool,
-        outputs: dict[Artifact, Artifact],
-        resolved: dict[DynamicValue, ResolvedDynamicValue],
-        pkgname: str | None,
-        package_deps: dict[str, list[str]]) -> CompileArgsInfo:
+def _compile_module(
+    ctx: AnalysisContext,
+    *,
+    link_style: LinkStyle,
+    enable_profiling: bool,
+    enable_haddock: bool,
+    enable_th: bool,
+    module_name: str,
+    modules: dict[str, _Module],
+    module_tsets: dict[str, CompiledModuleTSet],
+    md_file: Artifact,
+    graph: dict[str, list[str]],
+    package_deps: dict[str, list[str]],
+    toolchain_deps: list[str],
+    outputs: dict[Artifact, Artifact],
+    resolved: dict[DynamicValue, ResolvedDynamicValue],
+    artifact_suffix: str,
+    pkgname: str | None = None,
+) -> CompiledModuleTSet:
+    module = modules[module_name]
+
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+    compile_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
+    compile_cmd.add("--ghc", haskell_toolchain.compiler)
+
+    # ------------------------------------------------------------
+
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
-    compile_cmd = cmd_args()
-    compile_cmd.add(haskell_toolchain.compiler_flags)
+    compile_cmd_ = cmd_args()
+    compile_cmd_.add(haskell_toolchain.compiler_flags)
 
     # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
     # be parsed when inside an argsfile.
-    compile_cmd.add(ctx.attrs.compiler_flags)
-    compile_cmd.add("-c")
+    compile_cmd_.add(ctx.attrs.compiler_flags)
+    compile_cmd_.add("-c")
 
     if enable_haddock:
-        compile_cmd.add("-haddock")
+        compile_cmd_.add("-haddock")
 
     # These compiler arguments can be passed in a response file.
     compile_args = cmd_args()
@@ -539,7 +555,7 @@ def _compile_module_args(
     if pkgname:
         compile_args.add(["-this-unit-id", pkgname])
 
-    module_tsets = packages_info.exposed_package_modules
+    module_tsets_ = packages_info.exposed_package_modules
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
@@ -564,60 +580,23 @@ def _compile_module_args(
 
     producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags + haskell_toolchain.compiler_flags
 
-    return CompileArgsInfo(
+    args = CompileArgsInfo(
         result = CompileResultInfo(
             objects = objects,
             hi = his,
             hashes = [module.hash],
             stubs = stubs,
             producing_indices = producing_indices,
-            module_tsets = module_tsets,
+            module_tsets = module_tsets_,
         ),
         srcs = srcs,
-        args_for_cmd = compile_cmd,
+        args_for_cmd = compile_cmd_,
         args_for_file = compile_args,
         packagedb_tag = packagedb_tag,
         packagedbs = packages_info.exposed_package_dbs,
     )
 
-
-def _compile_module(
-    ctx: AnalysisContext,
-    *,
-    link_style: LinkStyle,
-    enable_profiling: bool,
-    enable_haddock: bool,
-    enable_th: bool,
-    module_name: str,
-    modules: dict[str, _Module],
-    module_tsets: dict[str, CompiledModuleTSet],
-    md_file: Artifact,
-    graph: dict[str, list[str]],
-    package_deps: dict[str, list[str]],
-    toolchain_deps: list[str],
-    outputs: dict[Artifact, Artifact],
-    resolved: dict[DynamicValue, ResolvedDynamicValue],
-    artifact_suffix: str,
-    pkgname: str | None = None,
-) -> CompiledModuleTSet:
-    module = modules[module_name]
-
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    compile_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
-    compile_cmd.add("--ghc", haskell_toolchain.compiler)
-
-    args = _compile_module_args(
-        ctx,
-        module,
-        link_style,
-        enable_profiling,
-        enable_haddock,
-        enable_th,
-        outputs,
-        resolved,
-        pkgname,
-        package_deps = package_deps
-    )
+    # ------------------------------------------------------------
 
     if args.args_for_file:
         if haskell_toolchain.use_argsfile:
