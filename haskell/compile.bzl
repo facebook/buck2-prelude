@@ -113,7 +113,7 @@ CompileResultInfo = record(
     stubs = field(Artifact),
     hashes = field(list[Artifact]),
     producing_indices = field(bool),
-    module_tsets = field(None | list[CompiledModuleTSet] | DynamicValue),
+    module_tsets = field(list[CompiledModuleTSet] | DynamicValue),
 )
 
 CompileArgsInfo = record(
@@ -434,17 +434,31 @@ def get_packages_info(
         transitive_deps = libs,
     )
 
-
-def _common_compile_args(
+def _compile_module_args(
         ctx: AnalysisContext,
+        module: _Module,
         link_style: LinkStyle,
         enable_profiling: bool,
+        enable_haddock: bool,
         enable_th: bool,
+        outputs: dict[Artifact, Artifact],
+        resolved: dict[DynamicValue, ResolvedDynamicValue],
         pkgname: str | None,
-        modname: str,
-        resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
-        package_deps: None | dict[str, list[str]] = None,
-        use_empty_lib = True) -> (None | list[CompiledModuleTSet], cmd_args, ArtifactTag, list[Artifact]):
+        package_deps: dict[str, list[str]]) -> CompileArgsInfo:
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    compile_cmd = cmd_args()
+    compile_cmd.add(haskell_toolchain.compiler_flags)
+
+    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
+    # be parsed when inside an argsfile.
+    compile_cmd.add(ctx.attrs.compiler_flags)
+    compile_cmd.add("-c")
+
+    if enable_haddock:
+        compile_cmd.add("-haddock")
+
+    # These compiler arguments can be passed in a response file.
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
     compile_args.add("-hide-all-packages")
@@ -467,12 +481,14 @@ def _common_compile_args(
         link_style,
         specify_pkg_version = False,
         enable_profiling = enable_profiling,
-        use_empty_lib = use_empty_lib,
+        use_empty_lib = True,
         resolved = resolved,
         package_deps = package_deps,
     )
 
     packagedb_tag = ctx.actions.artifact_tag()
+
+    modname = src_to_module_name(module.source.short_path)
 
     # TODO[AH] Avoid duplicates and share identical env files.
     #   The set of package-dbs can be known at the package level, not just the
@@ -513,8 +529,6 @@ def _common_compile_args(
 
     if enable_th:
         compile_args.add(packages_info.exposed_package_libs)
-        if not modname:
-            compile_args.hidden(packages_info.exposed_package_objects)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
@@ -526,35 +540,6 @@ def _common_compile_args(
         compile_args.add(["-this-unit-id", pkgname])
 
     module_tsets = packages_info.exposed_package_modules
-
-    return module_tsets, compile_args, packagedb_tag, packages_info.exposed_package_dbs
-
-
-def _compile_module_args(
-        ctx: AnalysisContext,
-        module: _Module,
-        link_style: LinkStyle,
-        enable_profiling: bool,
-        enable_haddock: bool,
-        enable_th: bool,
-        outputs: dict[Artifact, Artifact],
-        resolved: dict[DynamicValue, ResolvedDynamicValue],
-        pkgname = None,
-        package_deps: None | dict[str, list[str]] = None) -> CompileArgsInfo:
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
-    compile_cmd = cmd_args()
-    compile_cmd.add(haskell_toolchain.compiler_flags)
-
-    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
-    # be parsed when inside an argsfile.
-    compile_cmd.add(ctx.attrs.compiler_flags)
-    compile_cmd.add("-c")
-
-    if enable_haddock:
-        compile_cmd.add("-haddock")
-
-    module_tsets, compile_args, packagedb_tag, exposed_package_dbs = _common_compile_args(ctx, link_style, enable_profiling, enable_th, pkgname, modname = src_to_module_name(module.source.short_path), resolved = resolved, package_deps = package_deps)
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
@@ -592,7 +577,7 @@ def _compile_module_args(
         args_for_cmd = compile_cmd,
         args_for_file = compile_args,
         packagedb_tag = packagedb_tag,
-        packagedbs = exposed_package_dbs,
+        packagedbs = packages_info.exposed_package_dbs,
     )
 
 
