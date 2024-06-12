@@ -340,8 +340,6 @@ def get_packages_info(
     exposed_package_dbs = []
 
     for lib in libs.traverse():
-        # libs of dependencies might be needed at compile time if
-        # we're using Template Haskell:
         exposed_package_libs.hidden(lib.libs)
 
     packagedb_args = cmd_args(libs.project_as_args(
