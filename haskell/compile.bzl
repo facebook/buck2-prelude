@@ -472,17 +472,114 @@ def _compile_module(
     osuf, hisuf = output_extensions(link_style, enable_profiling)
     compile_args_for_file.add("-osuf", osuf, "-hisuf", hisuf)
 
+    # ------------------------------------------------------------
+
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
-    packages_info = get_packages_info(
+    #packages_info = get_packages_info(
+    #    ctx,
+    #    link_style,
+    #    specify_pkg_version = False,
+    #    enable_profiling = enable_profiling,
+    #    use_empty_lib = True,
+    #    resolved = resolved,
+    #    package_deps = package_deps,
+    #)
+    specify_pkg_version = False,
+    use_empty_lib = True,
+
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    # Collect library dependencies. Note that these don't need to be in a
+    # particular order.
+    direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
+    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = [
+        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        for lib in direct_deps_link_info
+    ])
+
+    # base is special and gets exposed by default
+    package_flag = _package_flag(haskell_toolchain)
+    exposed_package_modules = None
+    exposed_package_imports = []
+    exposed_package_objects = []
+    exposed_package_libs = cmd_args()
+    exposed_package_args = cmd_args([package_flag, "base"])
+    exposed_package_dbs = []
+
+    if True:
+        exposed_package_modules = []
+
+        for lib in direct_deps_link_info:
+            info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+            direct = info.value
+            dynamic = direct.dynamic[enable_profiling]
+            dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
+
+            for mod in package_deps.get(direct.name, []):
+                exposed_package_modules.append(dynamic_info.modules[mod])
+
+            if direct.name in package_deps:
+                db = direct.empty_db if use_empty_lib else direct.db
+                exposed_package_dbs.append(db)
+    else:
+        for lib in libs.traverse():
+            exposed_package_imports.extend(lib.import_dirs[enable_profiling])
+            exposed_package_objects.extend(lib.objects[enable_profiling])
+            # libs of dependencies might be needed at compile time if
+            # we're using Template Haskell:
+            exposed_package_libs.hidden(lib.libs)
+
+    packagedb_args = cmd_args(libs.project_as_args(
+        "empty_package_db" if use_empty_lib else "package_db",
+    ))
+
+    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
         link_style,
-        specify_pkg_version = False,
-        enable_profiling = enable_profiling,
-        use_empty_lib = True,
-        resolved = resolved,
-        package_deps = package_deps,
+        enable_profiling,
     )
+
+    if haskell_toolchain.packages and True:
+        haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+
+        toolchain_libs = [
+            dep[HaskellToolchainLibrary].name
+            for dep in ctx.attrs.deps
+            if HaskellToolchainLibrary in dep
+        ] + libs.reduce("packages")
+
+        package_db_tset = ctx.actions.tset(
+            HaskellPackageDbTSet,
+            children = [package_db[name] for name in toolchain_libs if name in package_db]
+        )
+
+        packagedb_args.add(package_db_tset.project_as_args("package_db"))
+    else:
+        packagedb_args.add(haskell_toolchain.packages.package_db)
+
+    # Expose only the packages we depend on directly
+    for lib in haskell_direct_deps_lib_infos:
+        pkg_name = lib.name
+        if (specify_pkg_version):
+            pkg_name += "-{}".format(lib.version)
+
+        exposed_package_args.add(package_flag, pkg_name)
+
+    packages_info = PackagesInfo(
+        exposed_package_modules = exposed_package_modules,
+        exposed_package_imports = exposed_package_imports,
+        exposed_package_objects = exposed_package_objects,
+        exposed_package_libs = exposed_package_libs,
+        exposed_package_args = exposed_package_args,
+        exposed_package_dbs = exposed_package_dbs,
+        packagedb_args = packagedb_args,
+        transitive_deps = libs,
+    )
+
+    # ------------------------------------------------------------
 
     packagedb_tag = ctx.actions.artifact_tag()
 
