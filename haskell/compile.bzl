@@ -117,7 +117,6 @@ CompileResultInfo = record(
 )
 
 PackagesInfo = record(
-    exposed_package_imports = field(list[Artifact]),
     exposed_package_objects = field(list[Artifact]),
     exposed_package_libs = cmd_args,
     exposed_package_args = cmd_args,
@@ -337,14 +336,12 @@ def get_packages_info(
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
-    exposed_package_imports = []
     exposed_package_objects = []
     exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
     exposed_package_dbs = []
 
     for lib in libs.traverse():
-        exposed_package_imports.extend(lib.import_dirs[enable_profiling])
         exposed_package_objects.extend(lib.objects[enable_profiling])
         # libs of dependencies might be needed at compile time if
         # we're using Template Haskell:
@@ -391,7 +388,6 @@ def get_packages_info(
         exposed_package_args.add(package_flag, pkg_name)
 
     return PackagesInfo(
-        exposed_package_imports = exposed_package_imports,
         exposed_package_objects = exposed_package_objects,
         exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
