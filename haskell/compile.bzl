@@ -446,9 +446,6 @@ def _compile_module(
     # particular order.
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
 
-    exposed_package_modules = []
-    exposed_package_dbs = []
-
     libs_by_name = {}
     for lib in direct_deps_link_info:
         info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
@@ -461,6 +458,8 @@ def _compile_module(
             modules = dynamic_info.modules,
         )
 
+    exposed_package_modules = []
+    exposed_package_dbs = []
     for dep_pkgname, dep_modules in package_deps.items():
         exposed_package_dbs.append(libs_by_name[dep_pkgname].package_db)
         for dep_modname in dep_modules:
