@@ -113,16 +113,7 @@ CompileResultInfo = record(
     stubs = field(Artifact),
     hashes = field(list[Artifact]),
     producing_indices = field(bool),
-    module_tsets = field(list[CompiledModuleTSet] | DynamicValue),
-)
-
-CompileArgsInfo = record(
-    result = field(CompileResultInfo),
-    srcs = field(cmd_args),
-    args_for_cmd = field(cmd_args),
-    args_for_file = field(cmd_args),
-    packagedb_tag = field(ArtifactTag),
-    packagedbs = field(list[Artifact]),
+    module_tsets = field(DynamicValue),
 )
 
 PackagesInfo = record(
@@ -434,153 +425,6 @@ def get_packages_info(
         transitive_deps = libs,
     )
 
-def _compile_module_args(
-        ctx: AnalysisContext,
-        module: _Module,
-        link_style: LinkStyle,
-        enable_profiling: bool,
-        enable_haddock: bool,
-        enable_th: bool,
-        outputs: dict[Artifact, Artifact],
-        resolved: dict[DynamicValue, ResolvedDynamicValue],
-        pkgname: str | None,
-        package_deps: dict[str, list[str]]) -> CompileArgsInfo:
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
-    compile_cmd = cmd_args()
-    compile_cmd.add(haskell_toolchain.compiler_flags)
-
-    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
-    # be parsed when inside an argsfile.
-    compile_cmd.add(ctx.attrs.compiler_flags)
-    compile_cmd.add("-c")
-
-    if enable_haddock:
-        compile_cmd.add("-haddock")
-
-    # These compiler arguments can be passed in a response file.
-    compile_args = cmd_args()
-    compile_args.add("-no-link", "-i")
-    compile_args.add("-hide-all-packages")
-
-    if enable_profiling:
-        compile_args.add("-prof")
-
-    if link_style == LinkStyle("shared"):
-        compile_args.add("-dynamic", "-fPIC")
-    elif link_style == LinkStyle("static_pic"):
-        compile_args.add("-fPIC", "-fexternal-dynamic-refs")
-
-    osuf, hisuf = output_extensions(link_style, enable_profiling)
-    compile_args.add("-osuf", osuf, "-hisuf", hisuf)
-
-    # Add -package-db and -package/-expose-package flags for each Haskell
-    # library dependency.
-    packages_info = get_packages_info(
-        ctx,
-        link_style,
-        specify_pkg_version = False,
-        enable_profiling = enable_profiling,
-        use_empty_lib = True,
-        resolved = resolved,
-        package_deps = package_deps,
-    )
-
-    packagedb_tag = ctx.actions.artifact_tag()
-
-    modname = src_to_module_name(module.source.short_path)
-
-    # TODO[AH] Avoid duplicates and share identical env files.
-    #   The set of package-dbs can be known at the package level, not just the
-    #   module level. So, we could generate this file outside of the
-    #   dynamic_output action.
-    package_env_file = ctx.actions.declare_output(".".join([
-        ctx.label.name,
-        modname or "pkg",
-        "package-db",
-        output_extensions(link_style, enable_profiling)[1],
-        "env",
-    ]))
-    package_env = cmd_args(delimiter = "\n")
-    packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
-    package_env.add(cmd_args(
-        packagedb_args,
-        format = "package-db {}",
-    ).relative_to(package_env_file, parent = 1))
-    ctx.actions.write(
-        package_env_file,
-        package_env,
-    )
-    compile_args.add(cmd_args(
-        packagedb_tag.tag_artifacts(package_env_file),
-        prepend = "-package-env",
-        hidden = packagedb_args,
-    ))
-
-    dep_file = ctx.actions.declare_output(".".join([
-        ctx.label.name,
-        modname or "pkg",
-        "package-db",
-        output_extensions(link_style, enable_profiling)[1],
-        "dep",
-    ])).as_output()
-    tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
-    compile_args.add("--buck2-packagedb-dep", tagged_dep_file)
-
-    if enable_th:
-        compile_args.add(packages_info.exposed_package_libs)
-
-    # Add args from preprocess-able inputs.
-    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
-    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
-    pre_args = pre.set.project_as_args("args")
-    compile_args.add(cmd_args(pre_args, format = "-optP={}"))
-
-    if pkgname:
-        compile_args.add(["-this-unit-id", pkgname])
-
-    module_tsets = packages_info.exposed_package_modules
-
-    objects = [outputs[obj] for obj in module.objects]
-    his = [outputs[hi] for hi in module.interfaces]
-    stubs = outputs[module.stub_dir]
-
-    compile_args.add("-outputdir", cmd_args([cmd_args(stubs.as_output()).parent(), module.prefix_dir], delimiter="/"))
-    compile_args.add("-o", objects[0].as_output())
-    compile_args.add("-ohi", his[0].as_output())
-    compile_args.add("-stubdir", stubs.as_output())
-
-    if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
-        compile_args.add("-dynamic-too")
-        compile_args.add("-dyno", objects[1].as_output())
-        compile_args.add("-dynohi", his[1].as_output())
-
-    srcs = cmd_args(module.source)
-    for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
-        # hs-boot files aren't expected to be an argument to compiler but does need
-        # to be included in the directory of the associated src file
-        if not is_haskell_src(path):
-            srcs.hidden(src)
-
-    producing_indices = "-fwrite-ide-info" in ctx.attrs.compiler_flags + haskell_toolchain.compiler_flags
-
-    return CompileArgsInfo(
-        result = CompileResultInfo(
-            objects = objects,
-            hi = his,
-            hashes = [module.hash],
-            stubs = stubs,
-            producing_indices = producing_indices,
-            module_tsets = module_tsets,
-        ),
-        srcs = srcs,
-        args_for_cmd = compile_cmd,
-        args_for_file = compile_args,
-        packagedb_tag = packagedb_tag,
-        packagedbs = packages_info.exposed_package_dbs,
-    )
-
-
 def _compile_module(
     ctx: AnalysisContext,
     *,
@@ -606,33 +450,127 @@ def _compile_module(
     compile_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
     compile_cmd.add("--ghc", haskell_toolchain.compiler)
 
-    args = _compile_module_args(
+    compile_cmd.add(haskell_toolchain.compiler_flags)
+
+    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
+    # be parsed when inside an argsfile.
+    compile_cmd.add(ctx.attrs.compiler_flags)
+    compile_cmd.add("-c")
+
+    if enable_haddock:
+        compile_cmd.add("-haddock")
+
+    # These compiler arguments can be passed in a response file.
+    compile_args_for_file = cmd_args()
+    compile_args_for_file.add("-no-link", "-i")
+    compile_args_for_file.add("-hide-all-packages")
+
+    if enable_profiling:
+        compile_args_for_file.add("-prof")
+
+    if link_style == LinkStyle("shared"):
+        compile_args_for_file.add("-dynamic", "-fPIC")
+    elif link_style == LinkStyle("static_pic"):
+        compile_args_for_file.add("-fPIC", "-fexternal-dynamic-refs")
+
+    osuf, hisuf = output_extensions(link_style, enable_profiling)
+    compile_args_for_file.add("-osuf", osuf, "-hisuf", hisuf)
+
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+    packages_info = get_packages_info(
         ctx,
-        module,
         link_style,
-        enable_profiling,
-        enable_haddock,
-        enable_th,
-        outputs,
-        resolved,
-        pkgname,
-        package_deps = package_deps
+        specify_pkg_version = False,
+        enable_profiling = enable_profiling,
+        use_empty_lib = True,
+        resolved = resolved,
+        package_deps = package_deps,
     )
 
-    if args.args_for_file:
-        if haskell_toolchain.use_argsfile:
-            argsfile = ctx.actions.declare_output(
-                "haskell_compile_" + artifact_suffix + ".argsfile",
-            )
-            for_file = cmd_args(args.args_for_file).add(args.srcs)
-            ctx.actions.write(argsfile.as_output(), for_file, allow_args = True)
-            compile_cmd.add(cmd_args(argsfile, format = "@{}"))
-            compile_cmd.hidden(for_file)
-        else:
-            compile_cmd.add(args.args_for_file)
-            compile_cmd.add(args.srcs)
+    packagedb_tag = ctx.actions.artifact_tag()
 
-    compile_cmd.add(args.args_for_cmd)
+    # TODO[AH] Avoid duplicates and share identical env files.
+    #   The set of package-dbs can be known at the package level, not just the
+    #   module level. So, we could generate this file outside of the
+    #   dynamic_output action.
+    package_env_file = ctx.actions.declare_output(".".join([
+        ctx.label.name,
+        module_name or "pkg",
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "env",
+    ]))
+    package_env = cmd_args(delimiter = "\n")
+    packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
+    package_env.add(cmd_args(
+        packagedb_args,
+        format = "package-db {}",
+    ).relative_to(package_env_file, parent = 1))
+    ctx.actions.write(
+        package_env_file,
+        package_env,
+    )
+    compile_args_for_file.add(cmd_args(
+        packagedb_tag.tag_artifacts(package_env_file),
+        prepend = "-package-env",
+        hidden = packagedb_args,
+    ))
+
+    dep_file = ctx.actions.declare_output(".".join([
+        ctx.label.name,
+        module_name or "pkg",
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "dep",
+    ])).as_output()
+    tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
+    compile_args_for_file.add("--buck2-packagedb-dep", tagged_dep_file)
+
+    if enable_th:
+        compile_args_for_file.add(packages_info.exposed_package_libs)
+
+    # Add args from preprocess-able inputs.
+    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
+    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
+    pre_args = pre.set.project_as_args("args")
+    compile_args_for_file.add(cmd_args(pre_args, format = "-optP={}"))
+
+    if pkgname:
+        compile_args_for_file.add(["-this-unit-id", pkgname])
+
+    objects = [outputs[obj] for obj in module.objects]
+    his = [outputs[hi] for hi in module.interfaces]
+    stubs = outputs[module.stub_dir]
+
+    compile_args_for_file.add("-outputdir", cmd_args([cmd_args(stubs.as_output()).parent(), module.prefix_dir], delimiter="/"))
+    compile_args_for_file.add("-o", objects[0].as_output())
+    compile_args_for_file.add("-ohi", his[0].as_output())
+    compile_args_for_file.add("-stubdir", stubs.as_output())
+
+    if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
+        compile_args_for_file.add("-dynamic-too")
+        compile_args_for_file.add("-dyno", objects[1].as_output())
+        compile_args_for_file.add("-dynohi", his[1].as_output())
+
+    compile_args_for_file.add(module.source)
+    for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
+        # hs-boot files aren't expected to be an argument to compiler but does need
+        # to be included in the directory of the associated src file
+        # TODO(ah) We should not indiscriminately include all non-hs sources,
+        #   but only those that this module actually depends on.
+        if not is_haskell_src(path):
+            compile_args_for_file.hidden(src)
+
+    if haskell_toolchain.use_argsfile:
+        argsfile = ctx.actions.declare_output(
+            "haskell_compile_" + artifact_suffix + ".argsfile",
+        )
+        ctx.actions.write(argsfile.as_output(), compile_args_for_file, allow_args = True)
+        compile_cmd.add(cmd_args(argsfile, format = "@{}"))
+        compile_cmd.hidden(compile_args_for_file)
+    else:
+        compile_cmd.add(compile_args_for_file)
 
     compile_cmd.add(
         cmd_args(
@@ -646,7 +584,7 @@ def _compile_module(
     # Transitive module dependencies from other packages.
     cross_package_modules = ctx.actions.tset(
         CompiledModuleTSet,
-        children = args.result.module_tsets,
+        children = packages_info.exposed_package_modules,
     )
     # Transitive module dependencies from the same package.
     this_package_modules = [
@@ -686,7 +624,7 @@ def _compile_module(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
         dep_files = {
             "abi": abi_tag,
-            "packagedb": args.packagedb_tag,
+            "packagedb": packagedb_tag,
         }
     )
 
@@ -706,7 +644,7 @@ def _compile_module(
             dyn_object_dot_o = dyn_object_dot_o,
             package_deps = package_deps.keys(),
             toolchain_deps = toolchain_deps,
-            db_deps = args.packagedbs,
+            db_deps = packages_info.exposed_package_dbs,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
