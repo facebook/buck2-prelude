@@ -471,12 +471,6 @@ def _compile_module(
             db = direct.empty_db
             exposed_package_dbs.append(db)
 
-    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
-        ctx,
-        link_style,
-        enable_profiling,
-    )
-
     pkg_deps = resolved[haskell_toolchain.packages.dynamic]
     package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
 
