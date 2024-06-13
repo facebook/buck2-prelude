@@ -437,6 +437,15 @@ def _compile_module(
     osuf, hisuf = output_extensions(link_style, enable_profiling)
     compile_args_for_file.add("-osuf", osuf, "-hisuf", hisuf)
 
+    # Add args from preprocess-able inputs.
+    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
+    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
+    pre_args = pre.set.project_as_args("args")
+    compile_args_for_file.add(cmd_args(pre_args, format = "-optP={}"))
+
+    if pkgname:
+        compile_args_for_file.add(["-this-unit-id", pkgname])
+
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
 
@@ -527,15 +536,6 @@ def _compile_module(
     ])).as_output()
     tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
     compile_args_for_file.add("--buck2-packagedb-dep", tagged_dep_file)
-
-    # Add args from preprocess-able inputs.
-    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
-    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
-    pre_args = pre.set.project_as_args("args")
-    compile_args_for_file.add(cmd_args(pre_args, format = "-optP={}"))
-
-    if pkgname:
-        compile_args_for_file.add(["-this-unit-id", pkgname])
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
