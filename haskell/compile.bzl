@@ -446,7 +446,6 @@ def _compile_module(
     # particular order.
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
 
-    # base is special and gets exposed by default
     exposed_package_modules = []
     exposed_package_dbs = []
 
