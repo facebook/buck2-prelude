@@ -447,11 +447,6 @@ def _compile_module(
     # Collect library dependencies. Note that these don't need to be in a
     # particular order.
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
-    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = [
-        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-        for lib in direct_deps_link_info
-    ])
-    packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
 
     # base is special and gets exposed by default
     exposed_package_modules = []
@@ -470,20 +465,24 @@ def _compile_module(
             db = direct.empty_db
             exposed_package_dbs.append(db)
 
-    pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-    package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
-
+    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = [
+        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        for lib in direct_deps_link_info
+    ])
     toolchain_libs = [
         dep[HaskellToolchainLibrary].name
         for dep in ctx.attrs.deps
         if HaskellToolchainLibrary in dep
     ] + libs.reduce("packages")
 
+    pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+    package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
     package_db_tset = ctx.actions.tset(
         HaskellPackageDbTSet,
         children = [package_db[name] for name in toolchain_libs if name in package_db]
     )
 
+    packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
     # ------------------------------------------------------------
