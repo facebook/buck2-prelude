@@ -454,7 +454,6 @@ def _compile_module(
     packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
 
     # base is special and gets exposed by default
-    package_flag = _package_flag(haskell_toolchain)
     exposed_package_modules = []
     exposed_package_dbs = []
 
