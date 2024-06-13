@@ -439,8 +439,6 @@ def _compile_module(
     osuf, hisuf = output_extensions(link_style, enable_profiling)
     compile_args_for_file.add("-osuf", osuf, "-hisuf", hisuf)
 
-    # ------------------------------------------------------------
-
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
 
@@ -484,8 +482,6 @@ def _compile_module(
 
     packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
-
-    # ------------------------------------------------------------
 
     packagedb_tag = ctx.actions.artifact_tag()
 
