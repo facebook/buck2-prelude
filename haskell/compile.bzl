@@ -551,6 +551,11 @@ def _compile_module(
         compile_args_for_file.add("-dynohi", his[1].as_output())
 
     compile_args_for_file.add(module.source)
+
+    aux_deps = ctx.attrs.srcs_deps.get(module.source)
+    if aux_deps:
+        compile_args_for_file.hidden(aux_deps)
+
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
         # hs-boot files aren't expected to be an argument to compiler but does need
         # to be included in the directory of the associated src file
