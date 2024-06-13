@@ -344,12 +344,6 @@ def get_packages_info(
         "empty_package_db" if use_empty_lib else "package_db",
     ))
 
-    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
-        ctx,
-        link_style,
-        enable_profiling,
-    )
-
     if haskell_toolchain.packages and resolved != None:
         haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
         pkg_deps = resolved[haskell_toolchain.packages.dynamic]
@@ -371,6 +365,12 @@ def get_packages_info(
     else:
         packagedb_args.add(haskell_toolchain.packages.package_db)
         bin_paths = cmd_args()
+
+    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
+        ctx,
+        link_style,
+        enable_profiling,
+    )
 
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
