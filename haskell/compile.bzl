@@ -388,9 +388,24 @@ def get_packages_info(
         bin_paths = bin_paths,
     )
 
+CommonCompileModuleArgs = record(
+    command = field(cmd_args),
+    args_for_file = field(cmd_args),
+)
+
+def _common_compile_module_args(
+    ctx: AnalysisContext,
+    *,
+) -> CommonCompileModuleArgs:
+    return CommonCompileModuleArgs(
+        command = cmd_args(),
+        args_for_file = cmd_args(),
+    )
+
 def _compile_module(
     ctx: AnalysisContext,
     *,
+    common_args: CommonCompileModuleArgs,
     link_style: LinkStyle,
     enable_profiling: bool,
     enable_haddock: bool,
@@ -407,8 +422,12 @@ def _compile_module(
     artifact_suffix: str,
     pkgname: str | None = None,
 ) -> CompiledModuleTSet:
+    compile_cmd = cmd_args(common_args.command)
+    # These compiler arguments can be passed in a response file.
+    compile_args_for_file = cmd_args(common_args.args_for_file)
+
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    compile_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
+    compile_cmd.add(ctx.attrs._ghc_wrapper[RunInfo])
     compile_cmd.add("--ghc", haskell_toolchain.compiler)
 
     compile_cmd.add(haskell_toolchain.compiler_flags)
@@ -421,8 +440,6 @@ def _compile_module(
     if enable_haddock:
         compile_cmd.add("-haddock")
 
-    # These compiler arguments can be passed in a response file.
-    compile_args_for_file = cmd_args()
     compile_args_for_file.add("-no-link", "-i")
     compile_args_for_file.add("-hide-all-packages")
 
@@ -667,6 +684,8 @@ def compile(
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
     def do_compile(ctx, artifacts, resolved, outputs, md_file=md_file, modules=modules):
+        common_args = _common_compile_module_args(ctx)
+
         md = artifacts[md_file].read_json()
         th_modules = md["th_modules"]
         module_map = md["module_mapping"]
@@ -680,6 +699,7 @@ def compile(
         for module_name in post_order_traversal(graph):
             module_tsets[module_name] = _compile_module(
                 ctx,
+                common_args = common_args,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
                 enable_haddock = enable_haddock,
