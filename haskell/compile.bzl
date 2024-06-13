@@ -396,7 +396,7 @@ def _compile_module(
     enable_haddock: bool,
     enable_th: bool,
     module_name: str,
-    modules: dict[str, _Module],
+    module: _Module,
     module_tsets: dict[str, CompiledModuleTSet],
     md_file: Artifact,
     graph: dict[str, list[str]],
@@ -407,8 +407,6 @@ def _compile_module(
     artifact_suffix: str,
     pkgname: str | None = None,
 ) -> CompiledModuleTSet:
-    module = modules[module_name]
-
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     compile_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
     compile_cmd.add("--ghc", haskell_toolchain.compiler)
@@ -687,7 +685,7 @@ def compile(
                 enable_haddock = enable_haddock,
                 enable_th = module_name in th_modules,
                 module_name = module_name,
-                modules = mapped_modules,
+                module = mapped_modules[module_name],
                 module_tsets = module_tsets,
                 graph = graph,
                 package_deps = package_deps.get(module_name, {}),
