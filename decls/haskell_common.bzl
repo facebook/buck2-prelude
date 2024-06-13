@@ -24,6 +24,9 @@ def _deps_arg():
      from which this rules sources import modules or native linkable rules exporting symbols
      this rules sources call into.
 """),
+        "srcs_deps": attrs.dict(attrs.source(), attrs.list(attrs.source()), default = {}, doc = """
+    Allows to declare dependencies for sources manually, additionally to the dependencies automatically detected.
+        """),
     }
 
 def _compiler_flags_arg():

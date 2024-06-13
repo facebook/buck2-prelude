@@ -198,6 +198,11 @@ def compile_args(
 
     arg_srcs = []
     hidden_srcs = []
+
+    aux_deps = ctx.attrs.srcs_deps.get(module.source)
+    if aux_deps:
+        hidden_srcs(aux_deps)
+
     for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
         # hs-boot files aren't expected to be an argument to compiler but does need
         # to be included in the directory of the associated src file
