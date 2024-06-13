@@ -451,6 +451,7 @@ def _compile_module(
         lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
         for lib in direct_deps_link_info
     ])
+    packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
@@ -469,8 +470,6 @@ def _compile_module(
         if direct.name in package_deps:
             db = direct.empty_db
             exposed_package_dbs.append(db)
-
-    packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
