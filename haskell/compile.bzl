@@ -444,25 +444,6 @@ def _compile_module(
     # particular order.
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
 
-    libs_by_name = {}
-    for lib in direct_deps_link_info:
-        info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-        direct = info.value
-        dynamic = direct.dynamic[enable_profiling]
-        dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
-
-        libs_by_name[direct.name] = struct(
-            package_db = direct.empty_db,
-            modules = dynamic_info.modules,
-        )
-
-    exposed_package_modules = []
-    exposed_package_dbs = []
-    for dep_pkgname, dep_modules in package_deps.items():
-        exposed_package_dbs.append(libs_by_name[dep_pkgname].package_db)
-        for dep_modname in dep_modules:
-            exposed_package_modules.append(libs_by_name[dep_pkgname].modules[dep_modname])
-
     libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = [
         lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
         for lib in direct_deps_link_info
@@ -488,6 +469,25 @@ def _compile_module(
 
     packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
+
+    libs_by_name = {}
+    for lib in direct_deps_link_info:
+        info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        direct = info.value
+        dynamic = direct.dynamic[enable_profiling]
+        dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
+
+        libs_by_name[direct.name] = struct(
+            package_db = direct.empty_db,
+            modules = dynamic_info.modules,
+        )
+
+    exposed_package_modules = []
+    exposed_package_dbs = []
+    for dep_pkgname, dep_modules in package_deps.items():
+        exposed_package_dbs.append(libs_by_name[dep_pkgname].package_db)
+        for dep_modname in dep_modules:
+            exposed_package_modules.append(libs_by_name[dep_pkgname].modules[dep_modname])
 
     packagedb_tag = ctx.actions.artifact_tag()
 
