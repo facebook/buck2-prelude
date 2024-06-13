@@ -437,6 +437,13 @@ def _compile_module(
     osuf, hisuf = output_extensions(link_style, enable_profiling)
     compile_args_for_file.add("-osuf", osuf, "-hisuf", hisuf)
 
+    non_haskell_sources = [src for (path, src) in srcs_to_pairs(ctx.attrs.srcs) if not is_haskell_src(path)]
+
+    if non_haskell_sources:
+        warning("{} specifies non-haskell file in `srcs`, consider using `srcs_deps` instead".format(ctx.label))
+
+        compile_args_for_file.hidden(non_haskell_sources)
+
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
     pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
@@ -556,13 +563,6 @@ def _compile_module(
     aux_deps = ctx.attrs.srcs_deps.get(module.source)
     if aux_deps:
         compile_args_for_file.hidden(aux_deps)
-
-    non_haskell_sources = [src for (path, src) in srcs_to_pairs(ctx.attrs.srcs) if not is_haskell_src(path)]
-
-    if non_haskell_sources:
-        warning("{} specifies non-haskell file in `srcs`, consider using `srcs_deps` instead".format(ctx.label))
-
-        compile_args_for_file.hidden(non_haskell_sources)
 
     if haskell_toolchain.use_argsfile:
         argsfile = ctx.actions.declare_output(
