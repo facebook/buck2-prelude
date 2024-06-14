@@ -474,6 +474,7 @@ def _compile_module(
     outputs: dict[Artifact, Artifact],
     resolved: dict[DynamicValue, ResolvedDynamicValue],
     artifact_suffix: str,
+    direct_deps_info: list[HaskellLibraryInfoTSet],
     pkgname: str | None = None,
 ) -> CompiledModuleTSet:
     compile_cmd = cmd_args(common_args.command)
@@ -485,14 +486,7 @@ def _compile_module(
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
 
-    # Collect library dependencies. Note that these don't need to be in a
-    # particular order.
-    direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
-
-    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = [
-        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-        for lib in direct_deps_link_info
-    ])
+    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = direct_deps_info)
     toolchain_libs = [
         dep[HaskellToolchainLibrary].name
         for dep in ctx.attrs.deps
@@ -516,8 +510,7 @@ def _compile_module(
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
     libs_by_name = {}
-    for lib in direct_deps_link_info:
-        info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+    for info in direct_deps_info:
         direct = info.value
         dynamic = direct.dynamic[enable_profiling]
         dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
@@ -696,6 +689,12 @@ def compile(
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
     def do_compile(ctx, artifacts, resolved, outputs, md_file=md_file, modules=modules):
+        # Collect library dependencies. Note that these don't need to be in a
+        # particular order.
+        direct_deps_info = [
+            lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+            for lib in attr_deps_haskell_link_infos(ctx)
+        ]
         common_args = _common_compile_module_args(
             ctx,
             enable_haddock = enable_haddock,
@@ -731,6 +730,7 @@ def compile(
                 resolved = resolved,
                 md_file=md_file,
                 artifact_suffix = artifact_suffix,
+                direct_deps_info = direct_deps_info,
                 pkgname = pkgname,
             )
 
