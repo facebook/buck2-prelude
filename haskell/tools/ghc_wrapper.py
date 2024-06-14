@@ -46,12 +46,24 @@ def main():
         type=Path,
         help="Output path of the abi file to create.",
     )
+    parser.add_argument(
+        "--bin-path",
+        type=Path,
+        action="append",
+        default=[],
+        help="Add given path to PATH.",
+    )
 
     args, ghc_args = parser.parse_known_args()
 
     cmd = [args.ghc] + ghc_args
 
-    subprocess.check_call(cmd)
+    aux_paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
+    env = os.environ.copy()
+    path = env.get("PATH", "")
+    env["PATH"] = os.pathsep.join([path] + aux_paths)
+
+    subprocess.check_call(cmd, env=env)
 
     recompute_abi_hash(args.ghc, args.abi_out)
 

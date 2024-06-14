@@ -125,6 +125,7 @@ PackagesInfo = record(
     exposed_package_dbs = field(list[Artifact]),
     packagedb_args = cmd_args,
     transitive_deps = field(HaskellLibraryInfoTSet),
+    bin_paths = cmd_args,
 )
 
 _Module = record(
@@ -246,9 +247,6 @@ def target_metadata(
 
     def get_metadata(ctx, _artifacts, resolved, outputs, catalog=catalog):
 
-        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
-
         # Add -package-db and -package/-expose-package flags for each Haskell
         # library dependency.
 
@@ -265,18 +263,13 @@ def target_metadata(
         ghc_args.add("-hide-all-packages")
         ghc_args.add(package_flag, "base")
 
-        package_dbs = ctx.actions.tset(
-            HaskellPackageDbTSet,
-            children = [package_db[name] for name in toolchain_libs if name in package_db]
-        )
-
         ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
         ghc_args.add(cmd_args(packages_info.exposed_package_args))
         ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
-        ghc_args.add(cmd_args(package_dbs.project_as_args("package_db"), prepend="-package-db"))
         ghc_args.add(ctx.attrs.compiler_flags)
 
         md_args = cmd_args(md_gen)
+        md_args.add(packages_info.bin_paths)
         md_args.add("--toolchain-libs", catalog)
         md_args.add("--ghc", haskell_toolchain.compiler)
         md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
@@ -403,8 +396,10 @@ def get_packages_info(
         )
 
         packagedb_args.add(package_db_tset.project_as_args("package_db"))
+        bin_paths = cmd_args(package_db_tset.project_as_args("path"), format="--bin-path={}/bin")
     else:
         packagedb_args.add(haskell_toolchain.packages.package_db)
+        bin_paths = cmd_args()
 
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
@@ -423,6 +418,7 @@ def get_packages_info(
         exposed_package_dbs = exposed_package_dbs,
         packagedb_args = packagedb_args,
         transitive_deps = libs,
+        bin_paths = bin_paths,
     )
 
 def _compile_module(
@@ -547,6 +543,7 @@ def _compile_module(
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
     compile_args_for_file.add("-stubdir", stubs.as_output())
+    compile_args_for_file.add(packages_info.bin_paths)
 
     if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
         compile_args_for_file.add("-dynamic-too")
@@ -554,13 +551,17 @@ def _compile_module(
         compile_args_for_file.add("-dynohi", his[1].as_output())
 
     compile_args_for_file.add(module.source)
-    for (path, src) in srcs_to_pairs(ctx.attrs.srcs):
-        # hs-boot files aren't expected to be an argument to compiler but does need
-        # to be included in the directory of the associated src file
-        # TODO(ah) We should not indiscriminately include all non-hs sources,
-        #   but only those that this module actually depends on.
-        if not is_haskell_src(path):
-            compile_args_for_file.hidden(src)
+
+    aux_deps = ctx.attrs.srcs_deps.get(module.source)
+    if aux_deps:
+        compile_args_for_file.hidden(aux_deps)
+
+    non_haskell_sources = [src for (path, src) in srcs_to_pairs(ctx.attrs.srcs) if not is_haskell_src(path)]
+
+    if non_haskell_sources:
+        warning("{} specifies non-haskell file in `srcs`, consider using `srcs_deps` instead".format(ctx.label))
+
+        compile_args_for_file.hidden(non_haskell_sources)
 
     if haskell_toolchain.use_argsfile:
         argsfile = ctx.actions.declare_output(
