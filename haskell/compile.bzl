@@ -475,6 +475,7 @@ def _compile_module(
     resolved: dict[DynamicValue, ResolvedDynamicValue],
     artifact_suffix: str,
     direct_deps_info: list[HaskellLibraryInfoTSet],
+    direct_deps_by_name: dict[str, typing.Any],
     pkgname: str | None = None,
 ) -> CompiledModuleTSet:
     compile_cmd = cmd_args(common_args.command)
@@ -509,23 +510,12 @@ def _compile_module(
     packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
-    libs_by_name = {}
-    for info in direct_deps_info:
-        direct = info.value
-        dynamic = direct.dynamic[enable_profiling]
-        dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
-
-        libs_by_name[direct.name] = struct(
-            package_db = direct.empty_db,
-            modules = dynamic_info.modules,
-        )
-
     exposed_package_modules = []
     exposed_package_dbs = []
     for dep_pkgname, dep_modules in package_deps.items():
-        exposed_package_dbs.append(libs_by_name[dep_pkgname].package_db)
+        exposed_package_dbs.append(direct_deps_by_name[dep_pkgname].package_db)
         for dep_modname in dep_modules:
-            exposed_package_modules.append(libs_by_name[dep_pkgname].modules[dep_modname])
+            exposed_package_modules.append(direct_deps_by_name[dep_pkgname].modules[dep_modname])
 
     packagedb_tag = ctx.actions.artifact_tag()
 
@@ -695,6 +685,13 @@ def compile(
             lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
             for lib in attr_deps_haskell_link_infos(ctx)
         ]
+        direct_deps_by_name = {
+            info.value.name: struct(
+                package_db = info.value.empty_db,
+                modules = resolved[info.value.dynamic[enable_profiling]][DynamicCompileResultInfo].modules,
+            )
+            for info in direct_deps_info
+        }
         common_args = _common_compile_module_args(
             ctx,
             enable_haddock = enable_haddock,
@@ -731,6 +728,7 @@ def compile(
                 md_file=md_file,
                 artifact_suffix = artifact_suffix,
                 direct_deps_info = direct_deps_info,
+                direct_deps_by_name = direct_deps_by_name,
                 pkgname = pkgname,
             )
 
