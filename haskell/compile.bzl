@@ -482,6 +482,12 @@ def _compile_module(
         children = [package_db[name] for name in toolchain_libs if name in package_db]
     )
 
+    # TODO(ah) breaks recompilation avoidance on transitive toolchain library changes.
+    compile_args_for_file.add(cmd_args(
+        package_db_tset.project_as_args("path"),
+        format="--bin-path={}/bin",
+    ))
+
     packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
@@ -541,7 +547,6 @@ def _compile_module(
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
     compile_args_for_file.add("-stubdir", stubs.as_output())
-    compile_args_for_file.add(packages_info.bin_paths)
 
     if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
         compile_args_for_file.add("-dynamic-too")
