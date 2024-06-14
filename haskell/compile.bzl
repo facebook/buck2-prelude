@@ -510,8 +510,6 @@ def _compile_module(
     packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
-    packagedb_tag = ctx.actions.artifact_tag()
-
     # TODO[AH] Avoid duplicates and share identical env files.
     #   The set of package-dbs can be known at the package level, not just the
     #   module level. So, we could generate this file outside of the
@@ -524,20 +522,22 @@ def _compile_module(
         "env",
     ]))
     package_env = cmd_args(delimiter = "\n")
-    packagedb_args_tagged = packagedb_tag.tag_artifacts(packagedb_args)
     package_env.add(cmd_args(
-        packagedb_args_tagged,
+        packagedb_args,
         format = "package-db {}",
     ).relative_to(package_env_file, parent = 1))
     ctx.actions.write(
         package_env_file,
         package_env,
     )
-    compile_args_for_file.add(cmd_args(
-        packagedb_tag.tag_artifacts(package_env_file),
+    package_env_arg = cmd_args(
+        package_env_file,
         prepend = "-package-env",
-        hidden = packagedb_args_tagged,
-    ))
+        hidden = packagedb_args,
+    )
+
+    packagedb_tag = ctx.actions.artifact_tag()
+    compile_args_for_file.add(packagedb_tag.tag_artifacts(package_env_arg))
 
     dep_file = ctx.actions.declare_output(".".join([
         ctx.label.name,
