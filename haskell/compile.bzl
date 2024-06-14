@@ -117,12 +117,8 @@ CompileResultInfo = record(
 )
 
 PackagesInfo = record(
-    exposed_package_modules = field(None | list[CompiledModuleTSet]),
-    exposed_package_imports = field(list[Artifact]),
-    exposed_package_objects = field(list[Artifact]),
     exposed_package_libs = cmd_args,
     exposed_package_args = cmd_args,
-    exposed_package_dbs = field(list[Artifact]),
     packagedb_args = cmd_args,
     transitive_deps = field(HaskellLibraryInfoTSet),
     bin_paths = cmd_args,
@@ -325,8 +321,7 @@ def get_packages_info(
         specify_pkg_version: bool,
         enable_profiling: bool,
         use_empty_lib: bool,
-        resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None,
-        package_deps: None | dict[str, list[str]] = None) -> PackagesInfo:
+        resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     # Collect library dependencies. Note that these don't need to be in a
@@ -339,45 +334,15 @@ def get_packages_info(
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
-    exposed_package_modules = None
-    exposed_package_imports = []
-    exposed_package_objects = []
     exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
-    exposed_package_dbs = []
 
-    if resolved != None and package_deps != None:
-        exposed_package_modules = []
-
-        for lib in direct_deps_link_info:
-            info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-            direct = info.value
-            dynamic = direct.dynamic[enable_profiling]
-            dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
-
-            for mod in package_deps.get(direct.name, []):
-                exposed_package_modules.append(dynamic_info.modules[mod])
-
-            if direct.name in package_deps:
-                db = direct.empty_db if use_empty_lib else direct.db
-                exposed_package_dbs.append(db)
-    else:
-        for lib in libs.traverse():
-            exposed_package_imports.extend(lib.import_dirs[enable_profiling])
-            exposed_package_objects.extend(lib.objects[enable_profiling])
-            # libs of dependencies might be needed at compile time if
-            # we're using Template Haskell:
-            exposed_package_libs.hidden(lib.libs)
+    for lib in libs.traverse():
+        exposed_package_libs.hidden(lib.libs)
 
     packagedb_args = cmd_args(libs.project_as_args(
         "empty_package_db" if use_empty_lib else "package_db",
     ))
-
-    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
-        ctx,
-        link_style,
-        enable_profiling,
-    )
 
     if haskell_toolchain.packages and resolved != None:
         haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -401,6 +366,12 @@ def get_packages_info(
         packagedb_args.add(haskell_toolchain.packages.package_db)
         bin_paths = cmd_args()
 
+    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
+        ctx,
+        link_style,
+        enable_profiling,
+    )
+
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
         pkg_name = lib.name
@@ -410,12 +381,8 @@ def get_packages_info(
         exposed_package_args.add(package_flag, pkg_name)
 
     return PackagesInfo(
-        exposed_package_modules = exposed_package_modules,
-        exposed_package_imports = exposed_package_imports,
-        exposed_package_objects = exposed_package_objects,
         exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
-        exposed_package_dbs = exposed_package_dbs,
         packagedb_args = packagedb_args,
         transitive_deps = libs,
         bin_paths = bin_paths,
@@ -474,15 +441,55 @@ def _compile_module(
 
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
-    packages_info = get_packages_info(
-        ctx,
-        link_style,
-        specify_pkg_version = False,
-        enable_profiling = enable_profiling,
-        use_empty_lib = True,
-        resolved = resolved,
-        package_deps = package_deps,
+
+    # Collect library dependencies. Note that these don't need to be in a
+    # particular order.
+    direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
+
+    libs_by_name = {}
+    for lib in direct_deps_link_info:
+        info = lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        direct = info.value
+        dynamic = direct.dynamic[enable_profiling]
+        dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
+
+        libs_by_name[direct.name] = struct(
+            package_db = direct.empty_db,
+            modules = dynamic_info.modules,
+        )
+
+    exposed_package_modules = []
+    exposed_package_dbs = []
+    for dep_pkgname, dep_modules in package_deps.items():
+        exposed_package_dbs.append(libs_by_name[dep_pkgname].package_db)
+        for dep_modname in dep_modules:
+            exposed_package_modules.append(libs_by_name[dep_pkgname].modules[dep_modname])
+
+    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = [
+        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        for lib in direct_deps_link_info
+    ])
+    toolchain_libs = [
+        dep[HaskellToolchainLibrary].name
+        for dep in ctx.attrs.deps
+        if HaskellToolchainLibrary in dep
+    ] + libs.reduce("packages")
+
+    pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+    package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+    package_db_tset = ctx.actions.tset(
+        HaskellPackageDbTSet,
+        children = [package_db[name] for name in toolchain_libs if name in package_db]
     )
+
+    # TODO(ah) breaks recompilation avoidance on transitive toolchain library changes.
+    compile_args_for_file.add(cmd_args(
+        package_db_tset.project_as_args("path"),
+        format="--bin-path={}/bin",
+    ))
+
+    packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
+    packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
     packagedb_tag = ctx.actions.artifact_tag()
 
@@ -498,9 +505,9 @@ def _compile_module(
         "env",
     ]))
     package_env = cmd_args(delimiter = "\n")
-    packagedb_args = packagedb_tag.tag_artifacts(packages_info.packagedb_args)
+    packagedb_args_tagged = packagedb_tag.tag_artifacts(packagedb_args)
     package_env.add(cmd_args(
-        packagedb_args,
+        packagedb_args_tagged,
         format = "package-db {}",
     ).relative_to(package_env_file, parent = 1))
     ctx.actions.write(
@@ -510,7 +517,7 @@ def _compile_module(
     compile_args_for_file.add(cmd_args(
         packagedb_tag.tag_artifacts(package_env_file),
         prepend = "-package-env",
-        hidden = packagedb_args,
+        hidden = packagedb_args_tagged,
     ))
 
     dep_file = ctx.actions.declare_output(".".join([
@@ -522,9 +529,6 @@ def _compile_module(
     ])).as_output()
     tagged_dep_file = packagedb_tag.tag_artifacts(dep_file)
     compile_args_for_file.add("--buck2-packagedb-dep", tagged_dep_file)
-
-    if enable_th:
-        compile_args_for_file.add(packages_info.exposed_package_libs)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
@@ -543,7 +547,6 @@ def _compile_module(
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
     compile_args_for_file.add("-stubdir", stubs.as_output())
-    compile_args_for_file.add(packages_info.bin_paths)
 
     if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
         compile_args_for_file.add("-dynamic-too")
@@ -585,7 +588,7 @@ def _compile_module(
     # Transitive module dependencies from other packages.
     cross_package_modules = ctx.actions.tset(
         CompiledModuleTSet,
-        children = packages_info.exposed_package_modules,
+        children = exposed_package_modules,
     )
     # Transitive module dependencies from the same package.
     this_package_modules = [
@@ -645,7 +648,7 @@ def _compile_module(
             dyn_object_dot_o = dyn_object_dot_o,
             package_deps = package_deps.keys(),
             toolchain_deps = toolchain_deps,
-            db_deps = packages_info.exposed_package_dbs,
+            db_deps = exposed_package_dbs,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
