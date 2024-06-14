@@ -510,13 +510,6 @@ def _compile_module(
     packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
-    exposed_package_modules = []
-    exposed_package_dbs = []
-    for dep_pkgname, dep_modules in package_deps.items():
-        exposed_package_dbs.append(direct_deps_by_name[dep_pkgname].package_db)
-        for dep_modname in dep_modules:
-            exposed_package_modules.append(direct_deps_by_name[dep_pkgname].modules[dep_modname])
-
     packagedb_tag = ctx.actions.artifact_tag()
 
     # TODO[AH] Avoid duplicates and share identical env files.
@@ -594,6 +587,13 @@ def _compile_module(
             delimiter=""
         )
     )
+
+    exposed_package_modules = []
+    exposed_package_dbs = []
+    for dep_pkgname, dep_modules in package_deps.items():
+        exposed_package_dbs.append(direct_deps_by_name[dep_pkgname].package_db)
+        for dep_modname in dep_modules:
+            exposed_package_modules.append(direct_deps_by_name[dep_pkgname].modules[dep_modname])
 
     # Transitive module dependencies from other packages.
     cross_package_modules = ctx.actions.tset(
