@@ -396,10 +396,65 @@ CommonCompileModuleArgs = record(
 def _common_compile_module_args(
     ctx: AnalysisContext,
     *,
+    enable_haddock: bool,
+    enable_profiling: bool,
+    link_style: LinkStyle,
+    pkgname: str | None = None,
 ) -> CommonCompileModuleArgs:
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    command = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
+    command.add("--ghc", haskell_toolchain.compiler)
+
+    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
+    # be parsed when inside an argsfile.
+    command.add(haskell_toolchain.compiler_flags)
+    command.add(ctx.attrs.compiler_flags)
+
+    command.add("-c")
+
+    if enable_haddock:
+        command.add("-haddock")
+
+    args_for_file = cmd_args()
+
+    args_for_file.add("-no-link", "-i")
+    args_for_file.add("-hide-all-packages")
+
+    if enable_profiling:
+        args_for_file.add("-prof")
+
+    if link_style == LinkStyle("shared"):
+        args_for_file.add("-dynamic", "-fPIC")
+    elif link_style == LinkStyle("static_pic"):
+        args_for_file.add("-fPIC", "-fexternal-dynamic-refs")
+
+    osuf, hisuf = output_extensions(link_style, enable_profiling)
+    args_for_file.add("-osuf", osuf, "-hisuf", hisuf)
+
+    non_haskell_sources = [
+        src
+        for (path, src) in srcs_to_pairs(ctx.attrs.srcs)
+        if not is_haskell_src(path)
+    ]
+
+    if non_haskell_sources:
+        warning("{} specifies non-haskell file in `srcs`, consider using `srcs_deps` instead".format(ctx.label))
+
+        args_for_file.hidden(non_haskell_sources)
+
+    # Add args from preprocess-able inputs.
+    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
+    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
+    pre_args = pre.set.project_as_args("args")
+    args_for_file.add(cmd_args(pre_args, format = "-optP={}"))
+
+    if pkgname:
+        args_for_file.add(["-this-unit-id", pkgname])
+
     return CommonCompileModuleArgs(
-        command = cmd_args(),
-        args_for_file = cmd_args(),
+        command = command,
+        args_for_file = args_for_file,
     )
 
 def _compile_module(
@@ -408,7 +463,6 @@ def _compile_module(
     common_args: CommonCompileModuleArgs,
     link_style: LinkStyle,
     enable_profiling: bool,
-    enable_haddock: bool,
     enable_th: bool,
     module_name: str,
     module: _Module,
@@ -427,48 +481,6 @@ def _compile_module(
     compile_args_for_file = cmd_args(common_args.args_for_file)
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    compile_cmd.add(ctx.attrs._ghc_wrapper[RunInfo])
-    compile_cmd.add("--ghc", haskell_toolchain.compiler)
-
-    compile_cmd.add(haskell_toolchain.compiler_flags)
-
-    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
-    # be parsed when inside an argsfile.
-    compile_cmd.add(ctx.attrs.compiler_flags)
-    compile_cmd.add("-c")
-
-    if enable_haddock:
-        compile_cmd.add("-haddock")
-
-    compile_args_for_file.add("-no-link", "-i")
-    compile_args_for_file.add("-hide-all-packages")
-
-    if enable_profiling:
-        compile_args_for_file.add("-prof")
-
-    if link_style == LinkStyle("shared"):
-        compile_args_for_file.add("-dynamic", "-fPIC")
-    elif link_style == LinkStyle("static_pic"):
-        compile_args_for_file.add("-fPIC", "-fexternal-dynamic-refs")
-
-    osuf, hisuf = output_extensions(link_style, enable_profiling)
-    compile_args_for_file.add("-osuf", osuf, "-hisuf", hisuf)
-
-    non_haskell_sources = [src for (path, src) in srcs_to_pairs(ctx.attrs.srcs) if not is_haskell_src(path)]
-
-    if non_haskell_sources:
-        warning("{} specifies non-haskell file in `srcs`, consider using `srcs_deps` instead".format(ctx.label))
-
-        compile_args_for_file.hidden(non_haskell_sources)
-
-    # Add args from preprocess-able inputs.
-    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
-    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
-    pre_args = pre.set.project_as_args("args")
-    compile_args_for_file.add(cmd_args(pre_args, format = "-optP={}"))
-
-    if pkgname:
-        compile_args_for_file.add(["-this-unit-id", pkgname])
 
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
@@ -684,7 +696,13 @@ def compile(
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
     def do_compile(ctx, artifacts, resolved, outputs, md_file=md_file, modules=modules):
-        common_args = _common_compile_module_args(ctx)
+        common_args = _common_compile_module_args(
+            ctx,
+            enable_haddock = enable_haddock,
+            enable_profiling = enable_profiling,
+            link_style = link_style,
+            pkgname = pkgname,
+        )
 
         md = artifacts[md_file].read_json()
         th_modules = md["th_modules"]
@@ -702,7 +720,6 @@ def compile(
                 common_args = common_args,
                 link_style = link_style,
                 enable_profiling = enable_profiling,
-                enable_haddock = enable_haddock,
                 enable_th = module_name in th_modules,
                 module_name = module_name,
                 module = mapped_modules[module_name],
