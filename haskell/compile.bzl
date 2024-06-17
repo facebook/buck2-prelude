@@ -527,11 +527,8 @@ def _compile_module(
     package_deps: dict[str, list[str]],
     toolchain_deps: list[str],
     outputs: dict[Artifact, Artifact],
-    resolved: dict[DynamicValue, ResolvedDynamicValue],
     artifact_suffix: str,
-    direct_deps_info: list[HaskellLibraryInfoTSet],
     direct_deps_by_name: dict[str, typing.Any],
-    pkgname: str | None = None,
 ) -> CompiledModuleTSet:
     compile_cmd = cmd_args(common_args.command)
     # These compiler arguments can be passed in a response file.
@@ -729,12 +726,9 @@ def compile(
                 package_deps = package_deps.get(module_name, {}),
                 toolchain_deps = toolchain_deps.get(module_name, []),
                 outputs = outputs,
-                resolved = resolved,
                 md_file=md_file,
                 artifact_suffix = artifact_suffix,
-                direct_deps_info = direct_deps_info,
                 direct_deps_by_name = direct_deps_by_name,
-                pkgname = pkgname,
             )
 
         return [DynamicCompileResultInfo(modules = module_tsets)]
