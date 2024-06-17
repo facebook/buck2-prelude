@@ -391,14 +391,17 @@ def get_packages_info(
 CommonCompileModuleArgs = record(
     command = field(cmd_args),
     args_for_file = field(cmd_args),
+    package_env_args = field(cmd_args),
 )
 
 def _common_compile_module_args(
     ctx: AnalysisContext,
     *,
+    resolved: dict[DynamicValue, ResolvedDynamicValue],
     enable_haddock: bool,
     enable_profiling: bool,
     link_style: LinkStyle,
+    direct_deps_info: list[HaskellLibraryInfoTSet],
     pkgname: str | None = None,
 ) -> CommonCompileModuleArgs:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -452,9 +455,61 @@ def _common_compile_module_args(
     if pkgname:
         args_for_file.add(["-this-unit-id", pkgname])
 
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+
+    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = direct_deps_info)
+    toolchain_libs = [
+        dep[HaskellToolchainLibrary].name
+        for dep in ctx.attrs.deps
+        if HaskellToolchainLibrary in dep
+    ] + libs.reduce("packages")
+
+    pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+    package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+    package_db_tset = ctx.actions.tset(
+        HaskellPackageDbTSet,
+        children = [package_db[name] for name in toolchain_libs if name in package_db]
+    )
+
+    # TODO(ah) breaks recompilation avoidance on transitive toolchain library changes.
+    args_for_file.add(cmd_args(
+        package_db_tset.project_as_args("path"),
+        format="--bin-path={}/bin",
+    ))
+
+    packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
+    packagedb_args.add(package_db_tset.project_as_args("package_db"))
+
+    # TODO[AH] Avoid duplicates and share identical env files.
+    #   The set of package-dbs can be known at the package level, not just the
+    #   module level. So, we could generate this file outside of the
+    #   dynamic_output action.
+    package_env_file = ctx.actions.declare_output(".".join([
+        ctx.label.name,
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "env",
+    ]))
+    package_env = cmd_args(delimiter = "\n")
+    package_env.add(cmd_args(
+        packagedb_args,
+        format = "package-db {}",
+    ).relative_to(package_env_file, parent = 1))
+    ctx.actions.write(
+        package_env_file,
+        package_env,
+    )
+    package_env_args = cmd_args(
+        package_env_file,
+        prepend = "-package-env",
+        hidden = packagedb_args,
+    )
+
     return CommonCompileModuleArgs(
         command = command,
         args_for_file = args_for_file,
+        package_env_args = package_env_args,
     )
 
 def _compile_module(
@@ -484,60 +539,8 @@ def _compile_module(
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
-    # Add -package-db and -package/-expose-package flags for each Haskell
-    # library dependency.
-
-    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = direct_deps_info)
-    toolchain_libs = [
-        dep[HaskellToolchainLibrary].name
-        for dep in ctx.attrs.deps
-        if HaskellToolchainLibrary in dep
-    ] + libs.reduce("packages")
-
-    pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-    package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
-    package_db_tset = ctx.actions.tset(
-        HaskellPackageDbTSet,
-        children = [package_db[name] for name in toolchain_libs if name in package_db]
-    )
-
-    # TODO(ah) breaks recompilation avoidance on transitive toolchain library changes.
-    compile_args_for_file.add(cmd_args(
-        package_db_tset.project_as_args("path"),
-        format="--bin-path={}/bin",
-    ))
-
-    packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
-    packagedb_args.add(package_db_tset.project_as_args("package_db"))
-
-    # TODO[AH] Avoid duplicates and share identical env files.
-    #   The set of package-dbs can be known at the package level, not just the
-    #   module level. So, we could generate this file outside of the
-    #   dynamic_output action.
-    package_env_file = ctx.actions.declare_output(".".join([
-        ctx.label.name,
-        module_name or "pkg",
-        "package-db",
-        output_extensions(link_style, enable_profiling)[1],
-        "env",
-    ]))
-    package_env = cmd_args(delimiter = "\n")
-    package_env.add(cmd_args(
-        packagedb_args,
-        format = "package-db {}",
-    ).relative_to(package_env_file, parent = 1))
-    ctx.actions.write(
-        package_env_file,
-        package_env,
-    )
-    package_env_arg = cmd_args(
-        package_env_file,
-        prepend = "-package-env",
-        hidden = packagedb_args,
-    )
-
     packagedb_tag = ctx.actions.artifact_tag()
-    compile_args_for_file.add(packagedb_tag.tag_artifacts(package_env_arg))
+    compile_args_for_file.add(packagedb_tag.tag_artifacts(common_args.package_env_args))
 
     dep_file = ctx.actions.declare_output(".".join([
         ctx.label.name,
@@ -694,9 +697,11 @@ def compile(
         }
         common_args = _common_compile_module_args(
             ctx,
+            resolved = resolved,
             enable_haddock = enable_haddock,
             enable_profiling = enable_profiling,
             link_style = link_style,
+            direct_deps_info = direct_deps_info,
             pkgname = pkgname,
         )
 
