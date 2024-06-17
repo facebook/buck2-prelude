@@ -349,11 +349,13 @@ def get_packages_info(
         pkg_deps = resolved[haskell_toolchain.packages.dynamic]
         package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
 
-        toolchain_libs = [
+        direct_toolchain_libs = [
             dep[HaskellToolchainLibrary].name
             for dep in ctx.attrs.deps
             if HaskellToolchainLibrary in dep
-        ] + libs.reduce("packages")
+        ]
+
+        toolchain_libs = direct_toolchain_libs + libs.reduce("packages")
 
         package_db_tset = ctx.actions.tset(
             HaskellPackageDbTSet,
@@ -361,7 +363,9 @@ def get_packages_info(
         )
 
         packagedb_args.add(package_db_tset.project_as_args("package_db"))
-        bin_paths = cmd_args(package_db_tset.project_as_args("path"), format="--bin-path={}/bin")
+
+        direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
+        bin_paths = cmd_args(direct_package_paths, format="--bin-path={}/bin")
     else:
         packagedb_args.add(haskell_toolchain.packages.package_db)
         bin_paths = cmd_args()
@@ -459,11 +463,13 @@ def _common_compile_module_args(
     # library dependency.
 
     libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = direct_deps_info)
-    toolchain_libs = [
+
+    direct_toolchain_libs = [
         dep[HaskellToolchainLibrary].name
         for dep in ctx.attrs.deps
         if HaskellToolchainLibrary in dep
-    ] + libs.reduce("packages")
+    ]
+    toolchain_libs = direct_toolchain_libs + libs.reduce("packages")
 
     pkg_deps = resolved[haskell_toolchain.packages.dynamic]
     package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
@@ -472,9 +478,9 @@ def _common_compile_module_args(
         children = [package_db[name] for name in toolchain_libs if name in package_db]
     )
 
-    # TODO(ah) breaks recompilation avoidance on transitive toolchain library changes.
+    direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
     args_for_file.add(cmd_args(
-        package_db_tset.project_as_args("path"),
+        direct_package_paths,
         format="--bin-path={}/bin",
     ))
 
