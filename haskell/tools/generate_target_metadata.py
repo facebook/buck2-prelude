@@ -93,13 +93,15 @@ def obtain_target_metadata(args):
     ghc_depends = run_ghc_depends(args.ghc, ghc_args, args.source, paths)
     th_modules = determine_th_modules(ghc_depends)
     module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
+    # TODO(ah) handle .hi-boot dependencies
+    module_graph = determine_module_graph(ghc_depends)
     #package_prefixes = calc_package_prefixes(args.package)
     #module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
     #    ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
     return {
         "th_modules": th_modules,
         "module_mapping": module_mapping,
-        #"module_graph": module_graph,
+        "module_graph": module_graph,
         #"package_deps": package_deps,
         #"toolchain_deps": toolchain_deps,
         "ghc_depends": ghc_depends,
@@ -142,6 +144,13 @@ def determine_module_mapping(ghc_depends, source_prefix):
             result[apparent_name] = modname
 
     return result
+
+
+def determine_module_graph(ghc_depends):
+    return {
+        modname: description.get("modules", [])
+        for modname, description in ghc_depends.items()
+    }
 
 
 def fix_ghc_args(ghc_args, toolchain_packages):
