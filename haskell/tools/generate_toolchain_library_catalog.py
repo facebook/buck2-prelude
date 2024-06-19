@@ -48,7 +48,6 @@ def _ghc_pkg_command(ghc_pkg, package_db):
         "--global",
         "--no-user-package-db",
         "--simple-output",
-        "--expand-pkgroot",
     ] + (["--package-db", package_db] if package_db else [])
 
 
@@ -73,17 +72,11 @@ def _parse_ghc_pkg_dump(lines):
                 current_key = "id"
                 if value:
                     current_package["id"] = value
-            elif key == "import-dirs":
-                current_key = "import-dirs"
-                if value:
-                    current_package.setdefault("import-dirs", []).append(value)
             else:
                 current_key = None
         elif line.strip():
             if current_key in ["name", "id"]:
                 current_package[current_key] = line.strip()
-            elif current_key == "import-dirs":
-                current_package.setdefault("import-dirs", []).append(line.strip())
 
     if current_package:
         yield current_package
@@ -91,19 +84,11 @@ def _parse_ghc_pkg_dump(lines):
 
 def _construct_package_mappings(packages):
     result = {
-        "by-import-dirs": {},
         "by-package-name": {},
     }
 
     for package in packages:
         result["by-package-name"][package["name"]] = package["id"]
-        for import_dir in package.get("import-dirs", []):
-            layer = result["by-import-dirs"]
-
-            for part in Path(import_dir).parts:
-                layer = layer.setdefault(part, {})
-
-            layer["//pkgid"] = package["id"]
 
     return result
 
