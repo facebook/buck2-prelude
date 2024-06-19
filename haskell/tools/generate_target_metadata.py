@@ -12,7 +12,7 @@ The result is a JSON object with the following fields:
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
 * `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
-* `toolchain_deps`": Toolchain library dependencies, `dict[modname, list[pkgname]]`.
+* `toolchain_deps`": Toolchain library dependencies, `dict[modname, list[pkgid]]`.
 """
 
 import argparse
@@ -166,7 +166,10 @@ def determine_package_deps(ghc_depends, toolchain_packages):
 
             if pkgname in toolchain_by_name:
                 if pkgid == toolchain_by_name[pkgname]:
-                    toolchain_deps.setdefault(modname, []).append(pkgname)
+                    toolchain_deps.setdefault(modname, []).append(pkgid)
+                elif pkgid == "base":
+                    # TODO(ah) why is base's package-id cropped to `base`?
+                    toolchain_deps.setdefault(modname, []).append("base")
                 # TODO(ah) is this an error?
             else:
                 package_deps.setdefault(modname, {})[pkgname] = pkgdep.get("modules", [])
