@@ -91,12 +91,13 @@ def obtain_target_metadata(args):
     ghc_args = fix_ghc_args(args.ghc_arg, toolchain_packages)
     paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
     ghc_depends = run_ghc_depends(args.ghc, ghc_args, args.source, paths)
-    #th_modules = determine_th_modules(ghc_options, args.source_prefix)
+    th_modules = determine_th_modules(ghc_depends)
+    module_mapping = determine_module_mapping(ghc_depends)
     #package_prefixes = calc_package_prefixes(args.package)
     #module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
     #    ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
     return {
-        #"th_modules": th_modules,
+        "th_modules": th_modules,
         #"module_mapping": module_mapping,
         #"module_graph": module_graph,
         #"package_deps": package_deps,
@@ -110,11 +111,11 @@ def load_toolchain_packages(filepath):
         return json.load(f)
 
 
-def determine_th_modules(ghc_options, source_prefix):
+def determine_th_modules(ghc_depends):
     return [
-        src_to_module_name(strip_prefix_(source_prefix, fname).lstrip("/"))
-        for fname, opts in ghc_options.items()
-        if uses_th(opts)
+        modname
+        for modname, properties in ghc_depends.items()
+        if uses_th(properties.get("options", []))
     ]
 
 
@@ -124,6 +125,9 @@ __TH_EXTENSIONS = ["TemplateHaskell", "TemplateHaskellQuotes", "QuasiQuotes"]
 def uses_th(opts):
     """Determine if a Template Haskell extension is enabled."""
     return any([f"-X{ext}" in opts for ext in __TH_EXTENSIONS])
+
+
+def determine_module_mapping(ghc_depends
 
 
 def fix_ghc_args(ghc_args, toolchain_packages):
