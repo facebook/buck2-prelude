@@ -92,13 +92,13 @@ def obtain_target_metadata(args):
     paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
     ghc_depends = run_ghc_depends(args.ghc, ghc_args, args.source, paths)
     th_modules = determine_th_modules(ghc_depends)
-    module_mapping = determine_module_mapping(ghc_depends)
+    module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
     #package_prefixes = calc_package_prefixes(args.package)
     #module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
     #    ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
     return {
         "th_modules": th_modules,
-        #"module_mapping": module_mapping,
+        "module_mapping": module_mapping,
         #"module_graph": module_graph,
         #"package_deps": package_deps,
         #"toolchain_deps": toolchain_deps,
@@ -127,7 +127,21 @@ def uses_th(opts):
     return any([f"-X{ext}" in opts for ext in __TH_EXTENSIONS])
 
 
-def determine_module_mapping(ghc_depends
+def determine_module_mapping(ghc_depends, source_prefix):
+    result = {}
+
+    for modname, properties in ghc_depends.items():
+        sources = list(filter(is_haskell_src, properties.get("sources", [])))
+
+        if len(sources) != 1:
+            raise RuntimeError(f"Expected exactly one Haskell source for module '{modname}' but got '{sources}'.")
+
+        apparent_name = src_to_module_name(strip_prefix_(source_prefix, sources[0]).lstrip("/"))
+
+        if apparent_name != modname:
+            result[apparent_name] = modname
+
+    return result
 
 
 def fix_ghc_args(ghc_args, toolchain_packages):
