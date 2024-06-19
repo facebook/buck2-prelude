@@ -90,19 +90,18 @@ def obtain_target_metadata(args):
     toolchain_packages = load_toolchain_packages(args.toolchain_libs)
     ghc_args = fix_ghc_args(args.ghc_arg, toolchain_packages)
     paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
-    ghc_depends, ghc_options = run_ghc_depends(args.ghc, ghc_args, args.source, paths)
-    th_modules = determine_th_modules(ghc_options, args.source_prefix)
-    package_prefixes = calc_package_prefixes(args.package)
-    module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
-        ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
+    ghc_depends = run_ghc_depends(args.ghc, ghc_args, args.source, paths)
+    #th_modules = determine_th_modules(ghc_options, args.source_prefix)
+    #package_prefixes = calc_package_prefixes(args.package)
+    #module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
+    #    ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
     return {
-        "th_modules": th_modules,
-        "module_mapping": module_mapping,
-        "module_graph": module_graph,
-        "package_deps": package_deps,
-        "toolchain_deps": toolchain_deps,
+        #"th_modules": th_modules,
+        #"module_mapping": module_mapping,
+        #"module_graph": module_graph,
+        #"package_deps": package_deps,
+        #"toolchain_deps": toolchain_deps,
         "ghc_depends": ghc_depends,
-        "ghc_options": ghc_options,
     }
 
 
@@ -164,7 +163,6 @@ def fix_ghc_args(ghc_args, toolchain_packages):
 def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
     with tempfile.TemporaryDirectory() as dname:
         json_fname = os.path.join(dname, "depends.json")
-        opt_json_fname = os.path.join(dname, "options.json")
         make_fname = os.path.join(dname, "depends.make")
         args = [
             ghc, "-M", "-include-pkg-deps",
@@ -172,7 +170,6 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
             #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
             "-outputdir", ".",
             "-dep-json", json_fname,
-            "-opt-json", opt_json_fname,
             "-dep-makefile", make_fname,
         ] + ghc_args + sources
 
@@ -182,8 +179,8 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
 
         subprocess.run(args, env=env, check=True)
 
-        with open(json_fname) as f, open(opt_json_fname) as o:
-            return json.load(f), json.load(o)
+        with open(json_fname) as f:
+            return json.load(f)
 
 
 def calc_package_prefixes(package_specs):
