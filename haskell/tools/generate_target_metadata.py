@@ -167,9 +167,9 @@ def determine_package_deps(ghc_depends, toolchain_packages):
             if pkgname in toolchain_by_name:
                 if pkgid == toolchain_by_name[pkgname]:
                     toolchain_deps.setdefault(modname, []).append(pkgid)
-                elif pkgid == "base":
+                elif pkgid == pkgname:
                     # TODO(ah) why is base's package-id cropped to `base`?
-                    toolchain_deps.setdefault(modname, []).append("base")
+                    toolchain_deps.setdefault(modname, []).append(toolchain_by_name.get(pkgid, pkgid))
                 # TODO(ah) is this an error?
             else:
                 package_deps.setdefault(modname, {})[pkgname] = pkgdep.get("modules", [])
