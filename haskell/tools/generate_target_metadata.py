@@ -12,7 +12,7 @@ The result is a JSON object with the following fields:
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
 * `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
-* `toolchain_deps`": Toolchain library dependencies, `dict[modname, pkgname]`.
+* `toolchain_deps`": Toolchain library dependencies, `dict[modname, list[pkgname]]`.
 """
 
 import argparse
@@ -98,12 +98,13 @@ def obtain_target_metadata(args):
     #package_prefixes = calc_package_prefixes(args.package)
     #module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
     #    ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
+    package_deps, toolchain_deps = determine_package_deps(ghc_depends, toolchain_packages)
     return {
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
-        #"package_deps": package_deps,
-        #"toolchain_deps": toolchain_deps,
+        "package_deps": package_deps,
+        "toolchain_deps": toolchain_deps,
         "ghc_depends": ghc_depends,
     }
 
@@ -151,6 +152,26 @@ def determine_module_graph(ghc_depends):
         modname: description.get("modules", [])
         for modname, description in ghc_depends.items()
     }
+
+
+def determine_package_deps(ghc_depends, toolchain_packages):
+    toolchain_by_name = toolchain_packages["by-package-name"]
+    package_deps = {}
+    toolchain_deps = {}
+
+    for modname, description in ghc_depends.items():
+        for pkgdep in description.get("packages", {}):
+            pkgname = pkgdep.get("name")
+            pkgid = pkgdep.get("id")
+
+            if pkgname in toolchain_by_name:
+                if pkgid == toolchain_by_name[pkgname]:
+                    toolchain_deps.setdefault(modname, []).append(pkgname)
+                # TODO(ah) is this an error?
+            else:
+                package_deps.setdefault(modname, {})[pkgname] = pkgdep.get("modules", [])
+
+    return package_deps, toolchain_deps
 
 
 def fix_ghc_args(ghc_args, toolchain_packages):
