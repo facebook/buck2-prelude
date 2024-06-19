@@ -95,9 +95,6 @@ def obtain_target_metadata(args):
     module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
     # TODO(ah) handle .hi-boot dependencies
     module_graph = determine_module_graph(ghc_depends)
-    #package_prefixes = calc_package_prefixes(args.package)
-    #module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
-    #    ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
     package_deps, toolchain_deps = determine_package_deps(ghc_depends, toolchain_packages)
     return {
         "th_modules": th_modules,
@@ -232,114 +229,6 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
 
         with open(json_fname) as f:
             return json.load(f)
-
-
-def calc_package_prefixes(package_specs):
-    """Creates a trie to look up modules in dependency packages.
-
-    Package names are stored under the marker key `//pkgname`. This is
-    unambiguous since path components may not contain `/` characters.
-    """
-    result = {}
-    for pkgname, path in (spec.split(":", 1) for spec in package_specs):
-        layer = result
-        for part in Path(path).parts:
-            layer = layer.setdefault(part, {})
-        layer["//pkgname"] = pkgname
-    return result
-
-
-def lookup_toolchain_dep(module_dep, toolchain_packages):
-    module_path = Path(module_dep)
-    layer = toolchain_packages["by-import-dirs"]
-    for part in module_path.parts:
-        if (layer := layer.get(part)) is None:
-            return None
-
-        if (pkgid := layer.get("//pkgid")) is not None:
-            return pkgid
-
-
-def lookup_package_dep(module_dep, package_prefixes):
-    """Look up a cross-packge module dependency.
-
-    Assumes that `module_dep` is a relative path to an interface file of the form
-    `buck-out/.../__my_package__/mod-shared/Some/Package.hi`.
-    """
-    module_path = Path(module_dep)
-    layer = package_prefixes
-    for offset, part in enumerate(module_path.parts):
-        if (layer := layer.get(part)) is None:
-            return None
-
-        if (pkgname := layer.get("//pkgname")) is not None:
-            modname = src_to_module_name("/".join(module_path.parts[offset+2:]))
-            return pkgname, modname
-
-
-def interpret_ghc_depends(ghc_depends, source_prefix, package_prefixes, toolchain_packages):
-    mapping = {}
-    graph = {}
-    extgraph = {}
-    toolchaingraph = {}
-
-    for k, vs in ghc_depends.items():
-        module_name = src_to_module_name(k)
-        intdeps, extdeps, toolchaindeps = parse_module_deps(vs, package_prefixes, toolchain_packages)
-
-        graph.setdefault(module_name, []).extend(intdeps)
-        for pkg, mods in extdeps.items():
-            extgraph.setdefault(module_name, {}).setdefault(pkg, []).extend(mods)
-        for pkg in toolchaindeps:
-            toolchaingraph.setdefault(module_name, set()).add(pkg)
-
-        ext = os.path.splitext(k)[1]
-
-        if ext != ".o":
-            continue
-
-        sources = list(filter(is_haskell_src, vs))
-
-        if not sources:
-            continue
-
-        assert len(sources) == 1, "one object file must correspond to exactly one haskell source "
-
-        hs_file = sources[0]
-
-        hs_module_name = src_to_module_name(
-            strip_prefix_(source_prefix, hs_file).lstrip("/"))
-
-        if hs_module_name != module_name:
-            mapping[hs_module_name] = module_name
-
-    return mapping, graph, extgraph, toolchaingraph
-
-
-def parse_module_deps(module_deps, package_prefixes, toolchain_packages):
-    internal_deps = []
-    external_deps = {}
-    toolchain_deps = set()
-
-    for module_dep in module_deps:
-        if is_haskell_src(module_dep):
-            continue
-
-        if (tooldep := lookup_toolchain_dep(module_dep, toolchain_packages)) is not None:
-            toolchain_deps.add(tooldep)
-            continue
-
-        if os.path.isabs(module_dep):
-            raise RuntimeError(f"Unexpected module dependency `{module_dep}`. Perhaps a missing `haskell_toolchain_library`?")
-
-        if (pkgdep := lookup_package_dep(module_dep, package_prefixes)) is not None:
-            pkgname, modname = pkgdep
-            external_deps.setdefault(pkgname, []).append(modname)
-            continue
-
-        internal_deps.append(src_to_module_name(module_dep))
-
-    return internal_deps, external_deps, toolchain_deps
 
 
 def src_to_module_name(x):
