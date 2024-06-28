@@ -12,7 +12,7 @@ The result is a JSON object with the following fields:
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
 * `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
-* `toolchain_deps`": Toolchain library dependencies, `dict[modname, pkgname]`.
+* `toolchain_deps`": Toolchain library dependencies, `dict[modname, list[pkgid]]`.
 """
 
 import argparse
@@ -90,11 +90,12 @@ def obtain_target_metadata(args):
     toolchain_packages = load_toolchain_packages(args.toolchain_libs)
     ghc_args = fix_ghc_args(args.ghc_arg, toolchain_packages)
     paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
-    ghc_depends, ghc_options = run_ghc_depends(args.ghc, ghc_args, args.source, paths)
-    th_modules = determine_th_modules(ghc_options, args.source_prefix)
-    package_prefixes = calc_package_prefixes(args.package)
-    module_mapping, module_graph, package_deps, toolchain_deps = interpret_ghc_depends(
-        ghc_depends, args.source_prefix, package_prefixes, toolchain_packages)
+    ghc_depends = run_ghc_depends(args.ghc, ghc_args, args.source, paths)
+    th_modules = determine_th_modules(ghc_depends)
+    module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
+    # TODO(ah) handle .hi-boot dependencies
+    module_graph = determine_module_graph(ghc_depends)
+    package_deps, toolchain_deps = determine_package_deps(ghc_depends, toolchain_packages)
     return {
         "th_modules": th_modules,
         "module_mapping": module_mapping,
@@ -109,11 +110,11 @@ def load_toolchain_packages(filepath):
         return json.load(f)
 
 
-def determine_th_modules(ghc_options, source_prefix):
+def determine_th_modules(ghc_depends):
     return [
-        src_to_module_name(strip_prefix_(source_prefix, fname).lstrip("/"))
-        for fname, opts in ghc_options.items()
-        if uses_th(opts)
+        modname
+        for modname, properties in ghc_depends.items()
+        if uses_th(properties.get("options", []))
     ]
 
 
@@ -123,6 +124,53 @@ __TH_EXTENSIONS = ["TemplateHaskell", "TemplateHaskellQuotes", "QuasiQuotes"]
 def uses_th(opts):
     """Determine if a Template Haskell extension is enabled."""
     return any([f"-X{ext}" in opts for ext in __TH_EXTENSIONS])
+
+
+def determine_module_mapping(ghc_depends, source_prefix):
+    result = {}
+
+    for modname, properties in ghc_depends.items():
+        sources = list(filter(is_haskell_src, properties.get("sources", [])))
+
+        if len(sources) != 1:
+            raise RuntimeError(f"Expected exactly one Haskell source for module '{modname}' but got '{sources}'.")
+
+        apparent_name = src_to_module_name(strip_prefix_(source_prefix, sources[0]).lstrip("/"))
+
+        if apparent_name != modname:
+            result[apparent_name] = modname
+
+    return result
+
+
+def determine_module_graph(ghc_depends):
+    return {
+        modname: description.get("modules", [])
+        for modname, description in ghc_depends.items()
+    }
+
+
+def determine_package_deps(ghc_depends, toolchain_packages):
+    toolchain_by_name = toolchain_packages["by-package-name"]
+    package_deps = {}
+    toolchain_deps = {}
+
+    for modname, description in ghc_depends.items():
+        for pkgdep in description.get("packages", {}):
+            pkgname = pkgdep.get("name")
+            pkgid = pkgdep.get("id")
+
+            if pkgname in toolchain_by_name:
+                if pkgid == toolchain_by_name[pkgname]:
+                    toolchain_deps.setdefault(modname, []).append(pkgid)
+                elif pkgid == pkgname:
+                    # TODO(ah) why is base's package-id cropped to `base`?
+                    toolchain_deps.setdefault(modname, []).append(toolchain_by_name.get(pkgid, pkgid))
+                # TODO(ah) is this an error?
+            else:
+                package_deps.setdefault(modname, {})[pkgname] = pkgdep.get("modules", [])
+
+    return package_deps, toolchain_deps
 
 
 def fix_ghc_args(ghc_args, toolchain_packages):
@@ -162,7 +210,6 @@ def fix_ghc_args(ghc_args, toolchain_packages):
 def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
     with tempfile.TemporaryDirectory() as dname:
         json_fname = os.path.join(dname, "depends.json")
-        opt_json_fname = os.path.join(dname, "options.json")
         make_fname = os.path.join(dname, "depends.make")
         args = [
             ghc, "-M", "-include-pkg-deps",
@@ -170,7 +217,6 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
             #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
             "-outputdir", ".",
             "-dep-json", json_fname,
-            "-opt-json", opt_json_fname,
             "-dep-makefile", make_fname,
         ] + ghc_args + sources
 
@@ -180,116 +226,8 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
 
         subprocess.run(args, env=env, check=True)
 
-        with open(json_fname) as f, open(opt_json_fname) as o:
-            return json.load(f), json.load(o)
-
-
-def calc_package_prefixes(package_specs):
-    """Creates a trie to look up modules in dependency packages.
-
-    Package names are stored under the marker key `//pkgname`. This is
-    unambiguous since path components may not contain `/` characters.
-    """
-    result = {}
-    for pkgname, path in (spec.split(":", 1) for spec in package_specs):
-        layer = result
-        for part in Path(path).parts:
-            layer = layer.setdefault(part, {})
-        layer["//pkgname"] = pkgname
-    return result
-
-
-def lookup_toolchain_dep(module_dep, toolchain_packages):
-    module_path = Path(module_dep)
-    layer = toolchain_packages["by-import-dirs"]
-    for part in module_path.parts:
-        if (layer := layer.get(part)) is None:
-            return None
-
-        if (pkgid := layer.get("//pkgid")) is not None:
-            return pkgid
-
-
-def lookup_package_dep(module_dep, package_prefixes):
-    """Look up a cross-packge module dependency.
-
-    Assumes that `module_dep` is a relative path to an interface file of the form
-    `buck-out/.../__my_package__/mod-shared/Some/Package.hi`.
-    """
-    module_path = Path(module_dep)
-    layer = package_prefixes
-    for offset, part in enumerate(module_path.parts):
-        if (layer := layer.get(part)) is None:
-            return None
-
-        if (pkgname := layer.get("//pkgname")) is not None:
-            modname = src_to_module_name("/".join(module_path.parts[offset+2:]))
-            return pkgname, modname
-
-
-def interpret_ghc_depends(ghc_depends, source_prefix, package_prefixes, toolchain_packages):
-    mapping = {}
-    graph = {}
-    extgraph = {}
-    toolchaingraph = {}
-
-    for k, vs in ghc_depends.items():
-        module_name = src_to_module_name(k)
-        intdeps, extdeps, toolchaindeps = parse_module_deps(vs, package_prefixes, toolchain_packages)
-
-        graph.setdefault(module_name, []).extend(intdeps)
-        for pkg, mods in extdeps.items():
-            extgraph.setdefault(module_name, {}).setdefault(pkg, []).extend(mods)
-        for pkg in toolchaindeps:
-            toolchaingraph.setdefault(module_name, set()).add(pkg)
-
-        ext = os.path.splitext(k)[1]
-
-        if ext != ".o":
-            continue
-
-        sources = list(filter(is_haskell_src, vs))
-
-        if not sources:
-            continue
-
-        assert len(sources) == 1, "one object file must correspond to exactly one haskell source "
-
-        hs_file = sources[0]
-
-        hs_module_name = src_to_module_name(
-            strip_prefix_(source_prefix, hs_file).lstrip("/"))
-
-        if hs_module_name != module_name:
-            mapping[hs_module_name] = module_name
-
-    return mapping, graph, extgraph, toolchaingraph
-
-
-def parse_module_deps(module_deps, package_prefixes, toolchain_packages):
-    internal_deps = []
-    external_deps = {}
-    toolchain_deps = set()
-
-    for module_dep in module_deps:
-        if is_haskell_src(module_dep):
-            continue
-
-        if (tooldep := lookup_toolchain_dep(module_dep, toolchain_packages)) is not None:
-            toolchain_deps.add(tooldep)
-            continue
-
-        if os.path.isabs(module_dep):
-            raise RuntimeError(f"Unexpected module dependency `{module_dep}`. Perhaps a missing `haskell_toolchain_library`?")
-
-        if (pkgdep := lookup_package_dep(module_dep, package_prefixes)) is not None:
-            pkgname, modname = pkgdep
-            external_deps.setdefault(pkgname, []).append(modname)
-            continue
-
-        internal_deps.append(src_to_module_name(module_dep))
-
-    return internal_deps, external_deps, toolchain_deps
+        with open(json_fname) as f:
+            return json.load(f)
 
 
 def src_to_module_name(x):
