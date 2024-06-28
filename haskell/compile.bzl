@@ -27,6 +27,7 @@ load(
     "attr_deps",
     "attr_deps_haskell_lib_infos",
     "attr_deps_haskell_link_infos",
+    "attr_deps_haskell_toolchain_libraries",
     "get_artifact_suffix",
     "is_haskell_src",
     "output_extensions",
@@ -178,38 +179,6 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
     return modules
 
-def _toolchain_library_catalog_impl(ctx: AnalysisContext) -> list[Provider]:
-    haskell_toolchain = ctx.attrs.toolchain[HaskellToolchainInfo]
-
-    ghc_pkg = haskell_toolchain.packager
-
-    catalog_gen = ctx.attrs.generate_toolchain_library_catalog[RunInfo]
-    catalog = ctx.actions.declare_output("haskell_toolchain_libraries.json")
-
-    cmd = cmd_args(catalog_gen, "--ghc-pkg", ghc_pkg, "--output", catalog.as_output())
-
-    if haskell_toolchain.packages:
-        cmd.add("--package-db", haskell_toolchain.packages.package_db)
-
-    ctx.actions.run(cmd, category = "haskell_toolchain_library_catalog")
-
-    return [DefaultInfo(default_output = catalog)]
-
-_toolchain_library_catalog = anon_rule(
-    impl = _toolchain_library_catalog_impl,
-    attrs = {
-        "toolchain": attrs.dep(
-            providers = [HaskellToolchainInfo],
-        ),
-        "generate_toolchain_library_catalog": attrs.dep(
-            providers = [RunInfo],
-        ),
-    },
-    artifact_promise_mappings = {
-        "catalog": lambda x: x[DefaultInfo].default_outputs[0],
-    }
-)
-
 def target_metadata(
         ctx: AnalysisContext,
         *,
@@ -226,11 +195,6 @@ def target_metadata(
         if HaskellToolchainLibrary in dep
     ]
 
-    toolchain_libs_catalog = ctx.actions.anon_target(_toolchain_library_catalog, {
-        "toolchain": ctx.attrs._haskell_toolchain,
-        "generate_toolchain_library_catalog": ctx.attrs._generate_toolchain_library_catalog,
-    })
-
     # The object and interface file paths are depending on the real module name
     # as inferred by GHC, not the source file path; currently this requires the
     # module name to correspond to the source file path as otherwise GHC will
@@ -239,9 +203,7 @@ def target_metadata(
     #
     # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
 
-    catalog = toolchain_libs_catalog.artifact("catalog")
-
-    def get_metadata(ctx, _artifacts, resolved, outputs, catalog=catalog):
+    def get_metadata(ctx, _artifacts, resolved, outputs):
 
         # Add -package-db and -package/-expose-package flags for each Haskell
         # library dependency.
@@ -266,7 +228,6 @@ def target_metadata(
 
         md_args = cmd_args(md_gen)
         md_args.add(packages_info.bin_paths)
-        md_args.add("--toolchain-libs", catalog)
         md_args.add("--ghc", haskell_toolchain.compiler)
         md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
         md_args.add(
@@ -531,10 +492,10 @@ def _compile_module(
     md_file: Artifact,
     graph: dict[str, list[str]],
     package_deps: dict[str, list[str]],
-    toolchain_deps: list[str],
     outputs: dict[Artifact, Artifact],
     artifact_suffix: str,
     direct_deps_by_name: dict[str, typing.Any],
+    toolchain_deps_by_name: dict[str, None],
 ) -> CompiledModuleTSet:
     compile_cmd = cmd_args(common_args.command)
     # These compiler arguments can be passed in a response file.
@@ -594,12 +555,20 @@ def _compile_module(
         )
     )
 
+    toolchain_deps = []
+    library_deps = []
     exposed_package_modules = []
     exposed_package_dbs = []
     for dep_pkgname, dep_modules in package_deps.items():
-        exposed_package_dbs.append(direct_deps_by_name[dep_pkgname].package_db)
-        for dep_modname in dep_modules:
-            exposed_package_modules.append(direct_deps_by_name[dep_pkgname].modules[dep_modname])
+        if dep_pkgname in toolchain_deps_by_name:
+            toolchain_deps.append(dep_pkgname)
+        elif dep_pkgname in direct_deps_by_name:
+            library_deps.append(dep_pkgname)
+            exposed_package_dbs.append(direct_deps_by_name[dep_pkgname].package_db)
+            for dep_modname in dep_modules:
+                exposed_package_modules.append(direct_deps_by_name[dep_pkgname].modules[dep_modname])
+        else:
+            fail("Unknown library dependency '{}'. Add the library to the `deps` attribute".format(dep_pkgname))
 
     # Transitive module dependencies from other packages.
     cross_package_modules = ctx.actions.tset(
@@ -617,8 +586,8 @@ def _compile_module(
         children = [cross_package_modules] + this_package_modules,
     )
 
-    compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package-id"))
-    compile_cmd.add(cmd_args(package_deps.keys(), prepend = "-package"))
+    compile_cmd.add(cmd_args(library_deps, prepend = "-package"))
+    compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package"))
 
     abi_tag = ctx.actions.artifact_tag()
 
@@ -628,7 +597,7 @@ def _compile_module(
         compile_cmd.hidden(dependency_modules.project_as_args("objects"))
         compile_cmd.add(dependency_modules.project_as_args("dyn_objects_dot_o"))
         compile_cmd.add(cmd_args(dependency_modules.reduce("package_deps").keys(), prepend = "-package"))
-        compile_cmd.add(cmd_args(dependency_modules.reduce("toolchain_deps").keys(), prepend = "-package-id"))
+        compile_cmd.add(cmd_args(dependency_modules.reduce("toolchain_deps").keys(), prepend = "-package"))
 
     compile_cmd.add(cmd_args(dependency_modules.reduce("packagedb_deps").keys(), prepend = "--buck2-package-db"))
 
@@ -662,7 +631,7 @@ def _compile_module(
             interfaces = module.interfaces,
             objects = module.objects,
             dyn_object_dot_o = dyn_object_dot_o,
-            package_deps = package_deps.keys(),
+            package_deps = library_deps,
             toolchain_deps = toolchain_deps,
             db_deps = exposed_package_dbs,
         ),
@@ -687,6 +656,10 @@ def compile(
     def do_compile(ctx, artifacts, resolved, outputs, md_file=md_file, modules=modules):
         # Collect library dependencies. Note that these don't need to be in a
         # particular order.
+        toolchain_deps_by_name = {
+            lib.name: None
+            for lib in attr_deps_haskell_toolchain_libraries(ctx)
+        }
         direct_deps_info = [
             lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
             for lib in attr_deps_haskell_link_infos(ctx)
@@ -713,7 +686,6 @@ def compile(
         module_map = md["module_mapping"]
         graph = md["module_graph"]
         package_deps = md["package_deps"]
-        toolchain_deps = md["toolchain_deps"]
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
         module_tsets = {}
@@ -730,11 +702,11 @@ def compile(
                 module_tsets = module_tsets,
                 graph = graph,
                 package_deps = package_deps.get(module_name, {}),
-                toolchain_deps = toolchain_deps.get(module_name, []),
                 outputs = outputs,
                 md_file=md_file,
                 artifact_suffix = artifact_suffix,
                 direct_deps_by_name = direct_deps_by_name,
+                toolchain_deps_by_name = toolchain_deps_by_name,
             )
 
         return [DynamicCompileResultInfo(modules = module_tsets)]

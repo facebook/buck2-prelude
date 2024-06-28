@@ -11,6 +11,10 @@ load(
     "CxxPlatformInfo",
 )
 load(
+    "@prelude//haskell:toolchain.bzl",
+    "HaskellToolchainLibrary",
+)
+load(
     "@prelude//haskell:library_info.bzl",
     "HaskellLibraryInfo",
     "HaskellLibraryProvider",
@@ -69,6 +73,15 @@ def attr_deps_haskell_link_infos(ctx: AnalysisContext) -> list[HaskellLinkInfo]:
         None,
         [
             d.get(HaskellLinkInfo)
+            for d in attr_deps(ctx) + ctx.attrs.template_deps
+        ],
+    )
+
+def attr_deps_haskell_toolchain_libraries(ctx: AnalysisContext) -> list[HaskellToolchainLibrary]:
+    return filter(
+        None,
+        [
+            d.get(HaskellToolchainLibrary)
             for d in attr_deps(ctx) + ctx.attrs.template_deps
         ],
     )

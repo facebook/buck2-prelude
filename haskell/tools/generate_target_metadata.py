@@ -12,7 +12,6 @@ The result is a JSON object with the following fields:
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
 * `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
-* `toolchain_deps`": Toolchain library dependencies, `dict[modname, list[pkgid]]`.
 """
 
 import argparse
@@ -32,11 +31,6 @@ def main():
         required=True,
         type=argparse.FileType("w"),
         help="Write package metadata to this file in JSON format.")
-    parser.add_argument(
-        "--toolchain-libs",
-        required=True,
-        type=str,
-        help="Path to the toolchain libraries catalog file.")
     parser.add_argument(
         "--ghc",
         required=True,
@@ -87,21 +81,18 @@ def json_default_handler(o):
 
 
 def obtain_target_metadata(args):
-    toolchain_packages = load_toolchain_packages(args.toolchain_libs)
-    ghc_args = fix_ghc_args(args.ghc_arg, toolchain_packages)
     paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
-    ghc_depends = run_ghc_depends(args.ghc, ghc_args, args.source, paths)
+    ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source, paths)
     th_modules = determine_th_modules(ghc_depends)
     module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
     # TODO(ah) handle .hi-boot dependencies
     module_graph = determine_module_graph(ghc_depends)
-    package_deps, toolchain_deps = determine_package_deps(ghc_depends, toolchain_packages)
+    package_deps = determine_package_deps(ghc_depends)
     return {
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
         "package_deps": package_deps,
-        "toolchain_deps": toolchain_deps,
     }
 
 
@@ -150,61 +141,15 @@ def determine_module_graph(ghc_depends):
     }
 
 
-def determine_package_deps(ghc_depends, toolchain_packages):
-    toolchain_by_name = toolchain_packages["by-package-name"]
+def determine_package_deps(ghc_depends):
     package_deps = {}
-    toolchain_deps = {}
 
     for modname, description in ghc_depends.items():
         for pkgdep in description.get("packages", {}):
             pkgname = pkgdep.get("name")
-            pkgid = pkgdep.get("id")
+            package_deps.setdefault(modname, {})[pkgname] = pkgdep.get("modules", [])
 
-            if pkgname in toolchain_by_name:
-                if pkgid == toolchain_by_name[pkgname]:
-                    toolchain_deps.setdefault(modname, []).append(pkgid)
-                elif pkgid == pkgname:
-                    # TODO(ah) why is base's package-id cropped to `base`?
-                    toolchain_deps.setdefault(modname, []).append(toolchain_by_name.get(pkgid, pkgid))
-                # TODO(ah) is this an error?
-            else:
-                package_deps.setdefault(modname, {})[pkgname] = pkgdep.get("modules", [])
-
-    return package_deps, toolchain_deps
-
-
-def fix_ghc_args(ghc_args, toolchain_packages):
-    """Replaces -package flags by -package-id where applicable.
-
-    Packages that have hidden internal packages cause failures of the form:
-
-        Could not load module ‘Data.Attoparsec.Text’.
-        It is a member of the hidden package ‘attoparsec-0.14.4’.
-
-    This can be avoided by specifying the corresponding packages by package-id
-    rather than package name.
-
-    The toolchain libraries catalog tracks a mapping from package name to
-    package id. We apply it here to any toolchain library dependencies.
-    """
-    result = []
-    mapping = toolchain_packages["by-package-name"]
-
-    args_iter = iter(ghc_args)
-    for arg in args_iter:
-        if arg == "-package":
-            package_name = next(args_iter)
-            if package_name is None:
-                raise RuntimeError("Missing package name argument for -package flag")
-
-            if (package_id := mapping.get(package_name, None)) is not None:
-                result.extend(["-package-id", package_id])
-            else:
-                result.extend(["-package", package_name])
-        else:
-            result.append(arg)
-
-    return result
+    return package_deps
 
 
 def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
