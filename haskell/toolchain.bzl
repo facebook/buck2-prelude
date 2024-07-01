@@ -50,7 +50,6 @@ HaskellToolchainLibrary = provider(
 )
 
 HaskellPackagesInfo = record(
-    package_db = Artifact,
     dynamic = DynamicValue,
 )
 
