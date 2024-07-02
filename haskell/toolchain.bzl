@@ -5,6 +5,8 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
+load("@prelude//utils:arglike.bzl", "ArgLike")
+
 HaskellPlatformInfo = provider(fields = {
     "name": provider_field(typing.Any, default = None),
 })
@@ -48,12 +50,11 @@ HaskellToolchainLibrary = provider(
 )
 
 HaskellPackagesInfo = record(
-    package_db = Artifact,
     dynamic = DynamicValue,
 )
 
 HaskellPackage = record(
-    db = Artifact,
+    db = ArgLike,
     path = Artifact,
 )
 

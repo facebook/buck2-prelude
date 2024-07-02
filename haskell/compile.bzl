@@ -328,7 +328,6 @@ def get_packages_info(
         direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
         bin_paths = cmd_args(direct_package_paths, format="--bin-path={}/bin")
     else:
-        packagedb_args.add(haskell_toolchain.packages.package_db)
         bin_paths = cmd_args()
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
