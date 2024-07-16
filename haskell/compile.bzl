@@ -48,7 +48,6 @@ CompiledModuleInfo = provider(fields = {
     "objects": provider_field(list[Artifact]),
     # TODO[AH] track this module's package-name/id & package-db instead.
     "db_deps": provider_field(list[Artifact]),
-    "package_deps": provider_field(list[str]),
     "toolchain_deps": provider_field(list[str]),
 })
 
@@ -60,14 +59,6 @@ def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
 
 def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.objects)
-
-def _compiled_module_reduce_as_package_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
-    # TODO[AH] is there a better way to avoid duplicate -package flags?
-    #   Using a projection instead would produce duplicates.
-    result = {pkg: None for pkg in mod.package_deps} if mod else {}
-    for child in children:
-        result.update(child)
-    return result
 
 def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None]], mod: CompiledModuleInfo | None) -> dict[Artifact, None]:
     # TODO[AH] is there a better way to avoid duplicate package-dbs?
@@ -92,7 +83,6 @@ CompiledModuleTSet = transitive_set(
         "objects": _compiled_module_project_as_objects,
     },
     reductions = {
-        "package_deps": _compiled_module_reduce_as_package_deps,
         "packagedb_deps": _compiled_module_reduce_as_packagedb_deps,
         "toolchain_deps": _compiled_module_reduce_as_toolchain_deps,
     },
@@ -593,7 +583,6 @@ def _compile_module(
     # TODO remove redundant data and dead code
     #if enable_th:
     #    compile_cmd.hidden(dependency_modules.project_as_args("objects"))
-    #    compile_cmd.add(cmd_args(dependency_modules.reduce("package_deps").keys(), prepend = "-package"))
     #    compile_cmd.add(cmd_args(dependency_modules.reduce("toolchain_deps").keys(), prepend = "-package"))
 
     compile_cmd.add(cmd_args(dependency_modules.reduce("packagedb_deps").keys(), prepend = "--buck2-package-db"))
@@ -620,7 +609,6 @@ def _compile_module(
             abi = module.hash,
             interfaces = module.interfaces,
             objects = module.objects,
-            package_deps = library_deps,
             toolchain_deps = toolchain_deps,
             db_deps = exposed_package_dbs,
         ),
