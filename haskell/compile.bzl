@@ -592,11 +592,12 @@ def _compile_module(
 
     compile_cmd.hidden(
         abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")))
-    if enable_th:
-        compile_cmd.hidden(dependency_modules.project_as_args("objects"))
-        compile_cmd.add(dependency_modules.project_as_args("dyn_objects_dot_o"))
-        compile_cmd.add(cmd_args(dependency_modules.reduce("package_deps").keys(), prepend = "-package"))
-        compile_cmd.add(cmd_args(dependency_modules.reduce("toolchain_deps").keys(), prepend = "-package"))
+    # TODO remove redundant data and dead code
+    #if enable_th:
+    #    compile_cmd.hidden(dependency_modules.project_as_args("objects"))
+    #    compile_cmd.add(dependency_modules.project_as_args("dyn_objects_dot_o"))
+    #    compile_cmd.add(cmd_args(dependency_modules.reduce("package_deps").keys(), prepend = "-package"))
+    #    compile_cmd.add(cmd_args(dependency_modules.reduce("toolchain_deps").keys(), prepend = "-package"))
 
     compile_cmd.add(cmd_args(dependency_modules.reduce("packagedb_deps").keys(), prepend = "--buck2-package-db"))
 
