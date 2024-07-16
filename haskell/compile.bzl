@@ -48,7 +48,6 @@ CompiledModuleInfo = provider(fields = {
     "objects": provider_field(list[Artifact]),
     # TODO[AH] track this module's package-name/id & package-db instead.
     "db_deps": provider_field(list[Artifact]),
-    "toolchain_deps": provider_field(list[str]),
 })
 
 def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
@@ -68,14 +67,6 @@ def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None
         result.update(child)
     return result
 
-def _compiled_module_reduce_as_toolchain_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
-    # TODO[AH] is there a better way to avoid duplicate -package-id flags?
-    #   Using a projection instead would produce duplicates.
-    result = {pkg: None for pkg in mod.toolchain_deps} if mod else {}
-    for child in children:
-        result.update(child)
-    return result
-
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
@@ -84,7 +75,6 @@ CompiledModuleTSet = transitive_set(
     },
     reductions = {
         "packagedb_deps": _compiled_module_reduce_as_packagedb_deps,
-        "toolchain_deps": _compiled_module_reduce_as_toolchain_deps,
     },
 )
 
@@ -583,7 +573,6 @@ def _compile_module(
     # TODO remove redundant data and dead code
     #if enable_th:
     #    compile_cmd.hidden(dependency_modules.project_as_args("objects"))
-    #    compile_cmd.add(cmd_args(dependency_modules.reduce("toolchain_deps").keys(), prepend = "-package"))
 
     compile_cmd.add(cmd_args(dependency_modules.reduce("packagedb_deps").keys(), prepend = "--buck2-package-db"))
 
@@ -609,7 +598,6 @@ def _compile_module(
             abi = module.hash,
             interfaces = module.interfaces,
             objects = module.objects,
-            toolchain_deps = toolchain_deps,
             db_deps = exposed_package_dbs,
         ),
         children = [cross_package_modules] + this_package_modules,
