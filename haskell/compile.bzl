@@ -592,6 +592,9 @@ def _compile_module(
 
     compile_cmd.hidden(
         abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")))
+    compile_cmd.add("-fbyte-code-and-object-code")
+    if enable_th:
+        compile_cmd.add("-fprefer-byte-code")
     # TODO remove redundant data and dead code
     #if enable_th:
     #    compile_cmd.hidden(dependency_modules.project_as_args("objects"))
