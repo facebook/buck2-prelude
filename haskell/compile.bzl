@@ -45,7 +45,6 @@ load("@prelude//utils:strings.bzl", "strip_prefix")
 CompiledModuleInfo = provider(fields = {
     "abi": provider_field(Artifact),
     "interfaces": provider_field(list[Artifact]),
-    "objects": provider_field(list[Artifact]),
     # TODO[AH] track this module's package-name/id & package-db instead.
     "db_deps": provider_field(list[Artifact]),
 })
@@ -55,9 +54,6 @@ def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
 
 def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.interfaces)
-
-def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
-    return cmd_args(mod.objects)
 
 def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None]], mod: CompiledModuleInfo | None) -> dict[Artifact, None]:
     # TODO[AH] is there a better way to avoid duplicate package-dbs?
@@ -71,7 +67,6 @@ CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
         "interfaces": _compiled_module_project_as_interfaces,
-        "objects": _compiled_module_project_as_objects,
     },
     reductions = {
         "packagedb_deps": _compiled_module_reduce_as_packagedb_deps,
@@ -570,9 +565,6 @@ def _compile_module(
     compile_cmd.add("-fbyte-code-and-object-code")
     if enable_th:
         compile_cmd.add("-fprefer-byte-code")
-    # TODO remove redundant data and dead code
-    #if enable_th:
-    #    compile_cmd.hidden(dependency_modules.project_as_args("objects"))
 
     compile_cmd.add(cmd_args(dependency_modules.reduce("packagedb_deps").keys(), prepend = "--buck2-package-db"))
 
@@ -597,7 +589,6 @@ def _compile_module(
         value = CompiledModuleInfo(
             abi = module.hash,
             interfaces = module.interfaces,
-            objects = module.objects,
             db_deps = exposed_package_dbs,
         ),
         children = [cross_package_modules] + this_package_modules,
