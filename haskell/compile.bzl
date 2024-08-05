@@ -45,12 +45,8 @@ load("@prelude//utils:strings.bzl", "strip_prefix")
 CompiledModuleInfo = provider(fields = {
     "abi": provider_field(Artifact),
     "interfaces": provider_field(list[Artifact]),
-    "objects": provider_field(list[Artifact]),
-    "dyn_object_dot_o": provider_field(Artifact),
     # TODO[AH] track this module's package-name/id & package-db instead.
     "db_deps": provider_field(list[Artifact]),
-    "package_deps": provider_field(list[str]),
-    "toolchain_deps": provider_field(list[str]),
 })
 
 def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
@@ -58,20 +54,6 @@ def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
 
 def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.interfaces)
-
-def _compiled_module_project_as_objects(mod: CompiledModuleInfo) -> cmd_args:
-    return cmd_args(mod.objects)
-
-def _compiled_module_project_as_dyn_objects_dot_o(mod: CompiledModuleInfo) -> cmd_args:
-    return cmd_args(mod.dyn_object_dot_o)
-
-def _compiled_module_reduce_as_package_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
-    # TODO[AH] is there a better way to avoid duplicate -package flags?
-    #   Using a projection instead would produce duplicates.
-    result = {pkg: None for pkg in mod.package_deps} if mod else {}
-    for child in children:
-        result.update(child)
-    return result
 
 def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None]], mod: CompiledModuleInfo | None) -> dict[Artifact, None]:
     # TODO[AH] is there a better way to avoid duplicate package-dbs?
@@ -81,25 +63,13 @@ def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None
         result.update(child)
     return result
 
-def _compiled_module_reduce_as_toolchain_deps(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
-    # TODO[AH] is there a better way to avoid duplicate -package-id flags?
-    #   Using a projection instead would produce duplicates.
-    result = {pkg: None for pkg in mod.toolchain_deps} if mod else {}
-    for child in children:
-        result.update(child)
-    return result
-
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
         "interfaces": _compiled_module_project_as_interfaces,
-        "objects": _compiled_module_project_as_objects,
-        "dyn_objects_dot_o": _compiled_module_project_as_dyn_objects_dot_o,
     },
     reductions = {
-        "package_deps": _compiled_module_reduce_as_package_deps,
         "packagedb_deps": _compiled_module_reduce_as_packagedb_deps,
-        "toolchain_deps": _compiled_module_reduce_as_toolchain_deps,
     },
 )
 
@@ -592,11 +562,9 @@ def _compile_module(
 
     compile_cmd.hidden(
         abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")))
+    compile_cmd.add("-fbyte-code-and-object-code")
     if enable_th:
-        compile_cmd.hidden(dependency_modules.project_as_args("objects"))
-        compile_cmd.add(dependency_modules.project_as_args("dyn_objects_dot_o"))
-        compile_cmd.add(cmd_args(dependency_modules.reduce("package_deps").keys(), prepend = "-package"))
-        compile_cmd.add(cmd_args(dependency_modules.reduce("toolchain_deps").keys(), prepend = "-package"))
+        compile_cmd.add("-fprefer-byte-code")
 
     compile_cmd.add(cmd_args(dependency_modules.reduce("packagedb_deps").keys(), prepend = "--buck2-package-db"))
 
@@ -616,22 +584,11 @@ def _compile_module(
         }
     )
 
-    object = module.objects[-1]
-    if object.extension == ".o":
-        dyn_object_dot_o = object
-    else:
-        dyn_object_dot_o = ctx.actions.declare_output("dot-o", paths.replace_extension(object.short_path, ".o"))
-        ctx.actions.symlink_file(dyn_object_dot_o, object)
-
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
             abi = module.hash,
             interfaces = module.interfaces,
-            objects = module.objects,
-            dyn_object_dot_o = dyn_object_dot_o,
-            package_deps = library_deps,
-            toolchain_deps = toolchain_deps,
             db_deps = exposed_package_dbs,
         ),
         children = [cross_package_modules] + this_package_modules,
