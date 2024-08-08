@@ -458,7 +458,6 @@ def _compile_module(
     module_name: str,
     module: _Module,
     module_tsets: dict[str, CompiledModuleTSet],
-    md_file: Artifact,
     graph: dict[str, list[str]],
     package_deps: dict[str, list[str]],
     outputs: dict[Artifact, Artifact],
@@ -517,7 +516,7 @@ def _compile_module(
 
     compile_cmd.add(
         cmd_args(
-            cmd_args(md_file, format = "-i{}").parent(),
+            cmd_args(stubs.as_output(), format = "-i{}").parent(),
             "/",
             module.prefix_dir,
             delimiter=""
@@ -659,7 +658,6 @@ def compile(
                 graph = graph,
                 package_deps = package_deps.get(module_name, {}),
                 outputs = outputs,
-                md_file=md_file,
                 artifact_suffix = artifact_suffix,
                 direct_deps_by_name = direct_deps_by_name,
                 toolchain_deps_by_name = toolchain_deps_by_name,
