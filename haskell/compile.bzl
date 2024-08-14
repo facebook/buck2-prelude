@@ -101,7 +101,7 @@ _Module = record(
     interfaces = field(list[Artifact]),
     hash = field(Artifact),
     objects = field(list[Artifact]),
-    stub_dir = field(Artifact),
+    stub_dir = field(Artifact | None),
     prefix_dir = field(str),
 )
 
@@ -142,7 +142,11 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
             object = ctx.actions.declare_output("mod-" + suffix, object_path)
             objects.append(object)
 
-        stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
+        if bootsuf == "":
+            stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
+        else:
+            stub_dir = None
+
         modules[module_name] = _Module(
             source = src,
             interfaces = interfaces,
@@ -490,12 +494,14 @@ def _compile_module(
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
-    stubs = outputs[module.stub_dir]
+    if module.stub_dir != None:
+        stubs = outputs[module.stub_dir]
 
     compile_args_for_file.add("-outputdir", cmd_args([cmd_args(md_file, ignore_artifacts=True).parent(), module.prefix_dir], delimiter="/"))
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
-    compile_args_for_file.add("-stubdir", stubs.as_output())
+    if module.stub_dir != None:
+        compile_args_for_file.add("-stubdir", stubs.as_output())
 
     if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
         compile_args_for_file.add("-dynamic-too")
@@ -681,7 +687,11 @@ def compile(
 
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
     objects = [object for module in modules.values() for object in module.objects]
-    stub_dirs = [module.stub_dir for module in modules.values()]
+    stub_dirs = [
+        module.stub_dir
+        for module in modules.values()
+        if module.stub_dir != None
+    ]
     abi_hashes = [module.hash for module in modules.values()]
 
     dyn_module_tsets = ctx.actions.dynamic_output(
