@@ -223,7 +223,7 @@ def target_metadata(
 
     ctx.actions.dynamic_output(
         dynamic = [],
-        promises = [haskell_toolchain.packages.dynamic],
+        promises = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [],
         inputs = [],
         outputs = [md_file.as_output()],
         f = get_metadata,
@@ -409,8 +409,12 @@ def _common_compile_module_args(
     ]
     toolchain_libs = direct_toolchain_libs + libs.reduce("packages")
 
-    pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-    package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+    if haskell_toolchain.packages:
+        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+    else:
+        package_db = []
+
     package_db_tset = ctx.actions.tset(
         HaskellPackageDbTSet,
         children = [package_db[name] for name in toolchain_libs if name in package_db]
@@ -729,7 +733,7 @@ def compile(
                 if enable_profiling else
                 lib.info[link_style]
             ]
-        ] + [ haskell_toolchain.packages.dynamic ],
+        ] + ([ haskell_toolchain.packages.dynamic ] if haskell_toolchain.packages else [ ]),
         inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
         f = do_compile)

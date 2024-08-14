@@ -1246,8 +1246,11 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     def do_link(ctx, artifacts, resolved, outputs, output=output, objects=objects):
         link_cmd = link.copy() # link is already frozen, make a copy
 
-        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+        if haskell_toolchain.packages:
+            pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+            package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+        else:
+            package_db = []
 
         # Add -package-db and -package/-expose-package flags for each Haskell
         # library dependency.
@@ -1280,7 +1283,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
     ctx.actions.dynamic_output(
         dynamic = [],
-        promises = [haskell_toolchain.packages.dynamic],
+        promises = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [ ],
         inputs = objects.values(),
         outputs = [output.as_output()],
         f = do_link,
