@@ -492,7 +492,7 @@ def _compile_module(
     his = [outputs[hi] for hi in module.interfaces]
     stubs = outputs[module.stub_dir]
 
-    compile_args_for_file.add("-outputdir", cmd_args([cmd_args(stubs.as_output()).parent(), module.prefix_dir], delimiter="/"))
+    compile_args_for_file.add("-outputdir", cmd_args([cmd_args(md_file, ignore_artifacts=True).parent(), module.prefix_dir], delimiter="/"))
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
     compile_args_for_file.add("-stubdir", stubs.as_output())
