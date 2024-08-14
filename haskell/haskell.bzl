@@ -423,8 +423,16 @@ def _make_package(
         use_empty_lib: bool) -> Artifact:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
+    def strip_prefix_dir(path, prefix):
+        if not prefix:
+            return path
+        prefix = prefix if prefix.endswith("/") else prefix + "/"
+        if path.startswith(prefix):
+            return path[len(prefix):]
+        return path
+
     # Don't expose boot sources, as they're only meant to be used for compiling.
-    modules = [src_to_module_name(x) for x, _ in srcs_to_pairs(ctx.attrs.srcs) if is_haskell_src(x)]
+    modules = [src_to_module_name(strip_prefix_dir(x, ctx.attrs.src_strip_prefix)) for x, _ in srcs_to_pairs(ctx.attrs.srcs) if is_haskell_src(x)]
 
     def mk_artifact_dir(dir_prefix: str, profiled: bool) -> str:
         art_suff = get_artifact_suffix(link_style, profiled)
