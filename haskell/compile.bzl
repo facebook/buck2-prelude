@@ -380,7 +380,7 @@ def _common_compile_module_args(
     non_haskell_sources = [
         src
         for (path, src) in srcs_to_pairs(ctx.attrs.srcs)
-        if not is_haskell_src(path)
+        if not is_haskell_src(path) and not is_haskell_boot(path)
     ]
 
     if non_haskell_sources:
