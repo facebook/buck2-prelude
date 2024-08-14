@@ -29,6 +29,7 @@ load(
     "attr_deps_haskell_link_infos",
     "attr_deps_haskell_toolchain_libraries",
     "get_artifact_suffix",
+    "is_haskell_boot",
     "is_haskell_src",
     "output_extensions",
     "src_to_module_name",
@@ -117,24 +118,27 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
     osuf, hisuf = output_extensions(link_style, enable_profiling)
 
     for src in sources:
-        if not is_haskell_src(src.short_path):
+        bootsuf = ""
+        if is_haskell_boot(src.short_path):
+            bootsuf = "-boot"
+        elif not is_haskell_src(src.short_path):
             continue
 
-        module_name = src_to_module_name(src.short_path)
-        interface_path = paths.replace_extension(src.short_path, "." + hisuf)
+        module_name = src_to_module_name(src.short_path) + bootsuf
+        interface_path = paths.replace_extension(src.short_path, "." + hisuf + bootsuf)
         interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
         interfaces = [interface]
-        object_path = paths.replace_extension(src.short_path, "." + osuf)
+        object_path = paths.replace_extension(src.short_path, "." + osuf + bootsuf)
         object = ctx.actions.declare_output("mod-" + suffix, object_path)
         objects = [object]
         hash = ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash")
 
         if link_style in [LinkStyle("static"), LinkStyle("static_pic")]:
             dyn_osuf, dyn_hisuf = output_extensions(LinkStyle("shared"), enable_profiling)
-            interface_path = paths.replace_extension(src.short_path, "." + dyn_hisuf)
+            interface_path = paths.replace_extension(src.short_path, "." + dyn_hisuf + bootsuf)
             interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
             interfaces.append(interface)
-            object_path = paths.replace_extension(src.short_path, "." + dyn_osuf)
+            object_path = paths.replace_extension(src.short_path, "." + dyn_osuf + bootsuf)
             object = ctx.actions.declare_output("mod-" + suffix, object_path)
             objects.append(object)
 

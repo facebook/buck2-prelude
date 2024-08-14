@@ -124,6 +124,7 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileRes
             html = ctx.actions.declare_output("haddock-html/{}.html".format(src_to_module_name(hi.short_path).replace(".", "-"))),
         )
         for hi in compiled.hi
+        if not hi.extension.endswith("-boot")
     }
 
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
