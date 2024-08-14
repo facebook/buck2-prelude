@@ -650,8 +650,12 @@ def compile(
         th_modules = md["th_modules"]
         module_map = md["module_mapping"]
         graph = md["module_graph"]
-        boot_deps = md["boot_deps"]
         package_deps = md["package_deps"]
+
+        boot_rev_deps = {}
+        for module_name, boot_deps in md["boot_deps"].items():
+            for boot_dep in boot_deps:
+                boot_rev_deps.setdefault(boot_dep, []).append(module_name)
 
         # TODO GHC --dep-json should integrate boot modules directly into the dependency graph.
         for module_name, module in modules.items():
