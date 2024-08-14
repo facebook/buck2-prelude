@@ -147,13 +147,20 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
         else:
             stub_dir = None
 
+        prefix_dir = "mod-" + suffix
+
+        src_strip_prefix = getattr(ctx.attrs, "src_strip_prefix", None)
+
+        if src_strip_prefix:
+            prefix_dir += "/" + src_strip_prefix
+
         modules[module_name] = _Module(
             source = src,
             interfaces = interfaces,
             hash = hash,
             objects = objects,
             stub_dir = stub_dir,
-            prefix_dir = "mod-" + suffix)
+            prefix_dir = prefix_dir)
 
     return modules
 
