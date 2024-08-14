@@ -524,15 +524,6 @@ def _compile_module(
     else:
         compile_cmd.add(compile_args_for_file)
 
-    compile_cmd.add(
-        cmd_args(
-            cmd_args(stubs.as_output(), format = "-i{}").parent(),
-            "/",
-            module.prefix_dir,
-            delimiter=""
-        )
-    )
-
     toolchain_deps = []
     library_deps = []
     exposed_package_modules = []
