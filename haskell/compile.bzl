@@ -644,7 +644,13 @@ def compile(
         th_modules = md["th_modules"]
         module_map = md["module_mapping"]
         graph = md["module_graph"]
+        boot_deps = md["boot_deps"]
         package_deps = md["package_deps"]
+
+        for module_name, boot_deps in md["boot_deps"].items():
+            for boot_dep in boot_deps:
+                graph.setdefault(module_name, []).append(boot_dep + "-boot")
+                graph.setdefault(boot_dep + "-boot", [])
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
         module_tsets = {}
