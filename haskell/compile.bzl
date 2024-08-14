@@ -505,9 +505,17 @@ def _compile_module(
     if module.stub_dir != None:
         stubs = outputs[module.stub_dir]
 
-    compile_args_for_file.add("-outputdir", cmd_args([cmd_args(md_file, ignore_artifacts=True).parent(), module.prefix_dir], delimiter="/"))
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
+
+    # Set the output directories. We do not use the -outputdir flag, but set the directories individually.
+    # Note, the -outputdir option is shorthand for the combination of -odir, -hidir, -hiedir, -stubdir and -dumpdir.
+    # But setting -hidir effectively disables the use of the search path to look up interface files,
+    # as ghc exclusively looks in that directory when it is set.
+    for dir in ["o", "hie", "dump"]:
+        compile_args_for_file.add(
+           "-{}dir".format(dir), cmd_args([cmd_args(stubs.as_output(), parent=1), module.prefix_dir], delimiter="/"),
+        )
     if module.stub_dir != None:
         compile_args_for_file.add("-stubdir", stubs.as_output())
 
