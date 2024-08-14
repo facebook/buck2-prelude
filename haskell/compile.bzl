@@ -527,7 +527,7 @@ def _compile_module(
 
     compile_cmd.add(
         cmd_args(
-            cmd_args(md_file, format = "-i{}").parent(),
+            cmd_args(md_file, format = "-i{}", ignore_artifacts=True).parent(),
             "/",
             module.prefix_dir,
             delimiter=""
