@@ -651,6 +651,8 @@ def compile(
             for boot_dep in boot_deps:
                 graph.setdefault(module_name, []).append(boot_dep + "-boot")
                 graph.setdefault(boot_dep + "-boot", [])
+                if boot_dep + "-boot" not in package_deps:
+                    package_deps[boot_dep + "-boot"] = package_deps[boot_dep]
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
         module_tsets = {}
