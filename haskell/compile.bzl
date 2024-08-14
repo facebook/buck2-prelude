@@ -358,6 +358,9 @@ def _common_compile_module_args(
 
     command.add("-c")
 
+    if getattr(ctx.attrs, "main", None) != None:
+        command.add(["-main-is", ctx.attrs.main])
+
     if enable_haddock:
         command.add("-haddock")
 
