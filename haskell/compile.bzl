@@ -29,6 +29,7 @@ load(
     "attr_deps_haskell_link_infos",
     "attr_deps_haskell_toolchain_libraries",
     "get_artifact_suffix",
+    "is_haskell_boot",
     "is_haskell_src",
     "output_extensions",
     "src_to_module_name",
@@ -100,7 +101,7 @@ _Module = record(
     interfaces = field(list[Artifact]),
     hash = field(Artifact),
     objects = field(list[Artifact]),
-    stub_dir = field(Artifact),
+    stub_dir = field(Artifact | None),
     prefix_dir = field(str),
 )
 
@@ -117,28 +118,35 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
     osuf, hisuf = output_extensions(link_style, enable_profiling)
 
     for src in sources:
-        if not is_haskell_src(src.short_path):
+        bootsuf = ""
+        if is_haskell_boot(src.short_path):
+            bootsuf = "-boot"
+        elif not is_haskell_src(src.short_path):
             continue
 
-        module_name = src_to_module_name(src.short_path)
-        interface_path = paths.replace_extension(src.short_path, "." + hisuf)
+        module_name = src_to_module_name(src.short_path) + bootsuf
+        interface_path = paths.replace_extension(src.short_path, "." + hisuf + bootsuf)
         interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
         interfaces = [interface]
-        object_path = paths.replace_extension(src.short_path, "." + osuf)
+        object_path = paths.replace_extension(src.short_path, "." + osuf + bootsuf)
         object = ctx.actions.declare_output("mod-" + suffix, object_path)
         objects = [object]
         hash = ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash")
 
         if link_style in [LinkStyle("static"), LinkStyle("static_pic")]:
             dyn_osuf, dyn_hisuf = output_extensions(LinkStyle("shared"), enable_profiling)
-            interface_path = paths.replace_extension(src.short_path, "." + dyn_hisuf)
+            interface_path = paths.replace_extension(src.short_path, "." + dyn_hisuf + bootsuf)
             interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
             interfaces.append(interface)
-            object_path = paths.replace_extension(src.short_path, "." + dyn_osuf)
+            object_path = paths.replace_extension(src.short_path, "." + dyn_osuf + bootsuf)
             object = ctx.actions.declare_output("mod-" + suffix, object_path)
             objects.append(object)
 
-        stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
+        if bootsuf == "":
+            stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
+        else:
+            stub_dir = None
+
         modules[module_name] = _Module(
             source = src,
             interfaces = interfaces,
@@ -372,7 +380,7 @@ def _common_compile_module_args(
     non_haskell_sources = [
         src
         for (path, src) in srcs_to_pairs(ctx.attrs.srcs)
-        if not is_haskell_src(path)
+        if not is_haskell_src(path) and not is_haskell_boot(path)
     ]
 
     if non_haskell_sources:
@@ -458,6 +466,7 @@ def _compile_module(
     module_name: str,
     module: _Module,
     module_tsets: dict[str, CompiledModuleTSet],
+    md_file: Artifact,
     graph: dict[str, list[str]],
     package_deps: dict[str, list[str]],
     outputs: dict[Artifact, Artifact],
@@ -486,12 +495,14 @@ def _compile_module(
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
-    stubs = outputs[module.stub_dir]
+    if module.stub_dir != None:
+        stubs = outputs[module.stub_dir]
 
-    compile_args_for_file.add("-outputdir", cmd_args([cmd_args(stubs.as_output()).parent(), module.prefix_dir], delimiter="/"))
+    compile_args_for_file.add("-outputdir", cmd_args([cmd_args(md_file, ignore_artifacts=True).parent(), module.prefix_dir], delimiter="/"))
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
-    compile_args_for_file.add("-stubdir", stubs.as_output())
+    if module.stub_dir != None:
+        compile_args_for_file.add("-stubdir", stubs.as_output())
 
     if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
         compile_args_for_file.add("-dynamic-too")
@@ -516,7 +527,7 @@ def _compile_module(
 
     compile_cmd.add(
         cmd_args(
-            cmd_args(stubs.as_output(), format = "-i{}").parent(),
+            cmd_args(md_file, format = "-i{}", ignore_artifacts=True).parent(),
             "/",
             module.prefix_dir,
             delimiter=""
@@ -642,6 +653,37 @@ def compile(
         graph = md["module_graph"]
         package_deps = md["package_deps"]
 
+        boot_rev_deps = {}
+        for module_name, boot_deps in md["boot_deps"].items():
+            for boot_dep in boot_deps:
+                boot_rev_deps.setdefault(boot_dep + "-boot", []).append(module_name)
+
+        # TODO GHC --dep-json should integrate boot modules directly into the dependency graph.
+        for module_name, module in modules.items():
+            if not module_name.endswith("-boot"):
+                continue
+
+            # Add boot modules to the module graph
+            graph[module_name] = []
+            # TODO GHC --dep-json should report boot module dependencies.
+            # The following is a naive approximation of the boot module's dependencies,
+            # taking the corresponding module's dependencies
+            # minus those that depend on the boot module.
+
+            # Add module dependencies for the boot module
+            graph[module_name].extend([
+                dep
+                for dep in graph[module_name[:-5]]
+                if not dep in boot_rev_deps[module_name]
+            ])
+
+            # Add package dependencies for the boot module
+            package_deps[module_name] = package_deps.get(module_name[:-5], [])
+
+        for module_name, boot_deps in md["boot_deps"].items():
+            for boot_dep in boot_deps:
+                graph.setdefault(module_name, []).append(boot_dep + "-boot")
+
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
         module_tsets = {}
 
@@ -658,6 +700,7 @@ def compile(
                 graph = graph,
                 package_deps = package_deps.get(module_name, {}),
                 outputs = outputs,
+                md_file=md_file,
                 artifact_suffix = artifact_suffix,
                 direct_deps_by_name = direct_deps_by_name,
                 toolchain_deps_by_name = toolchain_deps_by_name,
@@ -669,7 +712,11 @@ def compile(
 
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
     objects = [object for module in modules.values() for object in module.objects]
-    stub_dirs = [module.stub_dir for module in modules.values()]
+    stub_dirs = [
+        module.stub_dir
+        for module in modules.values()
+        if module.stub_dir != None
+    ]
     abi_hashes = [module.hash for module in modules.values()]
 
     dyn_module_tsets = ctx.actions.dynamic_output(

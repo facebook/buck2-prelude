@@ -555,8 +555,13 @@ def _build_haskell_lib(
 
     if link_style == LinkStyle("shared"):
         lib = ctx.actions.declare_output(lib_short_path)
+        objects = [
+            object
+            for object in compiled.objects
+            if not object.extension.endswith("-boot")
+        ]
 
-        def do_link(ctx, artifacts, resolved, outputs, lib=lib, objects=compiled.objects):
+        def do_link(ctx, artifacts, resolved, outputs, lib=lib, objects=objects):
             pkg_deps = resolved[haskell_toolchain.packages.dynamic]
             package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
 
@@ -598,7 +603,7 @@ def _build_haskell_lib(
         ctx.actions.dynamic_output(
             dynamic = [],
             promises = [haskell_toolchain.packages.dynamic],
-            inputs = compiled.objects,
+            inputs = objects,
             outputs = [lib.as_output()],
             f = do_link,
         )

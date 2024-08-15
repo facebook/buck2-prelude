@@ -45,6 +45,11 @@ HASKELL_EXTENSIONS = [
     ".y",
 ]
 
+HASKELL_BOOT_EXTENSIONS = [
+    ".hs-boot",
+    ".lhs-boot",
+]
+
 # We take a named_set for srcs, which is sometimes a list, sometimes a dict.
 # In future we should only accept a list, but for now, cope with both.
 def srcs_to_pairs(srcs) -> list[(str, Artifact)]:
@@ -56,6 +61,10 @@ def srcs_to_pairs(srcs) -> list[(str, Artifact)]:
 def is_haskell_src(x: str) -> bool:
     _, ext = paths.split_extension(x)
     return ext in HASKELL_EXTENSIONS
+
+def is_haskell_boot(x: str) -> bool:
+    _, ext = paths.split_extension(x)
+    return ext in HASKELL_BOOT_EXTENSIONS
 
 def src_to_module_name(x: str) -> str:
     base, _ext = paths.split_extension(x)

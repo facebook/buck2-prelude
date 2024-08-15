@@ -11,6 +11,7 @@ The result is a JSON object with the following fields:
 * `th_modules`: List of modules that require Template Haskell.
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
+* `boot_deps`: Intra-package dependencies on boot-modules, `dict[modname, list[modname]]`.
 * `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
 """
 
@@ -86,12 +87,13 @@ def obtain_target_metadata(args):
     th_modules = determine_th_modules(ghc_depends)
     module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
     # TODO(ah) handle .hi-boot dependencies
-    module_graph = determine_module_graph(ghc_depends)
+    module_graph, boot_deps = determine_module_graph(ghc_depends)
     package_deps = determine_package_deps(ghc_depends)
     return {
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
+        "boot_deps": boot_deps,
         "package_deps": package_deps,
     }
 
@@ -135,10 +137,15 @@ def determine_module_mapping(ghc_depends, source_prefix):
 
 
 def determine_module_graph(ghc_depends):
-    return {
+    module_deps = {
         modname: description.get("modules", [])
         for modname, description in ghc_depends.items()
     }
+    boot_deps = {
+        modname: description.get("modules-boot", [])
+        for modname, description in ghc_depends.items()
+    }
+    return module_deps, boot_deps
 
 
 def determine_package_deps(ghc_depends):
