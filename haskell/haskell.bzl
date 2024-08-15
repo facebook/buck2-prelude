@@ -424,13 +424,17 @@ def _make_package(
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
     # Don't expose boot sources, as they're only meant to be used for compiling.
-    modules = [src_to_module_name(x) for x, _ in srcs_to_pairs(ctx.attrs.srcs) if is_haskell_src(x)]
+    modules = [src_to_module_name(x, ctx.attrs.src_strip_prefix) for x, _ in srcs_to_pairs(ctx.attrs.srcs) if is_haskell_src(x)]
 
-    def mk_artifact_dir(dir_prefix: str, profiled: bool) -> str:
+    def mk_artifact_dir(dir_prefix: str, profiled: bool, subdir: str = "") -> str:
         art_suff = get_artifact_suffix(link_style, profiled)
-        return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + "\""
+        return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + subdir + "\""
 
-    import_dirs = [mk_artifact_dir("mod", profiled) for profiled in profiling]
+    src_prefix = getattr(ctx.attrs, "src_strip_prefix", "")
+    if src_prefix:
+        src_prefix = "/" + src_prefix
+
+    import_dirs = [mk_artifact_dir("mod", profiled, src_prefix) for profiled in profiling]
 
     conf = [
         "name: " + pkgname,
@@ -1246,8 +1250,11 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     def do_link(ctx, artifacts, resolved, outputs, output=output, objects=objects):
         link_cmd = link.copy() # link is already frozen, make a copy
 
-        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+        if haskell_toolchain.packages:
+            pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+            package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+        else:
+            package_db = []
 
         # Add -package-db and -package/-expose-package flags for each Haskell
         # library dependency.
@@ -1280,7 +1287,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
     ctx.actions.dynamic_output(
         dynamic = [],
-        promises = [haskell_toolchain.packages.dynamic],
+        promises = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [ ],
         inputs = objects.values(),
         outputs = [output.as_output()],
         f = do_link,

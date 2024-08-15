@@ -86,6 +86,7 @@ CompileResultInfo = record(
     hashes = field(list[Artifact]),
     producing_indices = field(bool),
     module_tsets = field(DynamicValue),
+    src_prefix = field(str),
 )
 
 PackagesInfo = record(
@@ -147,13 +148,20 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
         else:
             stub_dir = None
 
+        prefix_dir = "mod-" + suffix
+
+        src_strip_prefix = getattr(ctx.attrs, "src_strip_prefix", None)
+
+        if src_strip_prefix:
+            prefix_dir += "/" + src_strip_prefix
+
         modules[module_name] = _Module(
             source = src,
             interfaces = interfaces,
             hash = hash,
             objects = objects,
             stub_dir = stub_dir,
-            prefix_dir = "mod-" + suffix)
+            prefix_dir = prefix_dir)
 
     return modules
 
@@ -223,7 +231,7 @@ def target_metadata(
 
     ctx.actions.dynamic_output(
         dynamic = [],
-        promises = [haskell_toolchain.packages.dynamic],
+        promises = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [],
         inputs = [],
         outputs = [md_file.as_output()],
         f = get_metadata,
@@ -358,6 +366,9 @@ def _common_compile_module_args(
 
     command.add("-c")
 
+    if getattr(ctx.attrs, "main", None) != None:
+        command.add(["-main-is", ctx.attrs.main])
+
     if enable_haddock:
         command.add("-haddock")
 
@@ -409,8 +420,12 @@ def _common_compile_module_args(
     ]
     toolchain_libs = direct_toolchain_libs + libs.reduce("packages")
 
-    pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-    package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+    if haskell_toolchain.packages:
+        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+    else:
+        package_db = []
+
     package_db_tset = ctx.actions.tset(
         HaskellPackageDbTSet,
         children = [package_db[name] for name in toolchain_libs if name in package_db]
@@ -498,9 +513,17 @@ def _compile_module(
     if module.stub_dir != None:
         stubs = outputs[module.stub_dir]
 
-    compile_args_for_file.add("-outputdir", cmd_args([cmd_args(md_file, ignore_artifacts=True).parent(), module.prefix_dir], delimiter="/"))
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
+
+    # Set the output directories. We do not use the -outputdir flag, but set the directories individually.
+    # Note, the -outputdir option is shorthand for the combination of -odir, -hidir, -hiedir, -stubdir and -dumpdir.
+    # But setting -hidir effectively disables the use of the search path to look up interface files,
+    # as ghc exclusively looks in that directory when it is set.
+    for dir in ["o", "hie", "dump"]:
+        compile_args_for_file.add(
+           "-{}dir".format(dir), cmd_args([cmd_args(stubs.as_output(), parent=1), module.prefix_dir], delimiter="/"),
+        )
     if module.stub_dir != None:
         compile_args_for_file.add("-stubdir", stubs.as_output())
 
@@ -729,7 +752,7 @@ def compile(
                 if enable_profiling else
                 lib.info[link_style]
             ]
-        ] + [ haskell_toolchain.packages.dynamic ],
+        ] + ([ haskell_toolchain.packages.dynamic ] if haskell_toolchain.packages else [ ]),
         inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
         f = do_compile)
@@ -761,4 +784,5 @@ def compile(
         stubs = stubs_dir,
         producing_indices = False,
         module_tsets = dyn_module_tsets,
+        src_prefix = getattr(ctx.attrs, "src_strip_prefix", ""),
     )
