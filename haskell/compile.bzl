@@ -48,6 +48,7 @@ CompiledModuleInfo = provider(fields = {
     "interfaces": provider_field(list[Artifact]),
     # TODO[AH] track this module's package-name/id & package-db instead.
     "db_deps": provider_field(list[Artifact]),
+    "src_prefix": provider_field(str),
 })
 
 def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
@@ -64,6 +65,14 @@ def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None
         result.update(child)
     return result
 
+def _compiled_module_reduce_as_source_prefixes(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
+    d = { k: None for c in children for k in c.keys() }
+
+    if mod:
+        d[mod.src_prefix] = None
+
+    return d
+
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
@@ -71,6 +80,7 @@ CompiledModuleTSet = transitive_set(
     },
     reductions = {
         "packagedb_deps": _compiled_module_reduce_as_packagedb_deps,
+        "source_prefixes": _compiled_module_reduce_as_source_prefixes,
     },
 )
 
@@ -554,6 +564,7 @@ def _compile_module(
     else:
         compile_cmd.add(compile_args_for_file)
 
+    # add each module dir prefix to search path
     compile_cmd.add(
         cmd_args(
             cmd_args(md_file, format = "-i{}", ignore_artifacts=True).parent(),
@@ -623,12 +634,26 @@ def _compile_module(
         }
     )
 
+    source_path = paths.replace_extension(module.source.short_path, "")
+    module_name_for_file = src_to_module_name(source_path)
+
+    # assert that source_path (without extension) and its module name have the same length
+    if len(source_path) != len(module_name_for_file):
+        fail("{} should have the same length as {}".format(source_path, module_name_for_file))
+
+    if module_name != module_name_for_file and module_name_for_file.endswith("." + module_name):
+        # N.B. the prefix could have some '.' characters in it, use the source_path to determine the prefix
+        src_prefix = source_path[0:-len(module_name) - 1]
+    else:
+        src_prefix = ""
+
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
             abi = module.hash,
             interfaces = module.interfaces,
             db_deps = exposed_package_dbs,
+            src_prefix = src_prefix,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
