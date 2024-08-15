@@ -86,6 +86,7 @@ CompileResultInfo = record(
     hashes = field(list[Artifact]),
     producing_indices = field(bool),
     module_tsets = field(DynamicValue),
+    src_prefix = field(str),
 )
 
 PackagesInfo = record(
@@ -783,4 +784,5 @@ def compile(
         stubs = stubs_dir,
         producing_indices = False,
         module_tsets = dyn_module_tsets,
+        src_prefix = getattr(ctx.attrs, "src_strip_prefix", ""),
     )
