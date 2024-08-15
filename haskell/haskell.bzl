@@ -434,15 +434,15 @@ def _make_package(
     # Don't expose boot sources, as they're only meant to be used for compiling.
     modules = [src_to_module_name(strip_prefix_dir(x, ctx.attrs.src_strip_prefix)) for x, _ in srcs_to_pairs(ctx.attrs.srcs) if is_haskell_src(x)]
 
+    def mk_artifact_dir(dir_prefix: str, profiled: bool, subdir: str = "") -> str:
+        art_suff = get_artifact_suffix(link_style, profiled)
+        return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + subdir + "\""
+
     src_prefix = getattr(ctx.attrs, "src_strip_prefix", "")
     if src_prefix:
         src_prefix = "/" + src_prefix
 
-    def mk_artifact_dir(dir_prefix: str, profiled: bool) -> str:
-        art_suff = get_artifact_suffix(link_style, profiled)
-        return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + src_prefix + "\""
-
-    import_dirs = [mk_artifact_dir("mod", profiled) for profiled in profiling]
+    import_dirs = [mk_artifact_dir("mod", profiled, src_prefix) for profiled in profiling]
 
     conf = [
         "name: " + pkgname,
