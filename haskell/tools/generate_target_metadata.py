@@ -7,11 +7,12 @@
 * The cross-package module dependencies.
 * Which modules require Template Haskell.
 
+Note, boot files will be represented by the module name with a `-boot` suffix.
+
 The result is a JSON object with the following fields:
 * `th_modules`: List of modules that require Template Haskell.
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
-* `boot_deps`: Intra-package dependencies on boot-modules, `dict[modname, list[modname]]`.
 * `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
 """
 
@@ -86,14 +87,12 @@ def obtain_target_metadata(args):
     ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source, paths)
     th_modules = determine_th_modules(ghc_depends)
     module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
-    # TODO(ah) handle .hi-boot dependencies
-    module_graph, boot_deps = determine_module_graph(ghc_depends)
+    module_graph = determine_module_graph(ghc_depends)
     package_deps = determine_package_deps(ghc_depends)
     return {
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
-        "boot_deps": boot_deps,
         "package_deps": package_deps,
     }
 
@@ -132,6 +131,19 @@ def determine_module_mapping(ghc_depends, source_prefix):
 
         if apparent_name != modname:
             result[apparent_name] = modname
+
+        boot_properties = properties["boot"]
+        if boot_properties != None:
+            boot_modname = modname + "-boot"
+            boot_sources = list(filter(is_haskell_boot, boot_properties.get("sources", [])))
+
+            if len(boot_sources) != 1:
+                raise RuntimeError(f"Expected at most one Haskell boot file for module '{modname}' but got '{boot_sources}'.")
+
+            boot_apparent_name = src_to_module_name(strip_prefix_(source_prefix, sources[0]).lstrip("/")) + "-boot"
+
+            if boot_apparent_name != boot_modname:
+                result[boot_apparent_name] = boot_modname
 
     return result
 
@@ -193,6 +205,11 @@ def is_haskell_src(x):
     return ext in HASKELL_EXTENSIONS
 
 
+def is_haskell_boot(x):
+    _, ext = os.path.splitext(x)
+    return ext in HASKELL_BOOT_EXTENSIONS
+
+
 HASKELL_EXTENSIONS = [
     ".hs",
     ".lhs",
@@ -200,6 +217,12 @@ HASKELL_EXTENSIONS = [
     ".chs",
     ".x",
     ".y",
+]
+
+
+HASKELL_BOOT_EXTENSIONS = [
+    ".hs-boot",
+    ".lhs-boot",
 ]
 
 
