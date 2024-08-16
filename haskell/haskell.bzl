@@ -420,7 +420,8 @@ def _make_package(
         hlis: list[HaskellLibraryInfo],
         profiling: list[bool],
         enable_profiling: bool,
-        use_empty_lib: bool) -> Artifact:
+        use_empty_lib: bool,
+        md_file: Artifact) -> Artifact:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
     # Don't expose boot sources, as they're only meant to be used for compiling.
@@ -430,65 +431,77 @@ def _make_package(
         art_suff = get_artifact_suffix(link_style, profiled)
         return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + subdir + "\""
 
-    src_prefix = getattr(ctx.attrs, "src_strip_prefix", "")
-    if src_prefix:
-        src_prefix = "/" + src_prefix
-
-    import_dirs = [mk_artifact_dir("mod", profiled, src_prefix) for profiled in profiling]
-
-    conf = [
-        "name: " + pkgname,
-        "version: 1.0.0",
-        "id: " + pkgname,
-        "key: " + pkgname,
-        "exposed: False",
-        "exposed-modules: " + ", ".join(modules),
-        "import-dirs:" + ", ".join(import_dirs),
-        "depends: " + ", ".join([lib.id for lib in hlis]),
-    ]
-
     if use_empty_lib:
-        pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + "_empty.conf", conf)
+        pkg_conf = ctx.actions.declare_output("pkg-" + artifact_suffix + "_empty.conf")
         db = ctx.actions.declare_output("db-" + artifact_suffix + "_empty", dir = True)
     else:
-        if not libname:
-            fail("argument `libname` cannot be empty, when use_empty_lib == False")
-
-        if enable_profiling:
-            # Add the `-p` suffix otherwise ghc will look for objects
-            # following this logic (https://fburl.com/code/3gmobm5x) and will fail.
-            libname += "_p"
-
-        library_dirs = [mk_artifact_dir("lib", profiled) for profiled in profiling]
-        conf.append("library-dirs:" + ", ".join(library_dirs))
-        conf.append("extra-libraries: " + libname)
-
-        pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + ".conf", conf)
+        pkg_conf = ctx.actions.declare_output("pkg-" + artifact_suffix + ".conf")
         db = ctx.actions.declare_output("db-" + artifact_suffix, dir = True)
 
-    db_deps = [x.db for x in hlis]
+    def write_package_conf(ctx, artifacts, resolved, outputs, md_file=md_file, libname=libname):
+        src_prefix = getattr(ctx.attrs, "src_strip_prefix", "")
+        if src_prefix:
+            src_prefix = "/" + src_prefix
 
-    # So that ghc-pkg can find the DBs for the dependencies. We might
-    # be able to use flags for this instead, but this works.
-    ghc_package_path = cmd_args(
-        db_deps,
-        delimiter = ":",
-    )
+        import_dirs = [mk_artifact_dir("mod", profiled, src_prefix) for profiled in profiling]
 
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    ctx.actions.run(
-        cmd_args([
-            "sh",
-            "-c",
-            _REGISTER_PACKAGE,
-            "",
-            haskell_toolchain.packager,
-            db.as_output(),
-            pkg_conf,
-        ]),
-        category = "haskell_package_" + artifact_suffix.replace("-", "_"),
-        identifier = "empty" if use_empty_lib else "final",
-        env = {"GHC_PACKAGE_PATH": ghc_package_path} if db_deps else {},
+        conf = [
+            "name: " + pkgname,
+            "version: 1.0.0",
+            "id: " + pkgname,
+            "key: " + pkgname,
+            "exposed: False",
+            "exposed-modules: " + ", ".join(modules),
+            "import-dirs:" + ", ".join(import_dirs),
+            "depends: " + ", ".join([lib.id for lib in hlis]),
+        ]
+
+        if not use_empty_lib:
+            if not libname:
+                fail("argument `libname` cannot be empty, when use_empty_lib == False")
+
+            if enable_profiling:
+                # Add the `-p` suffix otherwise ghc will look for objects
+                # following this logic (https://fburl.com/code/3gmobm5x) and will fail.
+                libname += "_p"
+
+            library_dirs = [mk_artifact_dir("lib", profiled) for profiled in profiling]
+            conf.append("library-dirs:" + ", ".join(library_dirs))
+            conf.append("extra-libraries: " + libname)
+
+        ctx.actions.write(outputs[pkg_conf].as_output(), conf)
+
+        db_deps = [x.db for x in hlis]
+
+        # So that ghc-pkg can find the DBs for the dependencies. We might
+        # be able to use flags for this instead, but this works.
+        ghc_package_path = cmd_args(
+            db_deps,
+            delimiter = ":",
+        )
+
+        haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+        ctx.actions.run(
+            cmd_args([
+                "sh",
+                "-c",
+                _REGISTER_PACKAGE,
+                "",
+                haskell_toolchain.packager,
+                outputs[db].as_output(),
+                pkg_conf,
+            ]),
+            category = "haskell_package_" + artifact_suffix.replace("-", "_"),
+            identifier = "empty" if use_empty_lib else "final",
+            env = {"GHC_PACKAGE_PATH": ghc_package_path} if db_deps else {},
+        )
+
+    ctx.actions.dynamic_output(
+        dynamic = [md_file],
+        promises = [],
+        inputs = [],
+        outputs = [pkg_conf.as_output(), db.as_output()],
+        f = write_package_conf
     )
 
     return db
@@ -676,6 +689,7 @@ def _build_haskell_lib(
         import_artifacts.keys(),
         enable_profiling = enable_profiling,
         use_empty_lib = False,
+        md_file = md_file,
     )
     empty_db = _make_package(
         ctx,
@@ -686,6 +700,7 @@ def _build_haskell_lib(
         import_artifacts.keys(),
         enable_profiling = enable_profiling,
         use_empty_lib = True,
+        md_file = md_file,
     )
 
     hlib = HaskellLibraryInfo(
