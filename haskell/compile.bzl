@@ -160,11 +160,6 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
         prefix_dir = "mod-" + suffix
 
-        src_strip_prefix = getattr(ctx.attrs, "src_strip_prefix", None)
-
-        if src_strip_prefix:
-            prefix_dir += "/" + src_strip_prefix
-
         modules[module_name] = _Module(
             source = src,
             interfaces = interfaces,
@@ -564,16 +559,6 @@ def _compile_module(
     else:
         compile_cmd.add(compile_args_for_file)
 
-    # add each module dir prefix to search path
-    compile_cmd.add(
-        cmd_args(
-            cmd_args(md_file, format = "-i{}", ignore_artifacts=True).parent(),
-            "/",
-            module.prefix_dir,
-            delimiter=""
-        )
-    )
-
     toolchain_deps = []
     library_deps = []
     exposed_package_modules = []
@@ -604,6 +589,20 @@ def _compile_module(
         CompiledModuleTSet,
         children = [cross_package_modules] + this_package_modules,
     )
+
+    # add each module dir prefix to search path
+    source_prefixes = dependency_modules.reduce("source_prefixes").keys()
+
+    for prefix in source_prefixes:
+        compile_cmd.add(
+            cmd_args(
+                cmd_args(md_file, format = "-i{}", ignore_artifacts=True).parent(),
+                "/",
+                paths.join(module.prefix_dir, prefix),
+                delimiter=""
+            )
+        )
+
 
     compile_cmd.add(cmd_args(library_deps, prepend = "-package"))
     compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package"))
