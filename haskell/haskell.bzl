@@ -93,6 +93,7 @@ load(
     "output_extensions",
     "src_to_module_name",
     "srcs_to_pairs",
+    "source_prefix",
 )
 load(
     "@prelude//linking:link_groups.bzl",
@@ -441,30 +442,20 @@ def _make_package(
         md = artifacts[md_file].read_json()
         module_map = md["module_mapping"]
 
-        def source_prefix(module_path):
-            name = src_to_module_name(module_path)
-            ghc_name = module_map.get(name)
+        modules = []
+        source_prefixes = {}
+        for path, src in srcs_to_pairs(ctx.attrs.srcs):
+            # Don't expose boot sources, as they're only meant to be used for compiling.
+            if not is_haskell_src(path):
+                continue
 
-            if ghc_name and name.endswith("." + ghc_name):
-                start = len(name) - len(ghc_name)
-            else:
-                start = 0
+            name = src_to_module_name(path)
+            prefix = source_prefix(src, module_map.get(name, name))
+            source_prefixes[prefix] = None
 
-            return module_path[0:start]
+            modules.append(src_to_module_name(path[len(prefix) + 1:]))
 
-        def path_to_module_name(module_path):
-            prefix = source_prefix(module_path)
-
-            return src_to_module_name(module_path[len(prefix):])
-
-        haskell_sources = [src for src, _ in srcs_to_pairs(ctx.attrs.srcs) if is_haskell_src(src)]
-
-        # Don't expose boot sources, as they're only meant to be used for compiling.
-        modules = [path_to_module_name(x) for x in haskell_sources]
-
-        source_prefixes = {
-            source_prefix(mod): None for mod in haskell_sources
-        }.keys()
+        source_prefixes = source_prefixes.keys()
 
         import_dirs = [mk_artifact_dir("mod", profiled, src_prefix) for profiled in profiling for src_prefix in source_prefixes]
 
