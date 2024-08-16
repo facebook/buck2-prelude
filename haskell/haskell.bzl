@@ -424,12 +424,11 @@ def _make_package(
         md_file: Artifact) -> Artifact:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
-    # Don't expose boot sources, as they're only meant to be used for compiling.
-    modules = [src_to_module_name(x, ctx.attrs.src_strip_prefix) for x, _ in srcs_to_pairs(ctx.attrs.srcs) if is_haskell_src(x)]
-
     def mk_artifact_dir(dir_prefix: str, profiled: bool, subdir: str = "") -> str:
-        art_suff = get_artifact_suffix(link_style, profiled)
-        return "\"${pkgroot}/" + dir_prefix + "-" + art_suff + subdir + "\""
+        suffix = get_artifact_suffix(link_style, profiled)
+        if subdir:
+            suffix = paths.join(suffix, subdir)
+        return "\"${pkgroot}/" + dir_prefix + "-" + suffix + "\""
 
     if use_empty_lib:
         pkg_conf = ctx.actions.declare_output("pkg-" + artifact_suffix + "_empty.conf")
@@ -439,11 +438,35 @@ def _make_package(
         db = ctx.actions.declare_output("db-" + artifact_suffix, dir = True)
 
     def write_package_conf(ctx, artifacts, resolved, outputs, md_file=md_file, libname=libname):
-        src_prefix = getattr(ctx.attrs, "src_strip_prefix", "")
-        if src_prefix:
-            src_prefix = "/" + src_prefix
+        md = artifacts[md_file].read_json()
+        module_map = md["module_mapping"]
 
-        import_dirs = [mk_artifact_dir("mod", profiled, src_prefix) for profiled in profiling]
+        def source_prefix(module_path):
+            name = src_to_module_name(module_path)
+            ghc_name = module_map.get(name)
+
+            if ghc_name and name.endswith("." + ghc_name):
+                start = len(name) - len(ghc_name)
+            else:
+                start = 0
+
+            return module_path[0:start]
+
+        def path_to_module_name(module_path):
+            prefix = source_prefix(module_path)
+
+            return src_to_module_name(module_path[len(prefix):])
+
+        haskell_sources = [src for src, _ in srcs_to_pairs(ctx.attrs.srcs) if is_haskell_src(src)]
+
+        # Don't expose boot sources, as they're only meant to be used for compiling.
+        modules = [path_to_module_name(x) for x in haskell_sources]
+
+        source_prefixes = {
+            source_prefix(mod): None for mod in haskell_sources
+        }.keys()
+
+        import_dirs = [mk_artifact_dir("mod", profiled, src_prefix) for profiled in profiling for src_prefix in source_prefixes]
 
         conf = [
             "name: " + pkgname,
