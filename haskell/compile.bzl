@@ -653,37 +653,6 @@ def compile(
         graph = md["module_graph"]
         package_deps = md["package_deps"]
 
-        boot_rev_deps = {}
-        for module_name, boot_deps in md["boot_deps"].items():
-            for boot_dep in boot_deps:
-                boot_rev_deps.setdefault(boot_dep + "-boot", []).append(module_name)
-
-        # TODO GHC --dep-json should integrate boot modules directly into the dependency graph.
-        for module_name, module in modules.items():
-            if not module_name.endswith("-boot"):
-                continue
-
-            # Add boot modules to the module graph
-            graph[module_name] = []
-            # TODO GHC --dep-json should report boot module dependencies.
-            # The following is a naive approximation of the boot module's dependencies,
-            # taking the corresponding module's dependencies
-            # minus those that depend on the boot module.
-
-            # Add module dependencies for the boot module
-            graph[module_name].extend([
-                dep
-                for dep in graph[module_name[:-5]]
-                if not dep in boot_rev_deps[module_name]
-            ])
-
-            # Add package dependencies for the boot module
-            package_deps[module_name] = package_deps.get(module_name[:-5], [])
-
-        for module_name, boot_deps in md["boot_deps"].items():
-            for boot_dep in boot_deps:
-                graph.setdefault(module_name, []).append(boot_dep + "-boot")
-
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
         module_tsets = {}
 
