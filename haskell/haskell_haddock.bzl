@@ -16,6 +16,7 @@ load(
     "attr_deps",
     "attr_deps_haskell_link_infos",
     "src_to_module_name",
+    "source_prefix",
 )
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
 
@@ -65,13 +66,13 @@ def _haddock_dump_interface(
         for dep_name in graph[module_name]
     ]
 
-    interface_path = haddock_info.interface.short_path
+    prefix = source_prefix(haddock_info.interface, module_name)
 
-    module_name_for_file = src_to_module_name(interface_path)
-
-    if module_name != module_name_for_file and module_name_for_file.endswith("." + module_name):
-        start = len(module_name_for_file) - len(module_name)
-        html_output = ctx.actions.declare_output("haddock-html/{}.html".format(src_to_module_name(interface_path[start:]).replace(".", "-")))
+    if prefix:
+        interface_path = haddock_info.interface.short_path
+        html_output = ctx.actions.declare_output(
+            "haddock-html/{}.html".format(src_to_module_name(interface_path[len(prefix) + 1:]).replace(".", "-"))
+        )
         make_copy = True
     else:
         html_output = outputs[haddock_info.html]
