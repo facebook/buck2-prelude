@@ -184,7 +184,9 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
             print(shlex.join(args), file=sys.stderr)
 
         # Always forward stdout/stderr.
-        sys.stdout.buffer.write(res.stdout)
+        # Note, Buck2 swallows stdout on successful builds.
+        # Redirect to stderr to avoid this.
+        sys.stderr.buffer.write(res.stdout)
         sys.stderr.buffer.write(res.stderr)
 
         if res.returncode != 0:

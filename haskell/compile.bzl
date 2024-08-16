@@ -522,7 +522,7 @@ def _compile_module(
     # as ghc exclusively looks in that directory when it is set.
     for dir in ["o", "hie", "dump"]:
         compile_args_for_file.add(
-           "-{}dir".format(dir), cmd_args([cmd_args(stubs.as_output(), parent=1), module.prefix_dir], delimiter="/"),
+           "-{}dir".format(dir), cmd_args([cmd_args(md_file, ignore_artifacts=True, parent=1), module.prefix_dir], delimiter="/"),
         )
     if module.stub_dir != None:
         compile_args_for_file.add("-stubdir", stubs.as_output())
