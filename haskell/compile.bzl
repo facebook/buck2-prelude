@@ -520,8 +520,6 @@ def _compile_module(
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
-    if module.stub_dir != None:
-        stubs = outputs[module.stub_dir]
 
     compile_args_for_file.add("-o", objects[0].as_output())
     compile_args_for_file.add("-ohi", his[0].as_output())
@@ -535,6 +533,7 @@ def _compile_module(
            "-{}dir".format(dir), cmd_args([cmd_args(md_file, ignore_artifacts=True, parent=1), module.prefix_dir], delimiter="/"),
         )
     if module.stub_dir != None:
+        stubs = outputs[module.stub_dir]
         compile_args_for_file.add("-stubdir", stubs.as_output())
 
     if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
