@@ -16,9 +16,11 @@ The result is a JSON object with the following fields:
 """
 
 import argparse
+import sys
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 
@@ -176,7 +178,18 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
         path = env.get("PATH", "")
         env["PATH"] = os.pathsep.join([path] + aux_paths)
 
-        subprocess.run(args, env=env, check=True)
+        res = subprocess.run(args, env=env, capture_output=True)
+        if res.returncode != 0:
+            # Write the GHC command on failure.
+            print(shlex.join(args), file=sys.stderr)
+
+        # Always forward stdout/stderr.
+        sys.stdout.buffer.write(res.stdout)
+        sys.stderr.buffer.write(res.stderr)
+
+        if res.returncode != 0:
+            # Fail if GHC failed.
+            sys.exit(res.returncode)
 
         with open(json_fname) as f:
             return json.load(f)
