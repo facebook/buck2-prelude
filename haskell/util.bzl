@@ -35,7 +35,6 @@ load(
 )
 load("@prelude//utils:platform_flavors_util.bzl", "by_platform")
 load("@prelude//utils:utils.bzl", "flatten")
-load("@prelude//utils:strings.bzl", "strip_prefix")
 
 HASKELL_EXTENSIONS = [
     ".hs",
@@ -67,13 +66,8 @@ def is_haskell_boot(x: str) -> bool:
     _, ext = paths.split_extension(x)
     return ext in HASKELL_BOOT_EXTENSIONS
 
-def src_to_module_name(x: str, src_prefix: str = "") -> str:
+def src_to_module_name(x: str) -> str:
     base, _ext = paths.split_extension(x)
-    if src_prefix:
-        prefix = src_prefix if src_prefix.endswith("/") else src_prefix + "/"
-        stripped = strip_prefix(prefix, base)
-        if stripped: base = stripped
-
     return base.replace("/", ".")
 
 def _by_platform(ctx: AnalysisContext, xs: list[(str, list[typing.Any])]) -> list[typing.Any]:
