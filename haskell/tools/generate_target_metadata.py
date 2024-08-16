@@ -163,6 +163,7 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
     with tempfile.TemporaryDirectory() as dname:
         json_fname = os.path.join(dname, "depends.json")
         make_fname = os.path.join(dname, "depends.make")
+        haskell_sources = list(filter(is_haskell_src, sources))
         args = [
             ghc, "-M", "-include-pkg-deps",
             # Note: `-outputdir '.'` removes the prefix of all targets:
@@ -170,7 +171,7 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
             "-outputdir", ".",
             "-dep-json", json_fname,
             "-dep-makefile", make_fname,
-        ] + ghc_args + sources
+        ] + ghc_args + haskell_sources
 
         env = os.environ.copy()
         path = env.get("PATH", "")
