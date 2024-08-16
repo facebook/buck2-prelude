@@ -118,10 +118,10 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileRes
         cmd.add("--source-entity", source_entity)
 
     haddock_infos = {
-        src_to_module_name(hi.short_path, compiled.src_prefix): _HaddockInfo(
+        src_to_module_name(hi.short_path): _HaddockInfo(
             interface = hi,
-            haddock = ctx.actions.declare_output("haddock-interface/{}.haddock".format(src_to_module_name(hi.short_path, compiled.src_prefix))),
-            html = ctx.actions.declare_output("haddock-html/{}.html".format(src_to_module_name(hi.short_path, compiled.src_prefix).replace(".", "-"))),
+            haddock = ctx.actions.declare_output("haddock-interface/{}.haddock".format(src_to_module_name(hi.short_path))),
+            html = ctx.actions.declare_output("haddock-html/{}.html".format(src_to_module_name(hi.short_path).replace(".", "-"))),
         )
         for hi in compiled.hi
         if not hi.extension.endswith("-boot")
