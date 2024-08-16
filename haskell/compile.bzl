@@ -42,6 +42,7 @@ load(
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
+load("@prelude//haskell:util.bzl", "source_prefix")
 
 CompiledModuleInfo = provider(fields = {
     "abi": provider_field(Artifact),
@@ -631,18 +632,7 @@ def _compile_module(
         }
     )
 
-    source_path = paths.replace_extension(module.source.short_path, "")
-    module_name_for_file = src_to_module_name(source_path)
-
-    # assert that source_path (without extension) and its module name have the same length
-    if len(source_path) != len(module_name_for_file):
-        fail("{} should have the same length as {}".format(source_path, module_name_for_file))
-
-    if module_name != module_name_for_file and module_name_for_file.endswith("." + module_name):
-        # N.B. the prefix could have some '.' characters in it, use the source_path to determine the prefix
-        src_prefix = source_path[0:-len(module_name) - 1]
-    else:
-        src_prefix = ""
+    src_prefix = source_prefix(module.source, module_name)
 
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
