@@ -7,7 +7,7 @@
 * The cross-package module dependencies.
 * Which modules require Template Haskell.
 
-Note, boot files will be represented by the module name with a `-boot` suffix.
+Note, boot files will be represented by a `-boot` suffix in the module name.
 
 The result is a JSON object with the following fields:
 * `th_modules`: List of modules that require Template Haskell.
