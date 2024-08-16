@@ -132,7 +132,7 @@ def determine_module_mapping(ghc_depends, source_prefix):
         if apparent_name != modname:
             result[apparent_name] = modname
 
-        boot_properties = properties["boot"]
+        boot_properties = properties.get("boot", None)
         if boot_properties != None:
             boot_modname = modname + "-boot"
             boot_sources = list(filter(is_haskell_boot, boot_properties.get("sources", [])))
@@ -149,15 +149,21 @@ def determine_module_mapping(ghc_depends, source_prefix):
 
 
 def determine_module_graph(ghc_depends):
-    module_deps = {
-        modname: description.get("modules", [])
-        for modname, description in ghc_depends.items()
-    }
-    boot_deps = {
-        modname: description.get("modules-boot", [])
-        for modname, description in ghc_depends.items()
-    }
-    return module_deps, boot_deps
+    module_deps = {}
+    for modname, description in ghc_depends.items():
+        module_deps[modname] = description.get("modules", []) + [
+            dep + "-boot"
+            for dep in description.get("modules-boot", [])
+        ]
+
+        boot_description = description.get("boot", None)
+        if boot_description != None:
+            module_deps[modname + "-boot"] = boot_description.get("modules", []) + [
+                dep + "-boot"
+                for dep in boot_description.get("modules-boot", [])
+            ]
+
+    return module_deps
 
 
 def determine_package_deps(ghc_depends):
