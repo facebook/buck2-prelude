@@ -65,9 +65,21 @@ def _haddock_dump_interface(
         for dep_name in graph[module_name]
     ]
 
+    interface_path = haddock_info.interface.short_path
+
+    module_name_for_file = src_to_module_name(interface_path)
+
+    if module_name != module_name_for_file and module_name_for_file.endswith("." + module_name):
+        start = len(module_name_for_file) - len(module_name)
+        html_output = ctx.actions.declare_output("haddock-html/{}.html".format(src_to_module_name(interface_path[start:]).replace(".", "-")))
+        make_copy = True
+    else:
+        html_output = outputs[haddock_info.html]
+        make_copy = False
+
     ctx.actions.run(
         cmd.copy().add(
-            "--odir", cmd_args(outputs[haddock_info.html].as_output(), parent = 1),
+            "--odir", cmd_args(html_output.as_output(), parent = 1),
             "--dump-interface", outputs[haddock_info.haddock].as_output(),
             "--html",
             "--hoogle",
@@ -85,6 +97,8 @@ def _haddock_dump_interface(
         identifier = module_name,
         no_outputs_cleanup = True,
     )
+    if make_copy:
+        ctx.actions.copy_file(outputs[haddock_info.html].as_output(), html_output)
 
     return ctx.actions.tset(
         _HaddockInfoTSet,
