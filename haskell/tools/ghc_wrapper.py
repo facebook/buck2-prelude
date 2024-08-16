@@ -12,6 +12,7 @@ import argparse
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 
 def main():
@@ -61,7 +62,9 @@ def main():
     path = env.get("PATH", "")
     env["PATH"] = os.pathsep.join([path] + aux_paths)
 
-    returncode = subprocess.call(cmd, env=env)
+    # Note, Buck2 swallows stdout on successful builds.
+    # Redirect to stderr to avoid this.
+    returncode = subprocess.call(cmd, env=env, stdout=sys.stderr.buffer)
     if returncode != 0:
         return returncode
 
