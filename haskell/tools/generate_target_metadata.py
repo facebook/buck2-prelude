@@ -174,6 +174,12 @@ def determine_package_deps(ghc_depends):
             pkgname = pkgdep.get("name")
             package_deps.setdefault(modname, {})[pkgname] = pkgdep.get("modules", [])
 
+        boot_description = description.get("boot", None)
+        if boot_description != None:
+            for pkgdep in boot_description.get("packages", {}):
+                pkgname = pkgdep.get("name")
+                package_deps.setdefault(modname + "-boot", {})[pkgname] = pkgdep.get("modules", [])
+
     return package_deps
 
 
