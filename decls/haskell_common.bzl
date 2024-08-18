@@ -62,6 +62,13 @@ def _scripts_arg():
         ),
     }
 
+def _external_tools_arg():
+    return {
+        "external_tools": attrs.list(attrs.dep(providers = [RunInfo]), default = [], doc = """
+    External executables called from Haskell compiler during preprocessing or compilation.
+"""),
+    }
+
 haskell_common = struct(
     srcs_arg = _srcs_arg,
     src_strip_prefix = _src_strip_prefix_arg,
@@ -69,4 +76,5 @@ haskell_common = struct(
     compiler_flags_arg = _compiler_flags_arg,
     exported_linker_flags_arg = _exported_linker_flags_arg,
     scripts_arg = _scripts_arg,
+    external_tools_arg = _external_tools_arg,
 )

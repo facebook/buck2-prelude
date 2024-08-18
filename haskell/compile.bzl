@@ -437,6 +437,12 @@ def _common_compile_module_args(
         format="--bin-path={}/bin",
     ))
 
+    external_tool_paths = [tool[RunInfo] for tool in ctx.attrs.external_tools]
+    args_for_file.add(cmd_args(
+        external_tool_paths,
+        format="--bin-exe={}",
+    ))
+
     packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 

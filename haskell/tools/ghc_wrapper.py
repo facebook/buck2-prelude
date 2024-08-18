@@ -53,11 +53,19 @@ def main():
         help="Add given path to PATH.",
     )
 
+    parser.add_argument(
+        "--bin-exe",
+        type=Path,
+        action="append",
+        default=[],
+        help="Add given exe (more specific than bin-path)",
+    )
+
     args, ghc_args = parser.parse_known_args()
 
     cmd = [args.ghc] + ghc_args
 
-    aux_paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
+    aux_paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()] + [str(os.path.dirname(binexepath)) for binexepath in args.bin_exe]
     env = os.environ.copy()
     path = env.get("PATH", "")
     env["PATH"] = os.pathsep.join([path] + aux_paths)
