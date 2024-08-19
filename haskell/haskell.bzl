@@ -1163,7 +1163,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
             roots = get_dedupped_roots_from_groups(link_group_info.groups.values()),
         )
 
-        labels_to_links_map = get_filtered_labels_to_links_map(
+        labels_to_links = get_filtered_labels_to_links_map(
             public_nodes = public_nodes,
             linkable_graph_node_map = linkable_graph_node_map,
             link_group = None,
@@ -1206,14 +1206,14 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
                 pre_flags = own_binary_link_flags,
             ),
         )
-        link_infos.extend(get_filtered_links(labels_to_links_map, set(public_nodes)))
+        link_infos.extend(get_filtered_links(labels_to_links.map, set(public_nodes)))
         infos = LinkArgs(infos = link_infos)
 
         link_group_ctx = LinkGroupContext(
             link_group_mappings = link_group_info.mappings,
             link_group_libs = link_group_libs,
             link_group_preferred_linkage = link_group_preferred_linkage,
-            labels_to_links_map = labels_to_links_map,
+            labels_to_links_map = labels_to_links.map,
             targets_consumed_by_link_groups = {},
         )
 
