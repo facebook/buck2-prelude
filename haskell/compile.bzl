@@ -29,6 +29,7 @@ load(
     "attr_deps_haskell_link_infos",
     "attr_deps_haskell_toolchain_libraries",
     "get_artifact_suffix",
+    "get_source_prefixes",
     "is_haskell_boot",
     "is_haskell_src",
     "output_extensions",
@@ -42,14 +43,12 @@ load(
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
-load("@prelude//haskell:util.bzl", "source_prefix")
 
 CompiledModuleInfo = provider(fields = {
     "abi": provider_field(Artifact),
     "interfaces": provider_field(list[Artifact]),
     # TODO[AH] track this module's package-name/id & package-db instead.
     "db_deps": provider_field(list[Artifact]),
-    "src_prefix": provider_field(str),
 })
 
 def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
@@ -66,14 +65,6 @@ def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None
         result.update(child)
     return result
 
-def _compiled_module_reduce_as_source_prefixes(children: list[dict[str, None]], mod: CompiledModuleInfo | None) -> dict[str, None]:
-    d = { k: None for c in children for k in c.keys() }
-
-    if mod:
-        d[mod.src_prefix] = None
-
-    return d
-
 CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
@@ -81,7 +72,6 @@ CompiledModuleTSet = transitive_set(
     },
     reductions = {
         "packagedb_deps": _compiled_module_reduce_as_packagedb_deps,
-        "source_prefixes": _compiled_module_reduce_as_source_prefixes,
     },
 )
 
@@ -499,6 +489,7 @@ def _compile_module(
     artifact_suffix: str,
     direct_deps_by_name: dict[str, typing.Any],
     toolchain_deps_by_name: dict[str, None],
+    source_prefixes: list[str],
 ) -> CompiledModuleTSet:
     compile_cmd = cmd_args(common_args.command)
     # These compiler arguments can be passed in a response file.
@@ -590,8 +581,6 @@ def _compile_module(
     )
 
     # add each module dir prefix to search path
-    source_prefixes = dependency_modules.reduce("source_prefixes").keys()
-
     for prefix in source_prefixes:
         compile_cmd.add(
             cmd_args(
@@ -632,15 +621,12 @@ def _compile_module(
         }
     )
 
-    src_prefix = source_prefix(module.source, module_name)
-
     module_tset = ctx.actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
             abi = module.hash,
             interfaces = module.interfaces,
             db_deps = exposed_package_dbs,
-            src_prefix = src_prefix,
         ),
         children = [cross_package_modules] + this_package_modules,
     )
@@ -738,6 +724,7 @@ def compile(
 
         mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
         module_tsets = {}
+        source_prefixes = get_source_prefixes(ctx.attrs.srcs, module_map)
 
         for module_name in post_order_traversal(graph):
             module_tsets[module_name] = _compile_module(
@@ -756,6 +743,7 @@ def compile(
                 artifact_suffix = artifact_suffix,
                 direct_deps_by_name = direct_deps_by_name,
                 toolchain_deps_by_name = toolchain_deps_by_name,
+                source_prefixes = source_prefixes,
             )
 
         return [DynamicCompileResultInfo(modules = module_tsets)]

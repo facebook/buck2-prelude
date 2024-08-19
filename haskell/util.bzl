@@ -172,7 +172,7 @@ def get_artifact_suffix(link_style: LinkStyle, enable_profiling: bool, suffix: s
         artifact_suffix += "-prof"
     return artifact_suffix + suffix
 
-def source_prefix(source: Artifact, module_name: str) -> str:
+def _source_prefix(source: Artifact, module_name: str) -> str:
     """Determine the directory prefix of the given artifact, considering that ghc has determined `module_name` for that file."""
     source_path = paths.replace_extension(source.short_path, "")
 
@@ -188,3 +188,17 @@ def source_prefix(source: Artifact, module_name: str) -> str:
 
     return ""
 
+
+def get_source_prefixes(srcs: list[Artifact], module_map: dict[str, str]) -> list[str]:
+    """Determine source prefixes for the given haskell files and a mapping from source file module name to module name."""
+    source_prefixes = {}
+    for path, src in srcs_to_pairs(srcs):
+        if not is_haskell_src(path):
+            continue
+
+        name = src_to_module_name(path)
+        real_name = module_map.get(name)
+        prefix = _source_prefix(src, real_name) if real_name else ""
+        source_prefixes[prefix] = None
+
+    return source_prefixes.keys()

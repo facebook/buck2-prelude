@@ -89,11 +89,9 @@ load(
     "attr_deps_profiling_link_infos",
     "attr_deps_shared_library_infos",
     "get_artifact_suffix",
-    "is_haskell_src",
     "output_extensions",
     "src_to_module_name",
-    "srcs_to_pairs",
-    "source_prefix",
+    "get_source_prefixes",
 )
 load(
     "@prelude//linking:link_groups.bzl",
@@ -442,21 +440,9 @@ def _make_package(
         md = artifacts[md_file].read_json()
         module_map = md["module_mapping"]
 
-        modules = []
-        source_prefixes = {}
-        for path, src in srcs_to_pairs(ctx.attrs.srcs):
-            # Don't expose boot sources, as they're only meant to be used for compiling.
-            if not is_haskell_src(path):
-                continue
+        source_prefixes = get_source_prefixes(ctx.attrs.srcs, module_map)
 
-            name = src_to_module_name(path)
-            prefix = source_prefix(src, module_map.get(name, name))
-            source_prefixes[prefix] = None
-
-            modules.append(src_to_module_name(path[len(prefix) + 1:]))
-
-        source_prefixes = source_prefixes.keys()
-
+        modules = md["module_graph"].keys()
         import_dirs = [mk_artifact_dir("mod", profiled, src_prefix) for profiled in profiling for src_prefix in source_prefixes]
 
         conf = [
