@@ -46,6 +46,7 @@ haskell_binary = prelude_rule(
         native_common.link_group_public_deps_label() |
         native_common.link_style() |
         haskell_common.srcs_arg() |
+        haskell_common.external_tools_arg() |
         haskell_common.compiler_flags_arg() |
         haskell_common.deps_arg() |
         haskell_common.scripts_arg() |
