@@ -7,11 +7,12 @@
 * The cross-package module dependencies.
 * Which modules require Template Haskell.
 
+Note, boot files will be represented by a `-boot` suffix in the module name.
+
 The result is a JSON object with the following fields:
 * `th_modules`: List of modules that require Template Haskell.
 * `module_mapping`: Mapping from source inferred module name to actual module name, if different.
 * `module_graph`: Intra-package module dependencies, `dict[modname, list[modname]]`.
-* `boot_deps`: Intra-package dependencies on boot-modules, `dict[modname, list[modname]]`.
 * `package_deps`": Cross-package module dependencies, `dict[modname, dict[pkgname, list[modname]]`.
 """
 
@@ -88,14 +89,12 @@ def obtain_target_metadata(args):
     ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source, paths)
     th_modules = determine_th_modules(ghc_depends)
     module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
-    # TODO(ah) handle .hi-boot dependencies
-    module_graph, boot_deps = determine_module_graph(ghc_depends)
+    module_graph = determine_module_graph(ghc_depends)
     package_deps = determine_package_deps(ghc_depends)
     return {
         "th_modules": th_modules,
         "module_mapping": module_mapping,
         "module_graph": module_graph,
-        "boot_deps": boot_deps,
         "package_deps": package_deps,
     }
 
@@ -135,19 +134,38 @@ def determine_module_mapping(ghc_depends, source_prefix):
         if apparent_name != modname:
             result[apparent_name] = modname
 
+        boot_properties = properties.get("boot", None)
+        if boot_properties != None:
+            boot_modname = modname + "-boot"
+            boot_sources = list(filter(is_haskell_boot, boot_properties.get("sources", [])))
+
+            if len(boot_sources) != 1:
+                raise RuntimeError(f"Expected at most one Haskell boot file for module '{modname}' but got '{boot_sources}'.")
+
+            boot_apparent_name = src_to_module_name(strip_prefix_(source_prefix, sources[0]).lstrip("/")) + "-boot"
+
+            if boot_apparent_name != boot_modname:
+                result[boot_apparent_name] = boot_modname
+
     return result
 
 
 def determine_module_graph(ghc_depends):
-    module_deps = {
-        modname: description.get("modules", [])
-        for modname, description in ghc_depends.items()
-    }
-    boot_deps = {
-        modname: description.get("modules-boot", [])
-        for modname, description in ghc_depends.items()
-    }
-    return module_deps, boot_deps
+    module_deps = {}
+    for modname, description in ghc_depends.items():
+        module_deps[modname] = description.get("modules", []) + [
+            dep + "-boot"
+            for dep in description.get("modules-boot", [])
+        ]
+
+        boot_description = description.get("boot", None)
+        if boot_description != None:
+            module_deps[modname + "-boot"] = boot_description.get("modules", []) + [
+                dep + "-boot"
+                for dep in boot_description.get("modules-boot", [])
+            ]
+
+    return module_deps
 
 
 def determine_package_deps(ghc_depends):
@@ -158,6 +176,12 @@ def determine_package_deps(ghc_depends):
             pkgname = pkgdep.get("name")
             package_deps.setdefault(modname, {})[pkgname] = pkgdep.get("modules", [])
 
+        boot_description = description.get("boot", None)
+        if boot_description != None:
+            for pkgdep in boot_description.get("packages", {}):
+                pkgname = pkgdep.get("name")
+                package_deps.setdefault(modname + "-boot", {})[pkgname] = pkgdep.get("modules", [])
+
     return package_deps
 
 
@@ -165,6 +189,7 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
     with tempfile.TemporaryDirectory() as dname:
         json_fname = os.path.join(dname, "depends.json")
         make_fname = os.path.join(dname, "depends.make")
+        haskell_sources = list(filter(is_haskell_src, sources))
         args = [
             ghc, "-M", "-include-pkg-deps",
             # Note: `-outputdir '.'` removes the prefix of all targets:
@@ -172,7 +197,7 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
             "-outputdir", ".",
             "-dep-json", json_fname,
             "-dep-makefile", make_fname,
-        ] + ghc_args + sources
+        ] + ghc_args + haskell_sources
 
         env = os.environ.copy()
         path = env.get("PATH", "")
@@ -207,6 +232,11 @@ def is_haskell_src(x):
     return ext in HASKELL_EXTENSIONS
 
 
+def is_haskell_boot(x):
+    _, ext = os.path.splitext(x)
+    return ext in HASKELL_BOOT_EXTENSIONS
+
+
 HASKELL_EXTENSIONS = [
     ".hs",
     ".lhs",
@@ -214,6 +244,12 @@ HASKELL_EXTENSIONS = [
     ".chs",
     ".x",
     ".y",
+]
+
+
+HASKELL_BOOT_EXTENSIONS = [
+    ".hs-boot",
+    ".lhs-boot",
 ]
 
 
