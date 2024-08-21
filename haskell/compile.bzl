@@ -195,6 +195,7 @@ def target_metadata(
             specify_pkg_version = False,
             enable_profiling = False,
             use_empty_lib = True,
+            for_deps = True,
             resolved = resolved,
         )
         package_flag = _package_flag(haskell_toolchain)
@@ -263,6 +264,7 @@ def get_packages_info(
         specify_pkg_version: bool,
         enable_profiling: bool,
         use_empty_lib: bool,
+        for_deps: bool = False,
         resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
@@ -282,9 +284,14 @@ def get_packages_info(
     for lib in libs.traverse():
         exposed_package_libs.hidden(lib.libs)
 
-    packagedb_args = cmd_args(libs.project_as_args(
-        "empty_package_db" if use_empty_lib else "package_db",
-    ))
+    if for_deps:
+        package_db_projection = "deps_package_db"
+    elif use_empty_lib:
+        package_db_projection = "empty_package_db"
+    else:
+        package_db_projection = "package_db"
+
+    packagedb_args = cmd_args(libs.project_as_args(package_db_projection))
 
     if haskell_toolchain.packages and resolved != None:
         haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
