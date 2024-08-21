@@ -29,10 +29,6 @@ CrateType = enum(
     "staticlib",
 )
 
-# Crate type is intended for consumption by Rust code
-def crate_type_rust_linkage(crate_type: CrateType) -> bool:
-    return crate_type.value in ("rlib", "dylib", "proc-macro")
-
 # Crate type is intended for native linkage (eg C++)
 def crate_type_native_linkage(crate_type: CrateType) -> bool:
     return crate_type.value in ("cdylib", "staticlib")
@@ -68,6 +64,7 @@ Emit = enum(
     "dep-info",
     "mir",
     "expand",  # pseudo emit alias for -Zunpretty=expanded
+    "clippy",
     # Rustc actually has two different forms of metadata:
     #  - The full flavor, which is what's outputted when passing
     #    `--emit link,metadata` and can be used as a part of pipelined builds
@@ -88,12 +85,19 @@ MetadataKind = enum(
 
 # Emitting this artifact generates code
 def dep_metadata_of_emit(emit: Emit) -> MetadataKind:
-    if emit.value in ("asm", "llvm-bc", "llvm-ir", "obj", "link", "mir"):
-        return MetadataKind("link")
-    elif emit.value == "metadata-fast":
-        return MetadataKind("fast")
-    else:
-        return MetadataKind("full")
+    return {
+        Emit("asm"): MetadataKind("link"),
+        Emit("llvm-bc"): MetadataKind("link"),
+        Emit("llvm-ir"): MetadataKind("link"),
+        Emit("obj"): MetadataKind("link"),
+        Emit("link"): MetadataKind("link"),
+        Emit("mir"): MetadataKind("link"),
+        Emit("metadata-fast"): MetadataKind("fast"),
+        Emit("clippy"): MetadataKind("fast"),
+        Emit("dep-info"): MetadataKind("full"),
+        Emit("expand"): MetadataKind("full"),
+        Emit("metadata-full"): MetadataKind("full"),
+    }[emit]
 
 # Represents a way of invoking rustc to produce an artifact. These values are computed from
 # information such as the rule type, linkstyle, crate type, etc.
@@ -111,6 +115,7 @@ BuildParams = record(
 RustcFlags = record(
     crate_type = field(CrateType),
     platform_to_affix = field(typing.Callable),
+    link_strategy = field(LinkStrategy | None),
 )
 
 # Filenames used for various emitted forms
@@ -126,6 +131,7 @@ _EMIT_PREFIX_SUFFIX = {
     Emit("dep-info"): ("", ".d"),
     Emit("mir"): (None, ".mir"),
     Emit("expand"): (None, ".rs"),
+    Emit("clippy"): ("lib", ".rmeta"),  # Treated like metadata-fast
 }
 
 # Return the filename for a particular emitted artifact type
@@ -171,6 +177,7 @@ LinkageLang = enum(
 )
 
 _BINARY = 0
+_RUST_PROC_MACRO_RUSTDOC_TEST = 1
 _NATIVE_LINKABLE_SHARED_OBJECT = 3
 _RUST_DYLIB_SHARED = 4
 _RUST_PROC_MACRO = 5
@@ -199,42 +206,66 @@ _BUILD_PARAMS = {
     _BINARY: RustcFlags(
         crate_type = CrateType("bin"),
         platform_to_affix = _executable_prefix_suffix,
+        # link_strategy is provided by the rust_binary attribute
+        link_strategy = None,
+    ),
+    # It's complicated: this is a rustdoc test for a procedural macro crate.
+    # We need deps built as if this were a binary, while passing crate-type
+    # proc_macro to the rustdoc invocation.
+    _RUST_PROC_MACRO_RUSTDOC_TEST: RustcFlags(
+        crate_type = CrateType("proc-macro"),
+        platform_to_affix = _executable_prefix_suffix,
+        link_strategy = LinkStrategy("static_pic"),
     ),
     _NATIVE_LINKABLE_SHARED_OBJECT: RustcFlags(
         crate_type = CrateType("cdylib"),
         platform_to_affix = _library_prefix_suffix,
+        # cdylibs statically link all rust code and export a single C-style dylib
+        # for consumption by other languages
+        link_strategy = LinkStrategy("shared"),
     ),
     _RUST_DYLIB_SHARED: RustcFlags(
         crate_type = CrateType("dylib"),
         platform_to_affix = _library_prefix_suffix,
+        link_strategy = LinkStrategy("shared"),
     ),
     _RUST_PROC_MACRO: RustcFlags(
         crate_type = CrateType("proc-macro"),
         platform_to_affix = _library_prefix_suffix,
+        # FIXME(JakobDegen): It's not really clear what we should do about
+        # proc macros. The principled thing is probably to treat them sort
+        # of like a normal library, except that they always have preferred
+        # linkage shared? Preserve existing behavior for now
+        link_strategy = LinkStrategy("static_pic"),
     ),
     # FIXME(JakobDegen): Add a comment explaining why `.a`s need reloc-strategy
     # dependent names while `.rlib`s don't.
     _RUST_STATIC_PIC_LIBRARY: RustcFlags(
         crate_type = CrateType("rlib"),
         platform_to_affix = lambda _l, _t: ("lib", ".rlib"),
+        link_strategy = LinkStrategy("static_pic"),
     ),
     _RUST_STATIC_NON_PIC_LIBRARY: RustcFlags(
         crate_type = CrateType("rlib"),
         platform_to_affix = lambda _l, _t: ("lib", ".rlib"),
+        link_strategy = LinkStrategy("static"),
     ),
     _NATIVE_LINKABLE_STATIC_PIC: RustcFlags(
         crate_type = CrateType("staticlib"),
         platform_to_affix = lambda _l, _t: ("lib", "_pic.a"),
+        link_strategy = LinkStrategy("static_pic"),
     ),
     _NATIVE_LINKABLE_STATIC_NON_PIC: RustcFlags(
         crate_type = CrateType("staticlib"),
         platform_to_affix = lambda _l, _t: ("lib", ".a"),
+        link_strategy = LinkStrategy("static"),
     ),
 }
 
 _INPUTS = {
     # Binary
     ("binary", False, None, "rust"): _BINARY,
+    ("binary", True, None, "rust"): _RUST_PROC_MACRO_RUSTDOC_TEST,
     # Native linkable shared object
     ("library", False, "shared_lib", "native"): _NATIVE_LINKABLE_SHARED_OBJECT,
     # Native unbundled linkable shared object
@@ -313,43 +344,7 @@ def build_params(
         expect(link_strategy != None)
         expect(lib_output_style == None)
     else:
-        expect(link_strategy == None)
         expect(lib_output_style != None)
-
-    # FIXME(JakobDegen): We deal with Rust needing to know the link strategy
-    # even for building archives by using a default link strategy specifically
-    # for those cases. I've gone through the code and checked all the places
-    # where the link strategy is used to determine that this won't do anything
-    # too bad, but it would be nice to enforce that more strictly or not have
-    # this at all.
-    def default_link_strategy_for_output_style(output_style: LibOutputStyle) -> LinkStrategy:
-        if output_style == LibOutputStyle("archive"):
-            return LinkStrategy("static")
-        if output_style == LibOutputStyle("pic_archive"):
-            return LinkStrategy("static_pic")
-
-        # Rust does not have the `link_style` attribute on libraries in the same
-        # way that C++ does - if it did, this is what it would affect.
-        return LinkStrategy("shared")
-
-    if not link_strategy:
-        if proc_macro:
-            # FIXME(JakobDegen): It's not really clear what we should do about
-            # proc macros. The principled thing is probably to treat them sort
-            # of like a normal library, except that they always have preferred
-            # linkage shared? Preserve existing behavior for now
-            link_strategy = LinkStrategy("static_pic")
-        else:
-            link_strategy = default_link_strategy_for_output_style(lib_output_style)
-
-    if rule == RuleType("binary") and proc_macro:
-        # It's complicated: this is a rustdoc test for a procedural macro crate.
-        # We need deps built as if this were a binary, while passing crate-type
-        # proc_macro to the rustdoc invocation.
-        crate_type = CrateType("proc-macro")
-        proc_macro = False
-    else:
-        crate_type = None
 
     input = (rule.value, proc_macro, lib_output_style.value if lib_output_style else None, lang.value)
 
@@ -363,11 +358,19 @@ def build_params(
     )
 
     flags = _BUILD_PARAMS[_INPUTS[input]]
+
+    # FIXME(JakobDegen): We deal with Rust needing to know the link strategy
+    # even for building archives by using a default link strategy specifically
+    # for those cases. I've gone through the code and checked all the places
+    # where the link strategy is used to determine that this won't do anything
+    # too bad, but it would be nice to enforce that more strictly or not have
+    # this at all.
+    link_strategy = link_strategy or flags.link_strategy
     reloc_model = _get_reloc_model(link_strategy, target_os_type)
     prefix, suffix = flags.platform_to_affix(linker_type, target_os_type)
 
     return BuildParams(
-        crate_type = crate_type or flags.crate_type,
+        crate_type = flags.crate_type,
         reloc_model = reloc_model,
         dep_link_strategy = link_strategy,
         prefix = prefix,

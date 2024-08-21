@@ -31,7 +31,6 @@ load(
     "file_mapping",
     "list_dedupe",
     "preserve_structure",
-    "to_term_args",
 )
 
 def erlang_tests_macro(
@@ -43,6 +42,7 @@ def erlang_tests_macro(
         property_tests: list[str] = [],
         srcs: list[str] = [],
         prefix: str | None = None,
+        generated_app_labels: list[str] = [],
         **common_attributes) -> None:
     """
     Generate multiple erlang_test targets based on the `suites` field.
@@ -64,7 +64,7 @@ def erlang_tests_macro(
         erlang_app_rule(
             name = srcs_app,
             srcs = srcs,
-            labels = ["generated", "test_application", "test_utils"],
+            labels = generated_app_labels,
             applications = app_deps,
         )
         deps.append(":" + srcs_app)
@@ -153,15 +153,19 @@ def erlang_test_impl(ctx: AnalysisContext) -> list[Provider]:
     # Config files for ct
     config_files = [config_file[DefaultInfo].default_outputs[0] for config_file in ctx.attrs.config_files]
 
-    test_binary = ctx.attrs._test_binary[DefaultInfo].default_outputs
+    test_binary_cmd_args = ctx.attrs._test_binary[RunInfo]
 
-    trampoline = ctx.attrs._trampoline
+    trampolines = ctx.attrs._trampolines
+    if ctx.attrs._trampoline != None:
+        if trampolines != None:
+            fail("_trampoline and _trampolines can't be both provided")
+        trampolines = [ctx.attrs._trampoline]
+
     cmd = cmd_args([])
-    if trampoline:
-        cmd.add(trampoline[RunInfo])
+    if trampolines:
+        cmd.add(*[trampoline[RunInfo] for trampoline in trampolines])
 
-    cmd.add(primary_toolchain.otp_binaries.escript)
-    cmd.add(test_binary)
+    cmd.add(test_binary_cmd_args)
 
     suite = ctx.attrs.suite
     suite_name = module_name(suite)
@@ -183,6 +187,7 @@ def erlang_test_impl(ctx: AnalysisContext) -> list[Provider]:
     output_dir = link_output(ctx, suite_name, build_environment, data_dir, property_dir)
     test_info_file = _write_test_info_file(
         ctx = ctx,
+        extra_code_paths = [primary_toolchain.utility_modules],
         test_suite = suite_name,
         dependencies = dependencies,
         test_dir = output_dir,
@@ -191,20 +196,24 @@ def erlang_test_impl(ctx: AnalysisContext) -> list[Provider]:
     )
     cmd.add(test_info_file)
 
+    hidden_args = []
+
     default_info = _build_default_info(dependencies, output_dir)
     for output_artifact in default_info.other_outputs:
-        cmd.hidden(output_artifact)
+        hidden_args.append(output_artifact)
     for config_file in config_files:
-        cmd.hidden(config_file)
+        hidden_args.append(config_file)
 
-    cmd.hidden(output_dir)
+    hidden_args.append(primary_toolchain.utility_modules)
+    hidden_args.append(output_dir)
+    cmd.add(cmd_args(hidden = hidden_args))
 
     # prepare shell dependencies
     additional_paths = [
         dep[ErlangTestInfo].output_dir
         for dep in dependencies.values()
         if ErlangTestInfo in dep
-    ] + [output_dir]
+    ] + [primary_toolchain.utility_modules, output_dir]
 
     preamble = '-eval "%s" \\' % (ctx.attrs.preamble)
     additional_args = [cmd_args(preamble, "-noshell \\")]
@@ -259,18 +268,21 @@ def _build_default_info(dependencies: ErlAppDependencies, output_dir: Artifact) 
 
 def _write_test_info_file(
         ctx: AnalysisContext,
+        extra_code_paths: list[Artifact],
         test_suite: str,
         dependencies: ErlAppDependencies,
         test_dir: Artifact,
         config_files: list[Artifact],
         erl_cmd: [cmd_args, Artifact]) -> Artifact:
+    dependency_paths = _list_code_paths(dependencies)
+    dependency_paths.extend(extra_code_paths)
     tests_info = {
         "artifact_annotation_mfa": ctx.attrs._artifact_annotation_mfa,
         "common_app_env": ctx.attrs.common_app_env,
         "config_files": config_files,
         "ct_opts": ctx.attrs._ct_opts,
-        "dependencies": _list_code_paths(dependencies),
-        "erl_cmd": cmd_args(['"', cmd_args(erl_cmd, delimiter = " "), '"'], delimiter = ""),
+        "dependencies": dependency_paths,
+        "erl_cmd": erl_cmd,
         "extra_ct_hooks": ctx.attrs.extra_ct_hooks,
         "extra_flags": ctx.attrs.extra_erl_flags,
         "providers": ctx.attrs._providers,
@@ -278,27 +290,20 @@ def _write_test_info_file(
         "test_suite": test_suite,
     }
     test_info_file = ctx.actions.declare_output("tests_info")
-    ctx.actions.write(
-        test_info_file,
-        to_term_args(tests_info),
-    )
+    ctx.actions.write_json(test_info_file, tests_info)
     return test_info_file
 
-def _list_code_paths(dependencies: ErlAppDependencies) -> list[cmd_args]:
+def _list_code_paths(dependencies: ErlAppDependencies) -> list[[Artifact, cmd_args]]:
     """lists all ebin/ dirs from the test targets dependencies"""
     folders = []
     for dependency in dependencies.values():
         if ErlangAppInfo in dependency:
             dep_info = dependency[ErlangAppInfo]
-            if dep_info.virtual:
-                continue
-            folders.append(cmd_args(
-                dep_info.app_folder,
-                format = '"{}/ebin"',
-            ))
+            if not dep_info.virtual:
+                folders.append(cmd_args(dep_info.app_folder, format = "{}/ebin", delimiter = ""))
         elif ErlangTestInfo in dependency:
             dep_info = dependency[ErlangTestInfo]
-            folders.append(cmd_args(dep_info.output_dir, format = '"{}"'))
+            folders.append(dep_info.output_dir)
     return folders
 
 def _build_resource_dir(ctx, resources: list, target_dir: str) -> Artifact:

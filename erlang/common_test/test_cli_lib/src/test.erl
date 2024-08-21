@@ -24,7 +24,8 @@
     list/0, list/1,
     rerun/1,
     run/0, run/1,
-    reset/0
+    reset/0,
+    logs/0
 ]).
 
 %% init
@@ -133,6 +134,8 @@ command_description(run, 1) ->
     };
 command_description(reset, 0) ->
     #{args => [], desc => ["restarts the test node, enabling a clean test state"]};
+command_description(logs, 0) ->
+    #{args => [], desc => ["print log files of the currently running test suites"]};
 command_description(F, A) ->
     error({help_is_missing, {F, A}}).
 
@@ -213,6 +216,18 @@ reset() ->
             })
     end.
 
+%% @doc Print all the logs of the currently running test suites
+-spec logs() -> ok.
+logs() ->
+    ensure_initialized(),
+    case logs_impl() of
+        {ok, Logs} ->
+            lists:foreach(fun(LogPath) -> io:format("~s~n", [LogPath]) end, Logs),
+            io:format("~n");
+        {error, not_found} ->
+            io:format("no logs found~n")
+    end.
+
 %% internal
 -spec list_impl(RegEx :: string()) -> {ok, string()} | {error, term()}.
 list_impl(RegEx) ->
@@ -241,13 +256,20 @@ ensure_initialized() ->
 
 -spec init_utility_apps() -> boolean().
 init_utility_apps() ->
+    _ = application:load(test_cli_lib),
+    UtilityApps = application:get_env(test_cli_lib, utility_applications, []),
     RunningApps = proplists:get_value(running, application:info()),
-    case proplists:is_defined(test_cli_lib, RunningApps) of
+    StartResults = [init_utility_app(RunningApps, UtilityApp) || UtilityApp <- UtilityApps],
+    lists:any(fun(B) when is_boolean(B) -> B end, StartResults).
+
+-spec init_utility_app(RunningApps :: [atom()], UtilityApp :: atom()) -> boolean().
+init_utility_app(RunningApps, UtilityApp) ->
+    case proplists:is_defined(UtilityApp, RunningApps) of
         true ->
             false;
         false ->
-            io:format("starting utility applications...~n", []),
-            case application:ensure_all_started(test_cli_lib) of
+            io:format("starting utility application ~s...~n", [UtilityApp]),
+            case application:ensure_all_started(UtilityApp) of
                 {ok, _} ->
                     true;
                 Error ->
@@ -416,4 +438,18 @@ start_shell() ->
         _ ->
             user_drv:start(),
             ok
+    end.
+
+-spec logs_impl() -> {ok, [file:filename_all()]} | {error, not_found}.
+logs_impl() ->
+    case ct_daemon:priv_dir() of
+        undefined ->
+            {error, not_found};
+        PrivDir ->
+            PatternLog = filename:join(PrivDir, "*.log"),
+            LogPaths = filelib:wildcard(PatternLog),
+            PatternLogJson = filename:join(PrivDir, "*.log.json"),
+            LogJsonPaths = filelib:wildcard(PatternLogJson),
+            AllLogs = lists:sort(LogPaths ++ LogJsonPaths),
+            {ok, AllLogs}
     end.

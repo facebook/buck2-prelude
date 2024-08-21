@@ -5,6 +5,10 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
+load(
+    "@prelude//:artifact_tset.bzl",
+    "ArtifactInfoTag",
+)
 load("@prelude//apple:apple_toolchain_types.bzl", "AppleToolsInfo")
 load(
     "@prelude//linking:execution_preference.bzl",
@@ -40,6 +44,7 @@ AppleSelectiveDebuggingInfo = provider(
 
 AppleSelectiveDebuggingFilteredDebugInfo = record(
     map = field(dict[Label, list[Artifact]]),
+    swift_modules_labels = field(list[Label]),
 )
 
 # The type of selective debugging json input to utilze.
@@ -110,7 +115,7 @@ def _impl(ctx: AnalysisContext) -> list[Provider]:
         if json_type != _SelectiveDebuggingJsonType("targets"):
             return inner_ctx.actions.write(output_name, sorted(set(package_names).list()))
 
-        def scrub_selected_debug_paths_action(dynamic_ctx: AnalysisContext, artifacts, resolved, outputs):
+        def scrub_selected_debug_paths_action(dynamic_ctx: AnalysisContext, artifacts, outputs):
             packages = [
                 # "cell//path/to/some/thing:target" -> "path/to/some/thing"
                 target.split("//")[1].split(":")[0]
@@ -131,7 +136,12 @@ def _impl(ctx: AnalysisContext) -> list[Provider]:
 
         return output
 
-    def scrub_binary(inner_ctx, executable: Artifact, executable_link_execution_preference: LinkExecutionPreference, adhoc_codesign_tool: [RunInfo, None]) -> Artifact:
+    def scrub_binary(
+            inner_ctx,
+            executable: Artifact,
+            executable_link_execution_preference: LinkExecutionPreference,
+            adhoc_codesign_tool: [RunInfo, None],
+            focused_targets_labels: list[Label]) -> Artifact:
         inner_cmd = cmd_args(cmd)
         output = inner_ctx.actions.declare_output("debug_scrubbed/{}".format(executable.short_path))
 
@@ -143,6 +153,12 @@ def _impl(ctx: AnalysisContext) -> list[Provider]:
             inner_cmd.add(["--adhoc-codesign-tool", adhoc_codesign_tool])
         inner_cmd.add(["--input", executable])
         inner_cmd.add(["--output", output.as_output()])
+        if len(focused_targets_labels) > 0:
+            additional_labels_json = inner_ctx.actions.write_json(
+                inner_ctx.attrs.name + ".additional_labels.json",
+                {"targets": [label.raw_target() for label in focused_targets_labels]},
+            )
+            inner_cmd.add(["--persisted-targets-file", additional_labels_json])
         inner_ctx.actions.run(
             inner_cmd,
             category = "scrub_binary",
@@ -156,12 +172,27 @@ def _impl(ctx: AnalysisContext) -> list[Provider]:
 
     def filter_debug_info(debug_info: TransitiveSetIterator) -> AppleSelectiveDebuggingFilteredDebugInfo:
         map = {}
+        swift_modules = set()
+        selected_targets_contain_swift = False
         for infos in debug_info:
             for info in infos:
-                if _is_label_included(info.label, selection_criteria):
-                    map[info.label] = info.artifacts
+                # FIXME: Temporary disable the logic of transitive Swift debug info materialisation.
+                is_swiftmodule = False  # ArtifactInfoTag("swiftmodule") in info.tags
+                is_swift_pcm = False  # ArtifactInfoTag("swift_pcm") in info.tags
+                is_swift_related = is_swiftmodule or is_swift_pcm
+                if _is_label_included(info.label, selection_criteria) or (selected_targets_contain_swift and is_swift_related):
+                    # There might be a few ArtifactInfo corresponding to the same Label,
+                    # so to avoid overwriting, we need to preserve all artifacts.
+                    if info.label in map:
+                        map[info.label] += info.artifacts
+                    else:
+                        map[info.label] = list(info.artifacts)
 
-        return AppleSelectiveDebuggingFilteredDebugInfo(map = map)
+                    if is_swiftmodule:
+                        swift_modules.add(info.label)
+
+                    selected_targets_contain_swift = selected_targets_contain_swift or ArtifactInfoTag("swiftmodule") in info.tags
+        return AppleSelectiveDebuggingFilteredDebugInfo(map = map, swift_modules_labels = swift_modules.list())
 
     def preference_for_links(links: list[Label], deps_preferences: list[LinkExecutionPreferenceInfo]) -> LinkExecutionPreference:
         # If any dependent links were run locally, prefer that the current link is also performed locally,

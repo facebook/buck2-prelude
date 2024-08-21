@@ -5,5 +5,10 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
-def xcode_postbuild_script_impl(_ctx: AnalysisContext) -> list[Provider]:
-    return [DefaultInfo()]
+AppleErrorCategories = record(
+    # Lowercase string that should (preferably uniquely) match the lowercased
+    # stderr output caused by an error of interest.
+    string_match = str,
+    # List of category tags to be applied in the event of this error.
+    categories = list[str],
+)

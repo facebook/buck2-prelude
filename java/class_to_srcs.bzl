@@ -9,6 +9,7 @@ load(
     "@prelude//java:java_toolchain.bzl",
     "JavaToolchainInfo",  # @unused Used as a type
 )
+load("@prelude//utils:argfile.bzl", "at_argfile")
 
 def _class_to_src_map_args(mapping: Artifact | None):
     if mapping != None:
@@ -72,7 +73,8 @@ def create_class_to_source_map_from_jar(
         name: str,
         java_toolchain: JavaToolchainInfo,
         jar: Artifact,
-        srcs: list[Artifact]) -> Artifact:
+        srcs: list[Artifact],
+        sources_jar_name: [str, None] = None) -> (Artifact, Artifact | None):
     output = actions.declare_output(name)
     cmd = cmd_args(java_toolchain.gen_class_to_source_map[RunInfo])
     if java_toolchain.gen_class_to_source_map_include_sourceless_compiled_packages != None:
@@ -80,11 +82,13 @@ def create_class_to_source_map_from_jar(
             cmd.add("-i", item)
     cmd.add("-o", output.as_output())
     cmd.add(jar)
-    inputs_file = actions.write("class_to_srcs_map_argsfile.txt", srcs)
-    cmd.add(cmd_args(inputs_file, format = "@{}"))
-    cmd.hidden(srcs)
+    cmd.add(at_argfile(actions = actions, name = "class_to_srcs_map_argsfile.txt", args = srcs))
+    sources_jar = None
+    if sources_jar_name:
+        sources_jar = actions.declare_output(sources_jar_name)
+        cmd.add("--sources_jar", sources_jar.as_output())
     actions.run(cmd, category = "class_to_srcs_map")
-    return output
+    return (output, sources_jar)
 
 def maybe_create_class_to_source_map_debuginfo(
         actions: AnalysisActions,
@@ -99,9 +103,7 @@ def maybe_create_class_to_source_map_debuginfo(
     cmd = cmd_args(java_toolchain.gen_class_to_source_map_debuginfo[RunInfo])
     cmd.add("gen")
     cmd.add("-o", output.as_output())
-    inputs_file = actions.write("sourcefiles.txt", srcs)
-    cmd.add(cmd_args(inputs_file, format = "@{}"))
-    cmd.hidden(srcs)
+    cmd.add(at_argfile(actions = actions, name = "sourcefiles.txt", args = srcs))
     actions.run(cmd, category = "class_to_srcs_map_debuginfo")
     return output
 
@@ -112,10 +114,7 @@ def merge_class_to_source_map_from_jar(
         relative_to: [CellRoot, None],
         deps: list[JavaClassToSourceMapInfo]) -> Artifact:
     output = actions.declare_output(name)
-    cmd = cmd_args(java_toolchain.merge_class_to_source_maps[RunInfo])
-    cmd.add(cmd_args(output.as_output(), format = "--output={}"))
-    if relative_to != None:
-        cmd.add(cmd_args(str(relative_to), format = "--relative-to={}"))
+
     tset = actions.tset(
         JavaClassToSourceMapTset,
         value = None,
@@ -123,8 +122,14 @@ def merge_class_to_source_map_from_jar(
     )
     class_to_source_files = tset.project_as_args("class_to_src_map")
     mappings_file = actions.write("class_to_src_map.txt", class_to_source_files)
-    cmd.add(["--mappings", mappings_file])
-    cmd.hidden(class_to_source_files)
+
+    cmd = cmd_args(
+        java_toolchain.merge_class_to_source_maps[RunInfo],
+        cmd_args(output.as_output(), format = "--output={}"),
+        cmd_args(str(relative_to), format = "--relative-to={}") if relative_to != None else [],
+        ["--mappings", mappings_file],
+        hidden = class_to_source_files,
+    )
     actions.run(cmd, category = "merge_class_to_srcs_map")
     return output
 
@@ -143,8 +148,7 @@ def _create_merged_debug_info(
         children = [tset_debuginfo],
     )
     input_files = tset.project_as_args("class_to_src_map")
-    input_list_file = actions.write("debuginfo_list.txt", input_files)
-    cmd.add(cmd_args(input_list_file, format = "@{}"))
-    cmd.hidden(input_files)
+    cmd.add(at_argfile(actions = actions, name = "debuginfo_list.txt", args = input_files))
+
     actions.run(cmd, category = "merged_debuginfo")
     return output

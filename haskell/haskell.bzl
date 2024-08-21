@@ -1211,6 +1211,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
             link_group_libs = link_group_libs,
             link_group_preferred_linkage = link_group_preferred_linkage,
             labels_to_links_map = labels_to_links_map,
+            targets_consumed_by_link_groups = {},
         )
 
         for shared_lib in traverse_shared_library_info(shlib_info):

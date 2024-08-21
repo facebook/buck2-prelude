@@ -198,7 +198,7 @@ def get_objects_as_library_args(linker_type: str, objects: list[Artifact]) -> li
         args.append("-Wl,--start-lib")
         args.extend(objects)
         args.append("-Wl,--end-lib")
-    elif linker_type == "windows":
+    elif linker_type == "darwin" or linker_type == "windows":
         args.extend(objects)
     else:
         fail("Linker type {} not supported".format(linker_type))
@@ -254,6 +254,16 @@ def get_import_library(
         return import_library, [cmd_args(import_library.as_output(), format = "/IMPLIB:{}")]
     else:
         return None, []
+
+def get_deffile_flags(
+        ctx: AnalysisContext,
+        linker_type: str) -> list[ArgLike]:
+    if linker_type == "windows" and ctx.attrs.deffile != None:
+        return [
+            cmd_args(ctx.attrs.deffile, format = "/DEF:{}"),
+        ]
+    else:
+        return []
 
 def get_rpath_origin(
         linker_type: str) -> str:

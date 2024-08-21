@@ -241,15 +241,17 @@ def _maybe_filter_resources(
 
     filter_resources_cmd = cmd_args(android_toolchain.filter_resources[RunInfo])
     in_res_dirs = res_to_out_res_dir.keys()
-    filter_resources_cmd.hidden(in_res_dirs)
-    filter_resources_cmd.hidden([out_res.as_output() for out_res in res_to_out_res_dir.values()])
+    filter_resources_cmd.add(cmd_args(
+        hidden =
+            in_res_dirs + [out_res.as_output() for out_res in res_to_out_res_dir.values()],
+    ))
     filter_resources_cmd.add([
         "--in-res-dir-to-out-res-dir-map",
         ctx.actions.write_json("in_res_dir_to_out_res_dir_map", {"res_dir_map": res_to_out_res_dir}),
     ])
 
     if is_voltron_language_pack_enabled:
-        filter_resources_cmd.hidden([out_res.as_output() for out_res in voltron_res_to_out_res_dir.values()])
+        filter_resources_cmd.add(cmd_args(hidden = [out_res.as_output() for out_res in voltron_res_to_out_res_dir.values()]))
         filter_resources_cmd.add([
             "--voltron-in-res-dir-to-out-res-dir-map",
             ctx.actions.write_json("voltron_in_res_dir_to_out_res_dir_map", {"res_dir_map": voltron_res_to_out_res_dir}),
@@ -380,7 +382,7 @@ def _maybe_generate_string_source_map(
         res_dirs_file,
         "--output",
         output.as_output(),
-    ]).hidden(res_dirs)
+    ], hidden = res_dirs)
 
     if is_voltron_string_source_map:
         generate_string_source_map_cmd.add("--is-voltron")
@@ -420,7 +422,7 @@ def _maybe_package_strings_as_assets(
         string_assets_zip.as_output(),
         "--all-locales-string-assets-zip",
         all_locales_string_assets_zip.as_output(),
-    ]).hidden(string_files_res_dirs)
+    ], hidden = string_files_res_dirs)
 
     if locales:
         package_strings_as_assets_cmd.add("--locales", ",".join(locales))
@@ -499,7 +501,7 @@ def _get_module_manifests(
 
     module_manifests_dir = ctx.actions.declare_output("module_manifests_dir", dir = True)
 
-    def get_manifests_modular(ctx: AnalysisContext, artifacts, resolved, outputs):
+    def get_manifests_modular(ctx: AnalysisContext, artifacts, outputs):
         apk_module_graph_info = get_apk_module_graph_info(ctx, apk_module_graph_file, artifacts)
 
         merged_module_manifests = {}
@@ -580,6 +582,8 @@ def _merge_assets(
             merge_assets_cmd.add(["--base-apk", base_apk])
             merged_assets_output_hash = None
 
+        merge_assets_cmd.add("--binary-type", "aab" if is_bundle_build else "apk")
+
         return merge_assets_cmd, merged_assets_output_hash
 
     if apk_module_graph_file:
@@ -591,7 +595,7 @@ def _merge_assets(
         else:
             module_assets_apks_dir = None
 
-        def merge_assets_modular(ctx: AnalysisContext, artifacts, resolved, outputs):
+        def merge_assets_modular(ctx: AnalysisContext, artifacts, outputs):
             apk_module_graph_info = get_apk_module_graph_info(ctx, apk_module_graph_file, artifacts)
 
             module_to_assets_dirs = {}
@@ -608,7 +612,7 @@ def _merge_assets(
 
             assets_dirs_file = ctx.actions.write_json("assets_dirs.json", module_to_assets_dirs)
             merge_assets_cmd.add(["--assets-dirs", assets_dirs_file])
-            merge_assets_cmd.hidden([resource_info.assets for resource_info in asset_resource_infos])
+            merge_assets_cmd.add(cmd_args(hidden = [resource_info.assets for resource_info in asset_resource_infos]))
 
             ctx.actions.run(merge_assets_cmd, category = "merge_assets")
 
@@ -629,7 +633,7 @@ def _merge_assets(
             assets_dirs.extend([cxx_resources])
         assets_dirs_file = ctx.actions.write_json("assets_dirs.json", {ROOT_MODULE: assets_dirs})
         merge_assets_cmd.add(["--assets-dirs", assets_dirs_file])
-        merge_assets_cmd.hidden(assets_dirs)
+        merge_assets_cmd.add(cmd_args(hidden = assets_dirs))
 
         ctx.actions.run(merge_assets_cmd, category = "merge_assets")
 

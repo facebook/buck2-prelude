@@ -153,6 +153,12 @@ rules_attributes = {
                 This field indicates if global parse_tranforms should be applied to this application as well. It often makes sense
                 for third-party dependencies to not be subjected to global parse_transforms, similar to OTP applications.
             """),
+        "xrl_includefile": attrs.option(attrs.source(), default = None, doc = """
+                Customised prologue file to replace the default. See [`includefile` option](https://www.erlang.org/doc/apps/parsetools/leex.html#file/2) for details.
+        """),
+        "yrl_includefile": attrs.option(attrs.source(), default = None, doc = """
+                Customised prologue file to replace the default. See [`includefile` option](https://www.erlang.org/doc/apps/parsetools/yecc.html#file/2) for details.
+        """),
     } | common_application_attributes,
     "erlang_app_includes": {
         "application_name": attrs.string(),
@@ -163,6 +169,9 @@ rules_attributes = {
         "bundled": attrs.bool(default = True, doc = """
                 Setting bundled to `True` does generate a folder structure and escript trampoline instead of an archive.
         """),
+        "configs": attrs.list(attrs.dep(), default = [], doc = """
+            This attribute allows to set config files for the escript. The dependencies that are typically used
+            here are `export_file` targets."""),
         "deps": attrs.list(attrs.dep(), doc = """
                 List of Erlang applications that are bundled in the escript. This includes all transitive dependencies as well.
             """),
@@ -254,7 +263,7 @@ rules_attributes = {
                 List of additional Common Test hooks. The strings are interpreted as Erlang terms.
             """),
         "extra_erl_flags": attrs.list(attrs.string(), default = [], doc = """
-                List of additional command line arguments given to the erl command invocation. These 
+                List of additional command line arguments given to the erl command invocation. These
                 arguments are added to the front of the argument list.
             """),
         "preamble": attrs.string(default = read_root_config("erlang", "erlang_test_preamble", "test:info(),test:ensure_initialized(),test:start_shell()."), doc = """
@@ -282,7 +291,8 @@ rules_attributes = {
         "_test_binary": attrs.dep(default = "prelude//erlang/common_test/test_binary:escript"),
         "_test_binary_lib": attrs.dep(default = "prelude//erlang/common_test/test_binary:test_binary"),
         "_toolchain": attrs.toolchain_dep(default = "toolchains//:erlang-default"),
-        "_trampoline": attrs.option(attrs.dep(), default = None),
+        "_trampoline": attrs.option(attrs.dep(), default = None, doc = "DEPRECATED. Use _trampolines instead."),
+        "_trampolines": attrs.option(attrs.list(attrs.dep()), default = None),
     } | common_shell_attributes | re_test_args(),
 }
 

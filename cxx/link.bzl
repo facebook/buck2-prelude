@@ -18,8 +18,12 @@ load(
 )
 load("@prelude//cxx:cxx_toolchain_types.bzl", "CxxToolchainInfo")
 load(
+    "@prelude//cxx/dist_lto:darwin_dist_lto.bzl",
+    "cxx_darwin_dist_link",
+)
+load(
     "@prelude//cxx/dist_lto:dist_lto.bzl",
-    "cxx_dist_link",
+    "cxx_gnu_dist_link",
 )
 load("@prelude//linking:execution_preference.bzl", "LinkExecutionPreference", "LinkExecutionPreferenceInfo", "get_action_execution_attributes")
 load(
@@ -34,6 +38,7 @@ load(
 )
 load(
     "@prelude//linking:lto.bzl",
+    "LtoMode",
     "get_split_debug_lto_info",
 )
 load("@prelude//linking:strip.bzl", "strip_object")
@@ -60,6 +65,7 @@ load(":link_types.bzl", "CxxLinkResultType", "LinkOptions", "merge_link_options"
 load(
     ":linker.bzl",
     "SharedLibraryFlagOverrides",  # @unused Used as a type
+    "get_deffile_flags",
     "get_import_library",
     "get_output_flags",
     "get_shared_library_flags",
@@ -133,21 +139,34 @@ def cxx_link_into(
         linker_map_data = None
 
     if linker_info.supports_distributed_thinlto and opts.enable_distributed_thinlto:
-        if not linker_info.requires_objects:
-            fail("Cannot use distributed thinlto if the cxx toolchain doesn't require_objects")
+        if not linker_info.lto_mode == LtoMode("thin"):
+            fail("Cannot use distributed thinlto if the cxx toolchain doesn't use thin-lto lto_mode")
         sanitizer_runtime_args = cxx_sanitizer_runtime_arguments(ctx, cxx_toolchain_info, output)
         if sanitizer_runtime_args.extra_link_args or sanitizer_runtime_args.sanitizer_runtime_files:
             fail("Cannot use distributed thinlto with sanitizer runtime")
-        exe = cxx_dist_link(
-            ctx,
-            opts.links,
-            output,
-            linker_map,
-            opts.category_suffix,
-            opts.identifier,
-            should_generate_dwp,
-            is_result_executable,
-        )
+
+        linker_type = linker_info.type
+        if linker_type == "darwin":
+            exe = cxx_darwin_dist_link(
+                ctx,
+                output,
+                opts,
+                linker_map,
+                should_generate_dwp,
+                is_result_executable,
+            )
+        elif linker_type == "gnu":
+            exe = cxx_gnu_dist_link(
+                ctx,
+                output,
+                opts,
+                linker_map,
+                should_generate_dwp,
+                is_result_executable,
+            )
+        else:
+            fail("Linker type {} not supported for distributed thin-lto".format(linker_type))
+
         return CxxLinkResult(
             linked_object = exe,
             linker_map_data = linker_map_data,
@@ -183,12 +202,12 @@ def cxx_link_into(
         else:
             link_args_suffix = opts.category_suffix
     link_args_output = make_link_args(
+        ctx,
         ctx.actions,
         cxx_toolchain_info,
         links_with_linker_map,
         suffix = link_args_suffix,
         output_short_path = output.short_path,
-        is_shared = result_type.value == "shared_library",
         link_ordering = value_or(
             opts.link_ordering,
             # Fallback to toolchain default.
@@ -233,15 +252,19 @@ def cxx_link_into(
         shell_quoted_args = cmd_args(all_link_args, quote = "shell")
 
     argfile, _ = ctx.actions.write(
-        output.short_path + ".linker.argsfile",
+        output.short_path + ".cxx_link_argsfile",
         shell_quoted_args,
         allow_args = True,
     )
 
-    command = cmd_args(link_cmd_parts.linker)
-    command.add(cmd_args(argfile, format = "@{}"))
-    command.hidden(link_args_output.hidden)
-    command.hidden(shell_quoted_args)
+    command = cmd_args(
+        link_cmd_parts.linker,
+        cmd_args(argfile, format = "@{}"),
+        hidden = [
+            link_args_output.hidden,
+            shell_quoted_args,
+        ],
+    )
     category = "cxx_link"
     if opts.category_suffix != None:
         category += "_" + opts.category_suffix
@@ -250,11 +273,13 @@ def cxx_link_into(
     # generate a DWO directory, so make sure we at least `mkdir` and empty
     # one to make v2/RE happy.
     if split_debug_output != None:
-        cmd = cmd_args(["/bin/sh", "-c"])
-        cmd.add(cmd_args(split_debug_output.as_output(), format = 'mkdir -p {}; "$@"'))
-        cmd.add('""').add(command)
-        cmd.hidden(command)
-        command = cmd
+        command = cmd_args(
+            "/bin/sh",
+            "-c",
+            cmd_args(split_debug_output.as_output(), format = 'mkdir -p {}; "$@"'),
+            '""',
+            command,
+        )
 
     link_execution_preference_info = LinkExecutionPreferenceInfo(
         preference = opts.link_execution_preference,
@@ -262,6 +287,11 @@ def cxx_link_into(
     action_execution_properties = get_action_execution_attributes(
         opts.link_execution_preference,
     )
+
+    # only specify error_handler if one exists
+    error_handler_args = {}
+    if opts.error_handler:
+        error_handler_args["error_handler"] = opts.error_handler
 
     ctx.actions.run(
         command,
@@ -273,6 +303,7 @@ def cxx_link_into(
         identifier = opts.identifier,
         force_full_hybrid_if_capable = action_execution_properties.full_hybrid,
         allow_cache_upload = opts.allow_cache_upload,
+        **error_handler_args
     )
     unstripped_output = output
     if opts.strip:
@@ -483,7 +514,9 @@ def cxx_link_shared_library(
         output,
     )
 
-    links_with_extra_args = [LinkArgs(flags = extra_args)] + opts.links + [LinkArgs(flags = import_library_args)]
+    deffile_args = get_deffile_flags(ctx, linker_type)
+
+    links_with_extra_args = [LinkArgs(flags = extra_args)] + opts.links + [LinkArgs(flags = import_library_args + deffile_args)]
 
     opts = merge_link_options(
         opts,

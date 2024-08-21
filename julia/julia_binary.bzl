@@ -58,7 +58,7 @@ def build_jll_shlibs_mapping(ctx: AnalysisContext, json_info_file: Artifact):
         shared_libs = shlibs,
     )
 
-    shlib_label_to_soname = {shlib.label: shlib.soname for shlib in shlibs}
+    shlib_label_to_soname = {shlib.label: shlib.soname.ensure_str() for shlib in shlibs}
 
     # iterate through all the jll libraries
     json_info = []
@@ -70,8 +70,11 @@ def build_jll_shlibs_mapping(ctx: AnalysisContext, json_info_file: Artifact):
         # iterate through all the shlib dependencies for the current jll
         artifact_info = []
         for julia_name, label in jll.libs.items():
-            symlink_dir = cmd_args(shared_libs_symlink_tree, delimiter = "")
-            symlink_dir.relative_to(json_info_file)  # That cannot be produced by a tset projection
+            symlink_dir = cmd_args(
+                shared_libs_symlink_tree,
+                delimiter = "",
+                relative_to = json_info_file,  # That cannot be produced by a tset projection
+            )
             artifact_info.append((julia_name, symlink_dir, shlib_label_to_soname[label]))
         json_info.append((jll.name, jli.uuid, artifact_info))
 
@@ -106,19 +109,20 @@ def build_julia_command(ctx):
     """
     julia_toolchain = ctx.attrs._julia_toolchain[JuliaToolchainInfo]
 
-    # python processor
-    cmd = cmd_args([julia_toolchain.cmd_processor])
-
     # build out the symlink tree for libs
     symlink_dir = build_load_path_symtree(ctx)
-    cmd.hidden(symlink_dir)
 
     # build symdir for sources
     srcs_by_path = {f.short_path: f for f in ctx.attrs.srcs}
     srcs = ctx.actions.symlinked_dir("srcs_tree", srcs_by_path)
     if ctx.attrs.main not in srcs_by_path:
         fail("main should be in srcs!")
-    cmd.hidden(srcs)
+
+    # python processor
+    cmd = cmd_args(
+        [julia_toolchain.cmd_processor],
+        hidden = [symlink_dir] + [srcs],
+    )
 
     # prepare a json file to hold all the data the python preprocessor needs to
     # execute the julia interpreter.
@@ -128,10 +132,10 @@ def build_julia_command(ctx):
         "env": julia_toolchain.env,
         "jll_mapping": build_jll_shlibs_mapping(ctx, json_info_file),
         "julia_args": ctx.attrs.julia_args,
-        "julia_binary": cmd_args(julia_toolchain.julia, delimiter = " ").relative_to(json_info_file),
+        "julia_binary": cmd_args(julia_toolchain.julia, delimiter = " ", relative_to = json_info_file),
         "julia_flags": ctx.attrs.julia_flags,
-        "lib_path": cmd_args(symlink_dir, delimiter = " ").relative_to(json_info_file),
-        "main": cmd_args(srcs.project(ctx.attrs.main), delimiter = " ").relative_to(json_info_file),
+        "lib_path": cmd_args(symlink_dir, delimiter = " ", relative_to = json_info_file),
+        "main": cmd_args(srcs.project(ctx.attrs.main), delimiter = " ", relative_to = json_info_file),
     }
 
     json_file_loc = ctx.actions.write_json(json_info_file, json_info_dict, with_inputs = True)

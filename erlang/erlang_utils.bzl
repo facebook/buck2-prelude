@@ -11,12 +11,6 @@ load(
     "Toolchain",  # @unused Used as type
 )
 
-def normalise_metadata(data: [str, list[str]]) -> [cmd_args, list[cmd_args]]:
-    if type(data) == type([]):
-        return [cmd_args(item) for item in data]
-    else:
-        return cmd_args(data)
-
 def to_term_args(data: typing.Any) -> cmd_args:
     """ convert nested lists/tuple/map data structure to Erlang Term cmd_args
     """
@@ -107,13 +101,6 @@ def convert_dict(dt: dict) -> cmd_args:
     args.append("}")
     return cmd_args(args)
 
-def convert_args(data: cmd_args) -> cmd_args:
-    return cmd_args(
-        "\"",
-        cmd_args(data, delimiter = " "),
-        "\"",
-    )
-
 def convert_string(st: str) -> cmd_args:
     return cmd_args(cmd_args(["\"", st.replace("\"", "\\\""), "\""], delimiter = ""))
 
@@ -141,15 +128,6 @@ def multidict_projection_key(build_environments: dict[str, typing.Any], field_na
 def action_identifier(toolchain: Toolchain, name: str) -> str:
     """builds an action identifier parameterized by the toolchain"""
     return "%s(%s)" % (name, toolchain.name)
-
-def str_to_bool(value: str) -> bool:
-    """convert string representation of bool to bool"""
-    if value == "True":
-        return True
-    elif value == "False":
-        return False
-    else:
-        fail("{} is not a valid boolean value")
 
 def preserve_structure(path: str) -> dict[str, list[str]]:
     """Return a mapping from a path that preserves the filestructure relative to the path."""

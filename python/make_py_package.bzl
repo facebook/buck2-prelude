@@ -12,19 +12,24 @@ execution
 
 load("@prelude//:artifact_tset.bzl", "project_artifacts")
 load("@prelude//:local_only.bzl", "package_python_locally")
+load("@prelude//:paths.bzl", "paths")
 load(
     "@prelude//cxx:cxx_library_utility.bzl",
     "cxx_is_gnu",
 )
 load(
-    "@prelude//linking:link_info.bzl",
-    "LinkedObject",  # @unused Used as a type
+    "@prelude//linking:shared_libraries.bzl",
+    "SharedLibrary",  # @unused Used as a type
+    "gen_shared_libs_action",
+    "zip_shlibs",
 )
 load("@prelude//os_lookup:defs.bzl", "OsLookup")
 load("@prelude//utils:arglike.bzl", "ArgLike")
 load(":compile.bzl", "PycInvalidationMode")
 load(":interface.bzl", "EntryPoint", "EntryPointKind", "PythonLibraryManifestsInterface")
 load(":manifest.bzl", "ManifestInfo")  # @unused Used as a type
+load(":python.bzl", "manifests_to_interface")
+load(":python_library.bzl", "gather_dep_libraries")
 load(":toolchain.bzl", "PackageStyle", "PythonToolchainInfo", "get_package_style")
 
 # This represents the input to the creation of a Pex. Manifests provide source
@@ -34,7 +39,7 @@ PexModules = record(
     manifests = field(PythonLibraryManifestsInterface),
     extensions = field(ManifestInfo | None, None),
     extra_manifests = field(ManifestInfo | None, None),
-    debuginfo_manifest = field(ManifestInfo | None, None),
+    repl_manifests = field(PythonLibraryManifestsInterface | None, None),
     compile = field(bool, False),
 )
 
@@ -122,10 +127,11 @@ def make_py_package(
         package_style: PackageStyle,
         build_args: list[ArgLike],
         pex_modules: PexModules,
-        shared_libraries: dict[str, (LinkedObject, bool)],
+        shared_libraries: list[(str, SharedLibrary, bool)],
         main: EntryPoint,
         hidden_resources: list[ArgLike] | None,
-        allow_cache_upload: bool) -> PexProviders:
+        allow_cache_upload: bool,
+        debuginfo_files: list[(str | (str, SharedLibrary, str), Artifact)] = []) -> PexProviders:
     """
     Passes a standardized set of flags to a `make_py_package` binary to create a python
     "executable".
@@ -148,14 +154,22 @@ def make_py_package(
     if pex_modules.extensions:
         srcs.append(pex_modules.extensions.manifest)
 
-    preload_libraries = _preload_libraries_args(ctx, shared_libraries)
+    preload_libraries = _preload_libraries_args(
+        ctx = ctx,
+        shared_libraries = [
+            (shlib, libdir)
+            for libdir, shlib, preload in shared_libraries
+            if preload
+        ],
+    )
     startup_function = generate_startup_function_loader(ctx)
     manifest_module = generate_manifest_module(ctx, python_toolchain, srcs)
     common_modules_args, dep_artifacts, debug_artifacts = _pex_modules_common_args(
         ctx,
         pex_modules,
         [startup_function] if startup_function else [],
-        {name: lib for name, (lib, _) in shared_libraries.items()},
+        [(shlib, libdir) for libdir, shlib, _ in shared_libraries],
+        debuginfo_files = debuginfo_files,
     )
 
     default = _make_py_package_impl(
@@ -176,6 +190,52 @@ def make_py_package(
         output_suffix = "",
         allow_cache_upload = allow_cache_upload,
     )
+
+    # lets make a shell
+    if ctx.attrs.repl_main:
+        # no more
+        # kjdfhgskjh
+        repl_deps, _ = gather_dep_libraries(ctx.attrs.repl_only_deps)
+        repl_manifests = manifests_to_interface(repl_deps[0].manifests)
+
+        repl_pex_modules = PexModules(
+            manifests = pex_modules.manifests,
+            extra_manifests = pex_modules.extra_manifests,
+            extensions = pex_modules.extensions,
+            repl_manifests = repl_manifests,
+            compile = pex_modules.compile,
+        )
+
+        repl_common_modules_args, repl_dep_artifacts, repl_debug_artifacts = _pex_modules_common_args(
+            ctx,
+            repl_pex_modules,
+            [startup_function] if startup_function else [],
+            [(shlib, libdir) for libdir, shlib, _ in shared_libraries],
+            debuginfo_files = debuginfo_files,
+            suffix = "_repl",
+        )
+
+        default.sub_targets["repl"] = make_py_package_providers(
+            _make_py_package_impl(
+                ctx,
+                python_toolchain,
+                make_py_package_cmd,
+                PackageStyle("inplace"),
+                build_args,
+                len(shared_libraries) > 0,
+                preload_libraries,
+                repl_common_modules_args,
+                repl_dep_artifacts,
+                repl_debug_artifacts,
+                (EntryPointKind("function"), ctx.attrs.repl_main),
+                hidden_resources,
+                manifest_module,
+                pex_modules,
+                output_suffix = "-repl",
+                allow_cache_upload = allow_cache_upload,
+            ),
+        )
+
     for style in PackageStyle.values():
         pex_providers = default if style == package_style.value else _make_py_package_impl(
             ctx,
@@ -212,7 +272,7 @@ def _make_py_package_impl(
         preload_libraries: cmd_args,
         common_modules_args: cmd_args,
         dep_artifacts: list[ArgLike],
-        debug_artifacts: list[(ArgLike, str)],
+        debug_artifacts: list[(str | (str, SharedLibrary, str), ArgLike)],
         main: EntryPoint,
         hidden_resources: list[ArgLike] | None,
         manifest_module: ArgLike | None,
@@ -223,6 +283,7 @@ def _make_py_package_impl(
     standalone = package_style == PackageStyle("standalone")
 
     runtime_files = []
+    sub_targets = {}
     if standalone and hidden_resources != None:
         # constructing this error message is expensive, only do it when we abort analysis
         error_msg = "standalone builds don't support hidden resources" if output_suffix else _hidden_resources_error_message(ctx.label, hidden_resources)
@@ -258,7 +319,7 @@ def _make_py_package_impl(
         output_suffix,
     )
 
-    output = ctx.actions.declare_output("{}{}".format(name, python_toolchain.pex_extension))
+    output = ctx.actions.declare_output("{}{}".format(name, ctx.attrs.extension or python_toolchain.pex_extension))
 
     bootstrap_args = _pex_bootstrap_args(
         python_toolchain,
@@ -327,27 +388,61 @@ def _make_py_package_impl(
     if hidden_resources == None:
         hidden_resources = []
 
+    if symlink_tree_path != None:
+        sub_targets["link-tree"] = [DefaultInfo(
+            default_output = symlink_tree_path,
+            other_outputs = runtime_files,
+            sub_targets = {},
+        )]
+
     return PexProviders(
         default_output = output,
         other_outputs = runtime_files,
         other_outputs_prefix = symlink_tree_path.short_path if symlink_tree_path != None else None,
         hidden_resources = hidden_resources,
-        sub_targets = {},
-        run_cmd = cmd_args(run_args).hidden(runtime_files + hidden_resources),
+        sub_targets = sub_targets,
+        run_cmd = cmd_args(
+            run_args,
+            hidden = runtime_files + hidden_resources + [python_toolchain.interpreter],
+        ),
     )
 
-def _debuginfo_subtarget(ctx: AnalysisContext, debug_artifacts: list[(ArgLike, str)]) -> list[Provider]:
-    out = ctx.actions.write_json("debuginfo.manifest.json", debug_artifacts)
-    return [DefaultInfo(default_output = out, other_outputs = [a for a, _ in debug_artifacts])]
+def _debuginfo_subtarget(
+        ctx: AnalysisContext,
+        debug_artifacts: list[(str | (str, SharedLibrary, str), ArgLike)]) -> list[Provider]:
+    for_shared_libs = []
+    other = []
+    for name, artifact in debug_artifacts:
+        if type(name) == type(()):
+            for_shared_libs.append((name[1], (artifact, name[0], name[2])))
+        else:
+            other.append((artifact, name))
+    out = gen_shared_libs_action(
+        actions = ctx.actions,
+        out = "debuginfo.manifest.json",
+        shared_libs = [shlib for shlib, _ in for_shared_libs],
+        gen_action = lambda actions, output, shared_libs: actions.write_json(
+            output,
+            [
+                (debug, paths.join(libdir, soname + ext))
+                for soname, _, (debug, libdir, ext) in zip_shlibs(shared_libs, for_shared_libs)
+            ] + other,
+        ),
+    )
+    return [DefaultInfo(default_output = out, other_outputs = [d for _, d in debug_artifacts])]
 
-def _preload_libraries_args(ctx: AnalysisContext, shared_libraries: dict[str, (LinkedObject, bool)]) -> cmd_args:
-    preload_libraries_path = ctx.actions.write(
-        "__preload_libraries.txt",
-        cmd_args([
-            "--preload={}".format(name)
-            for name, (_, preload) in shared_libraries.items()
-            if preload
-        ]),
+def _preload_libraries_args(ctx: AnalysisContext, shared_libraries: list[(SharedLibrary, str)]) -> cmd_args:
+    preload_libraries_path = gen_shared_libs_action(
+        actions = ctx.actions,
+        out = "__preload_libraries.txt",
+        shared_libs = [shlib for shlib, _ in shared_libraries],
+        gen_action = lambda actions, output, shared_libs: actions.write(
+            output,
+            [
+                "--preload={}".format(paths.join(libdir, soname))
+                for soname, _, libdir in zip_shlibs(shared_libs, shared_libraries)
+            ],
+        ),
     )
     return cmd_args(preload_libraries_path, format = "@{}")
 
@@ -386,13 +481,18 @@ def _pex_bootstrap_args(
     if package_style == PackageStyle("standalone") and not zip_safe:
         cmd.add("--no-zip-safe")
 
+    for lib_path in toolchain.native_library_runtime_paths:
+        cmd.add("--native-library-runtime-path={}".format(lib_path))
+
     return cmd
 
 def _pex_modules_common_args(
         ctx: AnalysisContext,
         pex_modules: PexModules,
         extra_manifests: list[ArgLike],
-        shared_libraries: dict[str, LinkedObject]) -> (cmd_args, list[ArgLike], list[(ArgLike, str)]):
+        shared_libraries: list[(SharedLibrary, str)],
+        debuginfo_files: list[(str | (str, SharedLibrary, str), Artifact)],
+        suffix: str = "") -> (cmd_args, list[ArgLike], list[(str | (str, SharedLibrary, str), ArgLike)]):
     srcs = []
     src_artifacts = []
     deps = []
@@ -409,6 +509,10 @@ def _pex_modules_common_args(
         srcs.append(pex_modules.extra_manifests.manifest)
         src_artifacts.extend(pex_modules.extra_manifests.artifacts)
 
+    if pex_modules.repl_manifests:
+        srcs.extend(pex_modules.repl_manifests.src_manifests())
+        src_artifacts.extend(pex_modules.repl_manifests.src_artifacts_with_paths())
+
     if extra_manifests:
         srcs.extend(extra_manifests)
 
@@ -417,73 +521,104 @@ def _pex_modules_common_args(
     deps.extend([a[0] for a in pex_modules.manifests.resource_artifacts_with_paths()])
 
     src_manifests_path = ctx.actions.write(
-        "__src_manifests.txt",
+        "__src_manifests{}.txt".format(suffix),
         _srcs(srcs, format = "--module-manifest={}"),
     )
     resource_manifests_path = ctx.actions.write(
-        "__resource_manifests.txt",
+        "__resource_manifests{}.txt".format(suffix),
         _srcs(resources, format = "--resource-manifest={}"),
     )
 
-    native_libraries = [s.output for s in shared_libraries.values()]
-    native_library_srcs_path = ctx.actions.write(
-        "__native_libraries___srcs.txt",
-        _srcs(native_libraries, format = "--native-library-src={}"),
-    )
-    native_library_dests_path = ctx.actions.write(
-        "__native_libraries___dests.txt",
-        ["--native-library-dest={}".format(lib) for lib in shared_libraries],
+    native_libraries = gen_shared_libs_action(
+        actions = ctx.actions,
+        out = "__native_libraries{}__.txt".format(suffix),
+        shared_libs = [shlib for shlib, _ in shared_libraries],
+        gen_action = lambda actions, output, shared_libs: actions.write(
+            output,
+            cmd_args(
+                _srcs(
+                    [shlib.lib.output for shlib in shared_libs.values()],
+                    format = "--native-library-src={}",
+                ),
+                [
+                    "--native-library-dest={}".format(paths.join(libdir, soname))
+                    for soname, _, libdir in zip_shlibs(shared_libs, shared_libraries)
+                ],
+            ),
+        ),
     )
 
-    src_manifest_args = cmd_args(src_manifests_path).hidden(srcs)
-    resource_manifest_args = cmd_args(resource_manifests_path).hidden(resources)
-    native_library_srcs_args = cmd_args(native_library_srcs_path)
+    src_manifest_args = cmd_args(src_manifests_path, hidden = srcs)
+    resource_manifest_args = cmd_args(resource_manifests_path, hidden = resources)
 
     cmd = cmd_args()
     cmd.add(cmd_args(src_manifest_args, format = "@{}"))
     cmd.add(cmd_args(resource_manifest_args, format = "@{}"))
-    cmd.add(cmd_args(native_library_srcs_args, format = "@{}"))
-    cmd.add(cmd_args(native_library_dests_path, format = "@{}"))
+    cmd.add(cmd_args(native_libraries, format = "@{}"))
 
-    if pex_modules.debuginfo_manifest:
-        debuginfo_files = pex_modules.debuginfo_manifest.artifacts
+    if debuginfo_files:
         debuginfo_srcs_path = ctx.actions.write(
-            "__debuginfo___srcs.txt",
-            _srcs([src for src, _ in debuginfo_files], format = "--debuginfo-src={}"),
+            "__debuginfo___srcs{}.txt".format(suffix),
+            _srcs([src for _, src in debuginfo_files], format = "--debuginfo-src={}"),
         )
         debuginfo_srcs_args = cmd_args(debuginfo_srcs_path)
         cmd.add(cmd_args(debuginfo_srcs_args, format = "@{}"))
-        debug_artifacts.extend(debuginfo_files)
+        for name, artifact in debuginfo_files:
+            if type(name) != type(""):
+                libdir, shlib, ext = name
+                name = paths.join(libdir, shlib.soname.ensure_str() + ext)
+            debug_artifacts.append((name, artifact))
 
     if ctx.attrs.package_split_dwarf_dwp:
         if ctx.attrs.strip_libpar == "extract" and get_package_style(ctx) == PackageStyle("standalone") and cxx_is_gnu(ctx):
-            # rename to match extracted debuginfo package
-            dwp = [(s.dwp, "{}.debuginfo.dwp".format(n)) for n, s in shared_libraries.items() if s.dwp != None]
+            dwp_ext = ".debuginfo.dwp"
         else:
-            dwp = [(s.dwp, "{}.dwp".format(n)) for n, s in shared_libraries.items() if s.dwp != None]
-        dwp_srcs_path = ctx.actions.write(
-            "__dwp___srcs.txt",
-            _srcs([src for src, _ in dwp], format = "--dwp-src={}"),
+            dwp_ext = ".dwp"
+        dwp_args = gen_shared_libs_action(
+            actions = ctx.actions,
+            out = "__dwp{}__.txt".format(suffix),
+            shared_libs = [shlib for shlib, _ in shared_libraries],
+            gen_action = lambda actions, output, shared_libs: actions.write(
+                output,
+                cmd_args(
+                    _srcs(
+                        [
+                            shlib.lib.dwp
+                            for shlib in shared_libs.values()
+                            if shlib.lib.dwp != None
+                        ],
+                        format = "--dwp-src={}",
+                    ),
+                    _srcs(
+                        [
+                            paths.join(libdir, soname + dwp_ext)
+                            for soname, shlib, libdir in zip_shlibs(shared_libs, shared_libraries)
+                            if shlib.lib.dwp != None
+                        ],
+                        format = "--dwp-dest={}",
+                    ),
+                ),
+            ),
         )
-        dwp_dests_path = ctx.actions.write(
-            "__dwp___dests.txt",
-            _srcs([dest for _, dest in dwp], format = "--dwp-dest={}"),
-        )
-        dwp_srcs_args = cmd_args(dwp_srcs_path)
-        cmd.add(cmd_args(dwp_srcs_args, format = "@{}"))
-        cmd.add(cmd_args(dwp_dests_path, format = "@{}"))
+        cmd.add(cmd_args(dwp_args, format = "@{}"))
 
-        debug_artifacts.extend(dwp)
+        for shlib, libdir in shared_libraries:
+            if shlib.lib.dwp != None:
+                debug_artifacts.append(((libdir, shlib, dwp_ext), shlib.lib.dwp))
 
-    deps.extend([lib.output for lib in shared_libraries.values()])
+    for shlib, _ in shared_libraries:
+        deps.append(shlib.lib.output)
 
     external_debug_info = project_artifacts(
         ctx.actions,
-        [lib.external_debug_info for lib in shared_libraries.values()],
+        [
+            shlib.lib.external_debug_info
+            for shlib, _ in shared_libraries
+        ],
     )
 
     # HACK: external_debug_info has an empty path
-    debug_artifacts.extend([(d, "") for d in external_debug_info])
+    debug_artifacts.extend([("", d) for d in external_debug_info])
 
     return (cmd, deps, debug_artifacts)
 
@@ -491,7 +626,7 @@ def _pex_modules_args(
         ctx: AnalysisContext,
         common_args: cmd_args,
         dep_artifacts: list[ArgLike],
-        debug_artifacts: list[(ArgLike, str)],
+        debug_artifacts: list[(str | (str, SharedLibrary, str), ArgLike)],
         symlink_tree_path: Artifact | None,
         manifest_module: ArgLike | None,
         pex_modules: PexModules,
@@ -502,11 +637,13 @@ def _pex_modules_args(
     runtime (this might be empty for e.g. a standalone pex).
     """
 
-    cmd = cmd_args()
-    cmd.add(common_args)
+    cmd = []
+    hidden = []
+
+    cmd.append(common_args)
 
     if manifest_module != None:
-        cmd.add(cmd_args(manifest_module, format = "--module-manifest={}"))
+        cmd.append(cmd_args(manifest_module, format = "--module-manifest={}"))
 
     if pex_modules.compile:
         pyc_mode = PycInvalidationMode("UNCHECKED_HASH") if symlink_tree_path == None else PycInvalidationMode("CHECKED_HASH")
@@ -520,19 +657,19 @@ def _pex_modules_args(
                 format = "--module-manifest={}",
             ),
         )
-        cmd.add(cmd_args(bytecode_manifests_path, format = "@{}"))
-        cmd.hidden(bytecode_manifests)
+        cmd.append(cmd_args(bytecode_manifests_path, format = "@{}"))
+        hidden.append(bytecode_manifests)
 
     if symlink_tree_path != None:
-        cmd.add(["--modules-dir", symlink_tree_path.as_output()])
+        cmd.extend(["--modules-dir", symlink_tree_path.as_output()])
     else:
         # Accumulate all the artifacts we depend on. Only add them to the command
         # if we are not going to create symlinks.
-        cmd.hidden(dep_artifacts)
+        hidden.append(dep_artifacts)
 
-    cmd.hidden([a for a, _ in debug_artifacts])
+    hidden.extend([s for _, s in debug_artifacts])
 
-    return cmd
+    return cmd_args(cmd, hidden = hidden)
 
 def _hidden_resources_error_message(current_target: Label, hidden_resources: list[ArgLike] | None) -> str:
     """
@@ -582,7 +719,7 @@ def generate_startup_function_loader(ctx: AnalysisContext) -> ArgLike:
     else:
         startup_functions_list = "\n".join(
             [
-                '"' + startup_function + '",'
+                "'''" + startup_function + "''',"
                 for _, startup_function in sorted(ctx.attrs.manifest_module_entries.get("startup_functions", {}).items())
             ],
         )
@@ -593,24 +730,36 @@ def generate_startup_function_loader(ctx: AnalysisContext) -> ArgLike:
 import importlib
 import warnings
 
+VARS = {vars}
 STARTUP_FUNCTIONS=[{startup_functions_list}]
 
+VARS["_dearg"] = lambda *args, **kwargs: (args, kwargs)
+
+
 def load_startup_functions():
-    for func in STARTUP_FUNCTIONS:
-        mod, sep, func = func.partition(":")
+    for name in STARTUP_FUNCTIONS:
+        mod, sep, func = name.partition(":")
         if sep:
             try:
+                func, _, args = func.partition("(")
+                args, kwargs = eval("_dearg(" + args, VARS) if args else ((), {{}})
                 module = importlib.import_module(mod)
-                getattr(module, func)()
+                getattr(module, func)(*args, **kwargs)
             except Exception as e:
                 # TODO: Ignoring errors for now.
                 warnings.warn(
-                    "Startup function %s (%s:%s) not executed: %s"
-                    % (mod, name, func, e),
+                    "Startup function '%s' (%s:%s) not executed: %s"
+                    % (func, mod, func, e),
                     stacklevel=1,
                 )
 
-        """.format(startup_functions_list = startup_functions_list),
+        """.format(
+            startup_functions_list = startup_functions_list,
+            vars = {
+                "label": repr(ctx.label),
+                "name": ctx.attrs.name,
+            },
+        ),
     )
     return ctx.actions.write_json(
         "manifest/startup_function_loader.manifest",
@@ -639,11 +788,13 @@ def generate_manifest_module(
         "__module_manifests.txt",
         _srcs(src_manifests, format = "--module-manifest={}"),
     )
-    cmd = cmd_args(python_toolchain.make_py_package_manifest_module)
-    cmd.add(["--manifest-entries", entries_json])
-    cmd.add(cmd_args(src_manifests_path, format = "@{}"))
-    cmd.hidden(src_manifests)
-    cmd.add(["--output", module.as_output()])
+    cmd = cmd_args(
+        python_toolchain.make_py_package_manifest_module,
+        ["--manifest-entries", entries_json],
+        cmd_args(src_manifests_path, format = "@{}"),
+        ["--output", module.as_output()],
+        hidden = src_manifests,
+    )
     ctx.actions.run(cmd, category = "par", identifier = "manifest-module")
 
     json_entries_output = ctx.actions.declare_output("manifest/__manifest__.json")

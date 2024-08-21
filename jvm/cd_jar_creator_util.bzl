@@ -23,8 +23,7 @@ load("@prelude//java/utils:java_utils.bzl", "declare_prefixed_name")
 load("@prelude//utils:expect.bzl", "expect")
 
 def add_java_7_8_bootclasspath(target_level: int, bootclasspath_entries: list[Artifact], java_toolchain: JavaToolchainInfo) -> list[Artifact]:
-    if target_level == 7:
-        return bootclasspath_entries + java_toolchain.bootclasspath_7
+    # bootclasspath_7 is deprecated.
     if target_level == 8:
         return bootclasspath_entries + java_toolchain.bootclasspath_8
     return bootclasspath_entries
@@ -131,15 +130,16 @@ def define_output_paths(actions: AnalysisActions, prefix: [str, None], label: La
     )
 
 # buildifier: disable=uninitialized
-def add_output_paths_to_cmd_args(cmd: cmd_args, output_paths: OutputPaths, path_to_class_hashes: Artifact | None) -> cmd_args:
+def output_paths_to_hidden_cmd_args(output_paths: OutputPaths, path_to_class_hashes: Artifact | None) -> cmd_args:
+    hidden = []
     if path_to_class_hashes != None:
-        cmd.hidden(path_to_class_hashes.as_output())
-    cmd.hidden(output_paths.jar_parent.as_output())
-    cmd.hidden(output_paths.jar.as_output())
-    cmd.hidden(output_paths.classes.as_output())
-    cmd.hidden(output_paths.annotations.as_output())
-    cmd.hidden(output_paths.scratch.as_output())
-    return cmd
+        hidden.append(path_to_class_hashes.as_output())
+    hidden.append(output_paths.jar_parent.as_output())
+    hidden.append(output_paths.jar.as_output())
+    hidden.append(output_paths.classes.as_output())
+    hidden.append(output_paths.annotations.as_output())
+    hidden.append(output_paths.scratch.as_output())
+    return cmd_args(hidden = hidden)
 
 def encode_output_paths(label: Label, paths: OutputPaths, target_type: TargetType) -> struct:
     paths = struct(
@@ -366,9 +366,10 @@ def setup_dep_files(
         hidden = ["artifact"]) -> cmd_args:
     dep_file = declare_prefixed_output(actions, actions_identifier, "dep_file.txt")
 
-    new_cmd = cmd_args()
-    new_cmd.add(cmd)
-    new_cmd.add([
+    new_cmd_args = []
+    new_cmd_hidden = []
+    new_cmd_args.append(cmd)
+    new_cmd_args.append([
         "--used-classes",
     ] + [
         used_classes_json.as_output()
@@ -381,16 +382,16 @@ def setup_dep_files(
     if abi_to_abi_dir_map:
         abi_to_abi_dir_map_file = declare_prefixed_output(actions, actions_identifier, "abi_to_abi_dir_map")
         actions.write(abi_to_abi_dir_map_file, abi_to_abi_dir_map)
-        new_cmd.add([
+        new_cmd_args.extend([
             "--jar-to-jar-dir-map",
             abi_to_abi_dir_map_file,
         ])
-        if type(abi_to_abi_dir_map) == "transitive_set_args_projection":
-            new_cmd.hidden(classpath_jars_tag.tag_artifacts(abi_to_abi_dir_map))
+        if isinstance(abi_to_abi_dir_map, TransitiveSetArgsProjection):
+            new_cmd_hidden.append(classpath_jars_tag.tag_artifacts(abi_to_abi_dir_map))
         for hidden_artifact in hidden:
-            new_cmd.hidden(classpath_jars_tag.tag_artifacts(hidden_artifact))
+            new_cmd_hidden.append(classpath_jars_tag.tag_artifacts(hidden_artifact))
 
-    return new_cmd
+    return cmd_args(new_cmd_args, hidden = new_cmd_hidden)
 
 FORCE_PERSISTENT_WORKERS = read_root_config("build", "require_persistent_workers", "false").lower() == "true"
 
@@ -409,14 +410,27 @@ def prepare_cd_exe(
     local_only = False
     jvm_args = ["-XX:-MaxFDLimit"]
 
+    # The variables 'extra_jvm_args' and 'extra_jvm_args_target' are generally used, but they are primarily designed for profiling use-cases.
+    # The following section is configured with the profiling use-case in mind.
     if extra_jvm_args_target:
-        local_only = True
-        for target in extra_jvm_args_target:
-            if qualified_name == qualified_name_with_subtarget(target):
+        if len(extra_jvm_args_target) == 1:
+            # If there's only one target to profile, we want to isolate its compilation.
+            # This target should be built in its own action, allowing the worker (if available) to handle the remaining targets.
+            if qualified_name == qualified_name_with_subtarget(extra_jvm_args_target[0]):
                 jvm_args = jvm_args + extra_jvm_args
-                local_only = False
-                break
+                local_only = True  # This flag ensures the target is not run on the worker.
+        else:
+            # If there are multiple targets to profile, they should be built on the worker to generate a single profiling data set.
+            # The remaining targets should be built individually, either locally or on the Remote Execution (RE).
+            local_only = True  # By default, targets are not run on the worker.
+            for target in extra_jvm_args_target:
+                # If the current target matches the qualified name with subtarget, it is selected for profiling.
+                if qualified_name == qualified_name_with_subtarget(target):
+                    jvm_args = jvm_args + extra_jvm_args
+                    local_only = False  # This flag allows the target to run on the worker.
+                    break
     else:
+        # If no specific target is provided, the extra JVM arguments are added to all targets that run on worker, local machine or RE.
         jvm_args = jvm_args + extra_jvm_args
 
     # Allow JVM compiler daemon to access internal jdk.compiler APIs
@@ -463,6 +477,12 @@ def prepare_cd_exe(
         )
         return worker_run_info, FORCE_PERSISTENT_WORKERS
 
+FinalJarOutput = record(
+    final_jar = Artifact,
+    # The same as final_jar unless there is a jar_postprocessor.
+    preprocessed_jar = Artifact,
+)
+
 # If there's additional compiled srcs, we need to merge them in and if the
 # caller specified an output artifact we need to make sure the jar is in that
 # location.
@@ -473,17 +493,21 @@ def prepare_final_jar(
         output_paths: OutputPaths,
         additional_compiled_srcs: Artifact | None,
         jar_builder: RunInfo,
-        jar_postprocessor: [RunInfo, None]) -> Artifact:
+        jar_postprocessor: [RunInfo, None]) -> FinalJarOutput:
+    def make_output(jar: Artifact) -> FinalJarOutput:
+        if jar_postprocessor:
+            postprocessed_jar = postprocess_jar(actions, jar_postprocessor, jar, actions_identifier)
+            return FinalJarOutput(final_jar = postprocessed_jar, preprocessed_jar = jar)
+        else:
+            return FinalJarOutput(final_jar = jar, preprocessed_jar = jar)
+
     if not additional_compiled_srcs:
         output_jar = output_paths.jar
         if output:
             actions.copy_file(output.as_output(), output_paths.jar)
             output_jar = output
 
-        if jar_postprocessor:
-            return postprocess_jar(actions, jar_postprocessor, output_jar, actions_identifier)
-        else:
-            return output_jar
+        return make_output(output_jar)
 
     merged_jar = output
     if not merged_jar:
@@ -497,15 +521,12 @@ def prepare_final_jar(
             merged_jar.as_output(),
             "--entries-to-jar",
             files_to_merge_file,
-        ]).hidden(files_to_merge),
+        ], hidden = files_to_merge),
         category = "merge_additional_srcs",
         identifier = actions_identifier,
     )
 
-    if jar_postprocessor:
-        return postprocess_jar(actions, jar_postprocessor, merged_jar, actions_identifier)
-    else:
-        return merged_jar
+    return make_output(merged_jar)
 
 def generate_abi_jars(
         actions: AnalysisActions,

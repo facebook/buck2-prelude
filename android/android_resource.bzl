@@ -5,7 +5,9 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
-load("@prelude//java:java_providers.bzl", "get_java_packaging_info")
+load("@prelude//java:java_providers.bzl", "derive_compiling_deps", "get_global_code_info", "get_java_packaging_info")
+load("@prelude//java:java_toolchain.bzl", "JavaToolchainInfo")
+load("@prelude//utils:argfile.bzl", "argfile")
 load("@prelude//utils:expect.bzl", "expect")
 load(":android_providers.bzl", "AndroidResourceInfo", "ExportedAndroidResourceInfo", "RESOURCE_PRIORITY_NORMAL", "merge_android_packageable_info")
 load(":android_toolchain.bzl", "AndroidToolchainInfo")
@@ -73,6 +75,8 @@ def android_resource_impl(ctx: AnalysisContext) -> list[Provider]:
     providers.append(merge_android_packageable_info(ctx.label, ctx.actions, ctx.attrs.deps, manifest = ctx.attrs.manifest, resource_info = resource_info))
     providers.append(get_java_packaging_info(ctx, ctx.attrs.deps))
     providers.append(DefaultInfo(default_output = default_output, sub_targets = sub_targets))
+    compiling_deps = derive_compiling_deps(ctx.actions, None, ctx.attrs.deps)
+    providers.append(get_global_code_info(ctx, ctx.attrs.deps, ctx.attrs.deps, derive_compiling_deps(ctx.actions, None, []), compiling_deps, compiling_deps, ctx.attrs._java_toolchain[JavaToolchainInfo].global_code_config))
 
     return providers
 
@@ -129,10 +133,9 @@ def get_text_symbols(
     dep_symbols = _get_dep_symbols(deps)
     dep_symbol_paths.add(dep_symbols)
 
-    dep_symbol_paths_file, _ = ctx.actions.write("{}_dep_symbol_paths_file".format(identifier) if identifier else "dep_symbol_paths_file", dep_symbol_paths, allow_args = True)
+    dep_symbol_paths_file = argfile(actions = ctx.actions, name = "{}_dep_symbol_paths_file".format(identifier) if identifier else "dep_symbol_paths_file", args = dep_symbol_paths, allow_args = True)
 
     mini_aapt_cmd.add(["--dep-symbol-paths", dep_symbol_paths_file])
-    mini_aapt_cmd.hidden(dep_symbols)
 
     text_symbols = ctx.actions.declare_output("{}_R.txt".format(identifier) if identifier else "R.txt")
     mini_aapt_cmd.add(["--output-path", text_symbols.as_output()])

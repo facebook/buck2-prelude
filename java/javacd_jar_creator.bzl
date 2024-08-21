@@ -31,7 +31,6 @@ load(
     "OutputPaths",
     "TargetType",
     "add_java_7_8_bootclasspath",
-    "add_output_paths_to_cmd_args",
     "base_qualified_name",
     "declare_prefixed_output",
     "define_output_paths",
@@ -40,6 +39,7 @@ load(
     "generate_abi_jars",
     "get_abi_generation_mode",
     "get_compiling_deps_tset",
+    "output_paths_to_hidden_cmd_args",
     "prepare_cd_exe",
     "prepare_final_jar",
     "setup_dep_files",
@@ -246,7 +246,7 @@ def create_jar_artifact_javacd(
                 abi_dir.as_output(),
             )
 
-        args = add_output_paths_to_cmd_args(args, output_paths, path_to_class_hashes)
+        args.add(output_paths_to_hidden_cmd_args(output_paths, path_to_class_hashes))
 
         # TODO(cjhopman): make sure this works both locally and remote.
         event_pipe_out = declare_prefixed_output(actions, actions_identifier, "events.data")
@@ -285,6 +285,7 @@ def create_jar_artifact_javacd(
             category = "{}javacd_jar".format(category_prefix),
             identifier = actions_identifier or "",
             dep_files = dep_files,
+            allow_dep_file_cache_upload = True,
             exe = exe,
             local_only = local_only,
             low_pass_filter = False,
@@ -307,7 +308,7 @@ def create_jar_artifact_javacd(
         is_creating_subtarget,
     )
     jar_postprocessor = ctx.attrs.jar_postprocessor[RunInfo] if hasattr(ctx.attrs, "jar_postprocessor") and ctx.attrs.jar_postprocessor else None
-    final_jar = prepare_final_jar(
+    final_jar_output = prepare_final_jar(
         actions = actions,
         actions_identifier = actions_identifier,
         output = output,
@@ -326,7 +327,7 @@ def create_jar_artifact_javacd(
             additional_compiled_srcs,
             is_building_android_binary,
             java_toolchain.class_abi_generator,
-            final_jar,
+            final_jar_output.final_jar,
             compiling_deps_tset,
             source_only_abi_deps,
             class_abi_jar = class_abi_jar,
@@ -336,7 +337,8 @@ def create_jar_artifact_javacd(
         )
 
         result = make_compile_outputs(
-            full_library = final_jar,
+            full_library = final_jar_output.final_jar,
+            preprocessed_library = final_jar_output.preprocessed_jar,
             class_abi = class_abi,
             source_abi = source_abi,
             source_only_abi = source_only_abi,
@@ -347,7 +349,8 @@ def create_jar_artifact_javacd(
         )
     else:
         result = make_compile_outputs(
-            full_library = final_jar,
+            full_library = final_jar_output.final_jar,
+            preprocessed_library = final_jar_output.preprocessed_jar,
             required_for_source_only_abi = required_for_source_only_abi,
             annotation_processor_output = output_paths.annotations,
         )

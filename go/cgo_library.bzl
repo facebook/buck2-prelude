@@ -6,9 +6,17 @@
 # of this source tree.
 
 load(
+    "@prelude//linking:link_groups.bzl",
+    "merge_link_group_lib_info",
+)
+load(
     "@prelude//linking:link_info.bzl",
     "MergedLinkInfo",
     "create_merged_link_info_for_propagation",
+)
+load(
+    "@prelude//linking:linkable_graph.bzl",
+    "create_linkable_graph",
 )
 load(
     "@prelude//linking:shared_libraries.bzl",
@@ -28,19 +36,19 @@ load(":packages.bzl", "go_attr_pkg_name", "merge_pkgs")
 def cgo_library_impl(ctx: AnalysisContext) -> list[Provider]:
     pkg_name = go_attr_pkg_name(ctx)
 
-    shared = ctx.attrs._compile_shared
     race = ctx.attrs._race
+    asan = ctx.attrs._asan
     coverage_mode = GoCoverageMode(ctx.attrs._coverage_mode) if ctx.attrs._coverage_mode else None
 
     # Build Go library.
-    compiled_pkg = build_package(
+    compiled_pkg, pkg_info = build_package(
         ctx,
         pkg_name,
         ctx.attrs.go_srcs + ctx.attrs.srcs + ctx.attrs.headers,
         package_root = ctx.attrs.package_root,
         deps = ctx.attrs.deps + ctx.attrs.exported_deps,
-        shared = shared,
         race = race,
+        asan = asan,
         coverage_mode = coverage_mode,
         embedcfg = ctx.attrs.embedcfg,
     )
@@ -54,7 +62,7 @@ def cgo_library_impl(ctx: AnalysisContext) -> list[Provider]:
     # to work with cgo. And when nearly every FB service client is cgo,
     # we need to support it well.
     return [
-        DefaultInfo(default_output = compiled_pkg.pkg, other_outputs = [compiled_pkg.cgo_gen_dir]),
+        DefaultInfo(default_output = compiled_pkg.pkg, other_outputs = [pkg_info.cgo_gen_dir]),
         GoPkgCompileInfo(pkgs = merge_pkgs([
             pkgs,
             get_inherited_compile_pkgs(ctx.attrs.exported_deps),
@@ -68,4 +76,10 @@ def cgo_library_impl(ctx: AnalysisContext) -> list[Provider]:
             ctx.actions,
             deps = filter(None, map_idx(SharedLibraryInfo, ctx.attrs.deps)),
         ),
+        merge_link_group_lib_info(deps = ctx.attrs.deps),
+        create_linkable_graph(
+            ctx,
+            deps = ctx.attrs.deps,
+        ),
+        pkg_info,
     ]

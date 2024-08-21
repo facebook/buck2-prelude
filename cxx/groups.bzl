@@ -14,7 +14,7 @@ load(
 )
 load(
     "@prelude//utils:graph_utils.bzl",
-    "breadth_first_traversal_with_callback",
+    "depth_first_traversal_by",
 )
 load(
     "@prelude//utils:strings.bzl",
@@ -63,7 +63,7 @@ _TRAVERSALS_TO_ASSIGN_NODE = [
     # If iterating the tree of 'root2' we find a node which
     # was also present in 'root1', we can skip traversing the subtree
     # because it's evitable that everything is going to match there too.
-    Traversal("intersect"),
+    Traversal("intersect_any_roots"),
 ]
 
 # Creates a group from an existing group, overwriting any properties provided
@@ -118,9 +118,9 @@ def parse_groups_definitions(
                 preferred_linkage = Linkage(entry[3]) if len(entry) > 3 and entry[3] else None,
             )
             num_roots = len(mapping.roots) if mapping.roots else 0
-            if num_roots > 1 and mapping.traversal != Traversal("intersect"):
+            if num_roots > 1 and mapping.traversal != Traversal("intersect_any_roots"):
                 fail("Invariant. A link_group mapping with traversal type: {} can only have 1 root node. {} found.".format(mapping.traversal, mapping.roots))
-            elif mapping.traversal == Traversal("intersect") and num_roots < 2:
+            elif mapping.traversal == Traversal("intersect_any_roots") and num_roots < 2:
                 fail("Invariant. A link_group mapping with traversal type 'intersect' must have at least 2 root nodes. {} found.".format(mapping.roots))
 
             parsed_mappings.append(mapping)
@@ -142,8 +142,8 @@ def _parse_traversal_from_mapping(entry: str) -> Traversal:
         return Traversal("node")
     elif entry == "subfolders":
         return Traversal("subfolders")
-    elif entry == "intersect":
-        return Traversal("intersect")
+    elif entry == "intersect_any_roots":
+        return Traversal("intersect_any_roots")
     else:
         fail("Unrecognized group traversal type: " + entry)
 
@@ -218,7 +218,7 @@ def _find_targets_in_mapping(
     if not mapping.filters:
         if not mapping.roots:
             fail("no filter or explicit root given: {}", mapping)
-        elif mapping.traversal != Traversal("intersect"):
+        elif mapping.traversal != Traversal("intersect_any_roots"):
             return mapping.roots
 
     # Else find all dependencies that match the filter.
@@ -257,33 +257,33 @@ def _find_targets_in_mapping(
                 return False
         return True
 
-    def populate_matching_targets_bfs_wrapper(node, populate_queue):  # (Label, typing.Callable) -> None
+    def populate_matching_targets_bfs_wrapper(node):  # (Label) -> list
         if populate_matching_targets(node):
             graph_node = graph_map[node]
-            populate_queue(graph_node.deps)
-            populate_queue(graph_node.exported_deps)
+            return graph_node.deps + graph_node.exported_deps
+        return []
 
     if not mapping.roots:
         for node in graph_map:
             populate_matching_targets(node)
-    elif mapping.traversal == Traversal("intersect"):
-        intersected_targets = None
+    elif mapping.traversal == Traversal("intersect_any_roots"):
+        targets_to_counter = {}
         for root in mapping.roots:
             # This is a captured variable inside `populate_matching_targets`.
             # We reset it for each root we visit so that we don't have results
             # from other roots.
             matching_targets = {}
-            breadth_first_traversal_with_callback(graph_map, [root], populate_matching_targets_bfs_wrapper)
-            if intersected_targets == None:
-                intersected_targets = {target: True for target in matching_targets}
-            else:
-                # filter the list of intersected targets to only include targets also seen
-                # in the last passthrough.
-                intersected_targets = {target: True for target in matching_targets if target in intersected_targets}
+            depth_first_traversal_by(graph_map, [root], populate_matching_targets_bfs_wrapper)
+            for t in matching_targets:
+                targets_to_counter[t] = targets_to_counter.get(t, 0) + 1
 
-        return intersected_targets.keys()
+        return [
+            t
+            for t, count in targets_to_counter.items()
+            if count > 1
+        ]
     else:
-        breadth_first_traversal_with_callback(graph_map, mapping.roots, populate_matching_targets_bfs_wrapper)
+        depth_first_traversal_by(graph_map, mapping.roots, populate_matching_targets_bfs_wrapper)
 
     return matching_targets.keys()
 
@@ -316,16 +316,14 @@ def _transitively_add_targets_to_group_mapping(
         assign_target_to_group,  # (Label, bool) -> bool
         node_traversed_targets,  #: {"label": None}
         graph_map,  # {"label": "_b"}
-        node,
-        populate_queue):  # ([Label]) -> None
+        node):  # ([Label]) -> None
     previously_processed = assign_target_to_group(node, False)
 
     # If the node has been previously processed, and it was via tree (not node), all child nodes have been assigned
     if previously_processed and node not in node_traversed_targets:
-        return
+        return None
     graph_node = graph_map[node]
-    populate_queue(graph_node.deps)
-    populate_queue(graph_node.exported_deps)
+    return graph_node.deps + graph_node.exported_deps
 
 # Types removed to avoid unnecessary type checking which degrades performance.
 def _update_target_to_group_mapping(
@@ -342,7 +340,7 @@ def _update_target_to_group_mapping(
     if mapping.traversal in _TRAVERSALS_TO_ASSIGN_NODE:
         assign_target_to_group(target, True)
     else:  # tree
-        breadth_first_traversal_with_callback(graph_map, [target], transitively_add_targets_to_group_mapping)
+        depth_first_traversal_by(graph_map, [target], transitively_add_targets_to_group_mapping)
 
 def _add_to_implicit_link_group(
         generated_group_name,  # str
@@ -422,5 +420,5 @@ def make_info_subtarget_providers(ctx: AnalysisContext, groups: list[Group], map
         "groups": {group.name: _make_json_info_for_group(group) for group in groups},
         "mappings": mappings,
     }
-    json_output = ctx.actions.write_json("link_group_map_info.json", info_json)
+    json_output = ctx.actions.write_json("link_group_map_info.json", info_json, pretty = True)
     return [DefaultInfo(default_output = json_output)]

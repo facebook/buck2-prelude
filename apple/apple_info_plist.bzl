@@ -7,7 +7,7 @@
 
 load(":apple_bundle_destination.bzl", "AppleBundleDestination")
 load(":apple_bundle_part.bzl", "AppleBundlePart")
-load(":apple_bundle_utility.bzl", "get_bundle_min_target_version", "get_product_name")
+load(":apple_bundle_utility.bzl", "get_bundle_min_target_version", "get_default_binary_dep", "get_product_name")
 load(":apple_sdk.bzl", "get_apple_sdk_name")
 load(
     ":apple_sdk_metadata.bzl",
@@ -112,7 +112,7 @@ def _info_plist_additional_keys(ctx: AnalysisContext) -> dict[str, typing.Any]:
     xcode_version = ctx.attrs._apple_toolchain[AppleToolchainInfo].xcode_version
     if xcode_version:
         result["DTXcode"] = xcode_version
-    result[sdk_metadata.min_version_plist_info_key] = get_bundle_min_target_version(ctx, ctx.attrs.binary)
+    result[sdk_metadata.min_version_plist_info_key] = get_bundle_min_target_version(ctx, get_default_binary_dep(ctx.attrs.binary))
 
     identify_build_system = ctx.attrs._info_plist_identify_build_system_default
     if ctx.attrs.info_plist_identify_build_system != None:
@@ -142,6 +142,9 @@ def _info_plist_override_keys(ctx: AnalysisContext) -> dict[str, typing.Any]:
     if sdk_name == MacOSXSdkMetadata.name:
         if ctx.attrs.extension != "xpc":
             result["LSRequiresIPhoneOS"] = False
-    elif sdk_name not in [WatchOSSdkMetadata.name, WatchSimulatorSdkMetadata.name, MacOSXCatalystSdkMetadata.name]:
+    elif sdk_name in [WatchOSSdkMetadata.name, WatchSimulatorSdkMetadata.name]:
+        result["UIDeviceFamily"] = [4]
+        result["WKApplication"] = True
+    elif sdk_name not in [MacOSXCatalystSdkMetadata.name]:
         result["LSRequiresIPhoneOS"] = True
     return result

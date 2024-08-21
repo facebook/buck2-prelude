@@ -8,12 +8,13 @@
 load("@prelude//cxx:cxx_toolchain_types.bzl", "PicBehavior")
 load("@prelude//cxx:headers.bzl", "CPrecompiledHeaderInfo")
 load("@prelude//cxx:platform.bzl", "cxx_by_platform")
+load("@prelude//cxx:shared_library_interface.bzl", "SharedInterfaceInfo")
 load("@prelude//linking:types.bzl", "Linkage")
 load("@prelude//python:python.bzl", "PythonLibraryInfo")
 load("@prelude//utils:expect.bzl", "expect")
 load(
     "@prelude//utils:graph_utils.bzl",
-    "breadth_first_traversal_by",
+    "depth_first_traversal_by",
 )
 load(
     "@prelude//utils:utils.bzl",
@@ -42,6 +43,7 @@ load(
 LinkableRootInfo = provider(
     # @unsorted-dict-items
     fields = {
+        "label": provider_field(Label),
         "link_infos": provider_field(typing.Any, default = None),  # LinkInfos
         "name": provider_field(typing.Any, default = None),  # [str, None]
         "deps": provider_field(typing.Any, default = None),  # ["label"]
@@ -72,6 +74,10 @@ LinkableNode = record(
     # deps and their (transitive) exported deps. This helps keep link lines smaller
     # and produces more efficient libs (for example, DT_NEEDED stays a manageable size).
     exported_deps = field(list[Label], []),
+
+    # List of both deps and exported deps. We traverse linkable graph lots of times
+    # and preallocating this list saves RAM during analysis
+    all_deps = field(list[Label], []),
     # Link infos for all supported lib output styles supported by this node. This should have a value
     # for every output_style supported by the preferred linkage.
     link_infos = field(dict[LibOutputStyle, LinkInfos], {}),
@@ -101,6 +107,9 @@ LinkableNode = record(
     include_in_android_mergemap = field(bool),
     # Don't follow dependents on this node even if has preferred linkage static
     ignore_force_static_follows_dependents = field(bool),
+
+    # Shared interface provider for this node.
+    shared_interface_info = field(SharedInterfaceInfo | None),
 
     # Only allow constructing within this file.
     _private = _DisallowConstruction,
@@ -167,7 +176,8 @@ def create_linkable_node(
         can_be_asset: bool = True,
         include_in_android_mergemap: bool = True,
         linker_flags: [LinkerFlags, None] = None,
-        ignore_force_static_follows_dependents: bool = False) -> LinkableNode:
+        ignore_force_static_follows_dependents: bool = False,
+        shared_interface_info: SharedInterfaceInfo | None = None) -> LinkableNode:
     for output_style in _get_required_outputs_for_linkage(preferred_linkage):
         expect(
             output_style in link_infos,
@@ -175,12 +185,15 @@ def create_linkable_node(
         )
     if not linker_flags:
         linker_flags = LinkerFlags()
+    deps = linkable_deps(deps)
+    exported_deps = linkable_deps(exported_deps)
     return LinkableNode(
         labels = ctx.attrs.labels,
         preferred_linkage = preferred_linkage,
         default_link_strategy = default_link_strategy,
-        deps = linkable_deps(deps),
-        exported_deps = linkable_deps(exported_deps),
+        deps = deps,
+        exported_deps = exported_deps,
+        all_deps = deps + exported_deps,
         link_infos = link_infos,
         shared_libs = shared_libs,
         can_be_asset = can_be_asset,
@@ -189,6 +202,7 @@ def create_linkable_node(
         default_soname = default_soname,
         linker_flags = linker_flags,
         ignore_force_static_follows_dependents = ignore_force_static_follows_dependents,
+        shared_interface_info = shared_interface_info,
         _private = _DisallowConstruction(),
     )
 
@@ -328,8 +342,8 @@ def get_transitive_deps(
     """
 
     def find_transitive_deps(node: Label):
-        return link_infos[node].deps + link_infos[node].exported_deps
+        return link_infos[node].all_deps
 
-    all_deps = breadth_first_traversal_by(link_infos, roots, find_transitive_deps)
+    all_deps = depth_first_traversal_by(link_infos, roots, find_transitive_deps)
 
     return all_deps

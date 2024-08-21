@@ -24,20 +24,25 @@ from .list_codesign_identities import ListCodesignIdentities
 from .provisioning_profile_selection import CodeSignProvisioningError
 
 
-class Arguments(Tap):  # pyre-ignore[13] ignore uninitialized attributes for typed argument parser
+class Arguments(Tap):
     """
     Tool which code signs the Apple bundle. `Info.plist` file is amended as a part of it.
     """
 
+    # pyre-fixme[13]: Attribute `bundle_path` is never initialized.
     bundle_path: pathlib.Path
+    # pyre-fixme[13]: Attribute `info_plist` is never initialized.
     info_plist: pathlib.Path
     entitlements: Optional[pathlib.Path] = None
     profiles_dir: Optional[pathlib.Path] = None
     ad_hoc: bool = False
     ad_hoc_codesign_identity: Optional[str] = None
+    # pyre-fixme[13]: Attribute `platform` is never initialized.
     platform: ApplePlatform
     codesign_on_copy: Optional[List[pathlib.Path]] = None
     fast_provisioning_profile_parsing: bool = False
+    strict_provisioning_profile_search: bool = False
+    provisioning_profile_filter: Optional[str] = None
 
     def configure(self) -> None:
         """
@@ -105,6 +110,19 @@ class Arguments(Tap):  # pyre-ignore[13] ignore uninitialized attributes for typ
             required=False,
             help="Uses experimental faster provisioning profile parsing.",
         )
+        self.add_argument(
+            "--strict-provisioning-profile-search",
+            action="store_true",
+            required=False,
+            help="Fail code signing if more than one matching profile found.",
+        )
+        self.add_argument(
+            "--provisioning-profile-filter",
+            metavar="<regex>",
+            type=str,
+            required=False,
+            help="Regex to disambiguate multiple matching profiles, evaluated against provisioning profile filename.",
+        )
 
 
 # Add emoji to beginning of actionable error message so it stands out more.
@@ -132,6 +150,8 @@ def _main() -> None:
                 list_codesign_identities=ListCodesignIdentities.default(),
                 platform=args.platform,
                 should_use_fast_provisioning_profile_parsing=args.fast_provisioning_profile_parsing,
+                strict_provisioning_profile_search=args.strict_provisioning_profile_search,
+                provisioning_profile_filter=args.provisioning_profile_filter,
             )
 
         bundle_path = CodesignedPath(

@@ -11,6 +11,7 @@ load("@prelude//cxx:cxx_utility.bzl", "cxx_toolchain_allow_cache_upload_args")
 load("@prelude//cxx:debug.bzl", "SplitDebugMode")
 load("@prelude//cxx:headers.bzl", "HeaderMode", "HeadersAsRawHeadersMode")
 load("@prelude//cxx:linker.bzl", "LINKERS", "is_pdb_generated")
+load("@prelude//cxx:target_sdk_version.bzl", "get_toolchain_target_sdk_version")
 load("@prelude//linking:link_info.bzl", "LinkOrdering", "LinkStyle")
 load("@prelude//linking:lto.bzl", "LtoMode", "lto_compiler_flags")
 load("@prelude//utils:utils.bzl", "flatten", "value_or")
@@ -89,10 +90,12 @@ def cxx_toolchain_impl(ctx):
     linker_info = LinkerInfo(
         archiver = ctx.attrs.archiver[RunInfo],
         archiver_flags = cmd_args(ctx.attrs.archiver_flags),
+        archiver_reads_inputs = ctx.attrs.archiver_reads_inputs,
         archiver_supports_argfiles = ctx.attrs.archiver_supports_argfiles,
         archiver_type = ctx.attrs.archiver_type,
         archive_contents = ctx.attrs.archive_contents,
         archive_objects_locally = False,
+        archive_symbol_table = ctx.attrs.archive_symbol_table,
         binary_extension = value_or(ctx.attrs.binary_extension, ""),
         generate_linker_maps = ctx.attrs.generate_linker_maps,
         is_pdb_generated = is_pdb_generated(ctx.attrs.linker_type, ctx.attrs.linker_flags),
@@ -103,6 +106,7 @@ def cxx_toolchain_impl(ctx):
         link_ordering = ctx.attrs.link_ordering,
         linker = ctx.attrs.linker[RunInfo],
         linker_flags = cmd_args(ctx.attrs.linker_flags, c_lto_flags),
+        dist_thin_lto_codegen_flags = cmd_args(ctx.attrs.dist_thin_lto_codegen_flags) if ctx.attrs.dist_thin_lto_codegen_flags else None,
         post_linker_flags = cmd_args(ctx.attrs.post_linker_flags),
         lto_mode = lto_mode,
         mk_shlib_intf = ctx.attrs.shared_library_interface_producer,
@@ -128,6 +132,7 @@ def cxx_toolchain_impl(ctx):
     utilities_info = BinaryUtilitiesInfo(
         nm = ctx.attrs.nm[RunInfo],
         objcopy = ctx.attrs.objcopy_for_shared_library_interface[RunInfo],
+        objdump = ctx.attrs.objdump[RunInfo] if ctx.attrs.objdump else None,
         ranlib = ctx.attrs.ranlib[RunInfo] if ctx.attrs.ranlib else None,
         strip = ctx.attrs.strip[RunInfo],
         dwp = None,
@@ -169,16 +174,22 @@ def cxx_toolchain_impl(ctx):
         # TODO(T138705365): Turn on dep files by default
         use_dep_files = value_or(ctx.attrs.use_dep_files, _get_default_use_dep_files(platform_name)),
         clang_remarks = ctx.attrs.clang_remarks,
+        gcno_files = value_or(ctx.attrs.gcno_files, False),
         clang_trace = value_or(ctx.attrs.clang_trace, False),
         cpp_dep_tracking_mode = DepTrackingMode(ctx.attrs.cpp_dep_tracking_mode),
         cuda_dep_tracking_mode = DepTrackingMode(ctx.attrs.cuda_dep_tracking_mode),
         dumpbin_toolchain_path = ctx.attrs._dumpbin_toolchain_path[DefaultInfo].default_outputs[0] if ctx.attrs._dumpbin_toolchain_path else None,
+        target_sdk_version = get_toolchain_target_sdk_version(ctx),
+        dist_lto_tools_info = ctx.attrs.dist_lto_tools[DistLtoToolsInfo],
+        remap_cwd = ctx.attrs._remap_cwd_tool[RunInfo] if ctx.attrs.remap_cwd else None,
     )
 
 def cxx_toolchain_extra_attributes(is_toolchain_rule):
     dep_type = attrs.exec_dep if is_toolchain_rule else attrs.dep
     return {
+        "archive_symbol_table": attrs.bool(default = True),
         "archiver": dep_type(providers = [RunInfo]),
+        "archiver_reads_inputs": attrs.bool(default = True),
         "archiver_supports_argfiles": attrs.bool(default = False),
         "asm_compiler": attrs.option(dep_type(providers = [RunInfo]), default = None),
         "asm_preprocessor": attrs.option(dep_type(providers = [RunInfo]), default = None),
@@ -193,6 +204,8 @@ def cxx_toolchain_extra_attributes(is_toolchain_rule):
         "cuda_dep_tracking_mode": attrs.enum(DepTrackingMode.values(), default = "makefile"),
         "cvtres_compiler": attrs.option(dep_type(providers = [RunInfo]), default = None),
         "cxx_compiler": dep_type(providers = [RunInfo]),
+        "dist_lto_tools": dep_type(providers = [DistLtoToolsInfo], default = "prelude//cxx/dist_lto/tools:dist_lto_tools"),
+        "gcno_files": attrs.bool(default = False),
         "generate_linker_maps": attrs.bool(default = False),
         "hip_compiler": attrs.option(dep_type(providers = [RunInfo]), default = None),
         "link_ordering": attrs.enum(LinkOrdering.values(), default = "preorder"),
@@ -200,8 +213,11 @@ def cxx_toolchain_extra_attributes(is_toolchain_rule):
         "linker": dep_type(providers = [RunInfo]),
         "llvm_link": attrs.option(dep_type(providers = [RunInfo]), default = None),
         "lto_mode": attrs.enum(LtoMode.values(), default = "none"),
+        # Darwin only: the minimum deployment target supported
+        "min_sdk_version": attrs.option(attrs.string(), default = None),
         "nm": dep_type(providers = [RunInfo]),
         "objcopy_for_shared_library_interface": dep_type(providers = [RunInfo]),
+        "objdump": attrs.option(dep_type(providers = [RunInfo]), default = None),
         "object_format": attrs.enum(CxxObjectFormat.values(), default = "native"),
         "pic_behavior": attrs.enum(PicBehavior.values(), default = "supported"),
         # A placeholder tool that can be used to set up toolchain constraints.
@@ -214,6 +230,7 @@ def cxx_toolchain_extra_attributes(is_toolchain_rule):
         "public_headers_symlinks_enabled": attrs.bool(default = True),
         "ranlib": attrs.option(dep_type(providers = [RunInfo]), default = None),
         "rc_compiler": attrs.option(dep_type(providers = [RunInfo]), default = None),
+        "remap_cwd": attrs.bool(default = False),
         "requires_objects": attrs.bool(default = False),
         "sanitizer_runtime_enabled": attrs.bool(default = False),
         "sanitizer_runtime_files": attrs.set(attrs.dep(), sorted = True, default = []),  # Use `attrs.dep()` as it's not a tool, always propagate target platform
@@ -222,10 +239,11 @@ def cxx_toolchain_extra_attributes(is_toolchain_rule):
         "split_debug_mode": attrs.enum(SplitDebugMode.values(), default = "none"),
         "strip": dep_type(providers = [RunInfo]),
         "supports_distributed_thinlto": attrs.bool(default = False),
+        # Darwin only: the deployment target to use for this build
+        "target_sdk_version": attrs.option(attrs.string(), default = None),
         "use_archiver_flags": attrs.bool(default = True),
         "use_dep_files": attrs.option(attrs.bool(), default = None),
         "_dep_files_processor": dep_type(providers = [RunInfo], default = "prelude//cxx/tools:dep_file_processor"),
-        "_dist_lto_tools": attrs.default_only(dep_type(providers = [DistLtoToolsInfo], default = "prelude//cxx/dist_lto/tools:dist_lto_tools")),
         # TODO(scottcao): Figure out a slightly better way to integrate this. In theory, this is only needed for clang toolchain.
         # If we were using msvc, we should be able to use dumpbin directly.
         "_dumpbin_toolchain_path": attrs.default_only(attrs.option(dep_type(providers = [DefaultInfo]), default = select({
@@ -243,6 +261,7 @@ def cxx_toolchain_extra_attributes(is_toolchain_rule):
         # FIXME: prelude// should be standalone (not refer to fbsource//)
         "_mk_hmap": attrs.default_only(dep_type(providers = [RunInfo], default = "prelude//cxx/tools:hmap_wrapper")),
         "_msvc_hermetic_exec": attrs.default_only(dep_type(providers = [RunInfo], default = "prelude//windows/tools:msvc_hermetic_exec")),
+        "_remap_cwd_tool": attrs.default_only(dep_type(providers = [RunInfo], default = "prelude//cxx/tools:remap_cwd")),
     } | cxx_toolchain_allow_cache_upload_args()
 
 def _cxx_toolchain_inheriting_target_platform_attrs():

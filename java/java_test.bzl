@@ -25,6 +25,7 @@ load(
     "@prelude//tests:re_utils.bzl",
     "get_re_executors_from_props",
 )
+load("@prelude//utils:argfile.bzl", "at_argfile")
 load("@prelude//utils:expect.bzl", "expect")
 load("@prelude//test/inject_test_run_info.bzl", "inject_test_run_info")
 
@@ -92,9 +93,7 @@ def build_junit_test(
 
     uses_java8 = "run_with_java8" in labels
 
-    classpath_args = cmd_args()
-    if run_from_cell_root:
-        classpath_args.relative_to(ctx.label.cell_root)
+    relative_to = {"relative_to": ctx.label.cell_root} if run_from_cell_root else {}
 
     if uses_java8:
         # Java 8 does not support using argfiles, and these tests can have huge classpaths so we need another
@@ -103,16 +102,25 @@ def build_junit_test(
         # to the "FileClassPathRunner" as a system variable. The "FileClassPathRunner" then loads all the jars
         # from that file onto the classpath, and delegates running the test to the junit test runner.
         cmd.extend(["-classpath", cmd_args(java_test_toolchain.test_runner_library_jar)])
-        classpath_args.add(cmd_args(classpath))
+        classpath_args = cmd_args(
+            cmd_args(classpath),
+            **relative_to
+        )
         classpath_args_file = ctx.actions.write("classpath_args_file", classpath_args)
-        cmd.append(cmd_args(classpath_args_file, format = "-Dbuck.classpath_file={}").hidden(classpath_args))
+        cmd.append(cmd_args(
+            classpath_args_file,
+            format = "-Dbuck.classpath_file={}",
+            hidden = classpath_args,
+        ))
     else:
         # Java 9+ supports argfiles, so just write the classpath to an argsfile. "FileClassPathRunner" will delegate
         # immediately to the junit test runner.
-        classpath_args.add("-classpath")
-        classpath_args.add(cmd_args(classpath, delimiter = get_path_separator_for_exec_os(ctx)))
-        classpath_args_file = ctx.actions.write("classpath_args_file", classpath_args)
-        cmd.append(cmd_args(classpath_args_file, format = "@{}").hidden(classpath_args))
+        classpath_args = cmd_args(
+            "-classpath",
+            cmd_args(classpath, delimiter = get_path_separator_for_exec_os(ctx)),
+            **relative_to
+        )
+        cmd.append(at_argfile(actions = ctx.actions, name = "classpath_args_file", args = classpath_args))
 
     if (ctx.attrs.test_type == "junit5"):
         cmd.extend(java_test_toolchain.junit5_test_runner_main_class_args)
@@ -137,7 +145,7 @@ def build_junit_test(
             ctx.actions.write("sources.txt", ctx.attrs.srcs),
             "--output",
             class_names.as_output(),
-        ]).hidden(ctx.attrs.srcs)
+        ], hidden = ctx.attrs.srcs)
         ctx.actions.run(list_class_names_cmd, category = "list_class_names")
 
     cmd.extend(["--test-class-names-file", class_names])
@@ -159,7 +167,7 @@ def build_junit_test(
             deps = [tests_class_to_source_info],
         )
         if run_from_cell_root:
-            transitive_class_to_src_map = cmd_args(transitive_class_to_src_map).relative_to(ctx.label.cell_root)
+            transitive_class_to_src_map = cmd_args(transitive_class_to_src_map, relative_to = ctx.label.cell_root)
         env["JACOCO_CLASSNAME_SOURCE_MAP"] = transitive_class_to_src_map
 
     test_info = ExternalRunnerTestInfo(

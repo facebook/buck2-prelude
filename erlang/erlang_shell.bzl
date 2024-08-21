@@ -39,6 +39,7 @@ def _build_run_info(
         erl_args.add(cmd_args(additional_path, format = "-pa \"${REPO_ROOT}\"/{} \\", delimiter = ""))
 
     # add configs
+    config_files = _shell_config_files(ctx)
     for config_file in _shell_config_files(ctx):
         erl_args.add(cmd_args(config_file, format = "-config \"${REPO_ROOT}\"/{} \\", delimiter = ""))
 
@@ -56,11 +57,11 @@ def _build_run_info(
     content.add("")
 
     shell_script = ctx.actions.write("start_shell.sh", content)
-    shell_cmd = cmd_args(["/usr/bin/env", "bash", shell_script])
-
-    # depend on input paths
-    for code_path in app_paths + additional_paths:
-        shell_cmd.hidden(code_path)
+    shell_cmd = cmd_args(
+        ["/usr/bin/env", "bash", shell_script],
+        # depend on input paths
+        hidden = app_paths + additional_paths + config_files,
+    )
 
     return RunInfo(shell_cmd)
 

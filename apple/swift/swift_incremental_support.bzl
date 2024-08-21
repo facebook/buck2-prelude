@@ -10,8 +10,8 @@ load("@prelude//apple:apple_utility.bzl", "get_module_name")
 load("@prelude//apple/swift:swift_toolchain_types.bzl", "SwiftObjectFormat")
 load("@prelude//apple/swift:swift_types.bzl", "SwiftCompilationModes")
 load(
-    "@prelude//cxx:compile.bzl",
-    "CxxSrcWithFlags",
+    "@prelude//cxx:cxx_sources.bzl",
+    "CxxSrcWithFlags",  # @unused Used as a type
 )
 
 _WriteOutputFileMapOutput = record(
@@ -56,21 +56,20 @@ def get_incremental_swiftmodule_compilation_flags(ctx: AnalysisContext, srcs: li
 def _get_incremental_compilation_flags_and_objects(
         output_file_map: _WriteOutputFileMapOutput,
         additional_flags: cmd_args) -> IncrementalCompilationOutput:
-    cmd = cmd_args([
-        "-incremental",
-        "-enable-incremental-imports",
-        "-disable-cmo",  # To minimize changes in generated swiftmodule file.
-        "-enable-batch-mode",
-        "-driver-batch-count",
-        "1",
-        "-output-file-map",
-        output_file_map.output_map_artifact,
-    ])
-    cmd.add(additional_flags)
-
-    cmd = cmd.hidden([swiftdep.as_output() for swiftdep in output_file_map.swiftdeps])
-    cmd = cmd.hidden([artifact.as_output() for artifact in output_file_map.artifacts])
-    cmd = cmd.hidden(output_file_map.main_swiftdeps.as_output())
+    cmd = cmd_args(
+        [
+            "-incremental",
+            "-enable-incremental-imports",
+            "-disable-cmo",  # To minimize changes in generated swiftmodule file.
+            "-enable-batch-mode",
+            "-output-file-map",
+            output_file_map.output_map_artifact,
+            additional_flags,
+        ],
+        hidden = [swiftdep.as_output() for swiftdep in output_file_map.swiftdeps] +
+                 [artifact.as_output() for artifact in output_file_map.artifacts] +
+                 [output_file_map.main_swiftdeps.as_output()],
+    )
 
     return IncrementalCompilationOutput(
         incremental_flags_cmd = cmd,
