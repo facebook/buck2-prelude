@@ -166,6 +166,7 @@ haskell_library = prelude_rule(
         # @unsorted-dict-items
         haskell_common.srcs_arg() |
         haskell_common.external_tools_arg() |
+        haskell_common.srcs_envs_arg() |
         haskell_common.compiler_flags_arg() |
         haskell_common.deps_arg() |
         haskell_common.scripts_arg() |

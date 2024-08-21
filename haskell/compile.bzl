@@ -546,6 +546,19 @@ def _compile_module(
     if aux_deps:
         compile_args_for_file.hidden(aux_deps)
 
+    src_envs = ctx.attrs.srcs_envs.get(module.source)
+    if src_envs:
+        for k, v in src_envs:
+            compile_args_for_file.add(cmd_args(
+                k,
+                format="--extra-env-key={}",
+            ))
+            compile_args_for_file.add(cmd_args(
+                v,
+                format="--extra-env-value={}",
+            ))
+
+
     if haskell_toolchain.use_argsfile:
         argsfile = ctx.actions.declare_output(
             "haskell_compile_" + artifact_suffix + ".argsfile",
