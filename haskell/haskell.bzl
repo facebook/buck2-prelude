@@ -1265,12 +1265,6 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     def do_link(ctx, artifacts, resolved, outputs, output=output, objects=objects):
         link_cmd = link.copy() # link is already frozen, make a copy
 
-        if haskell_toolchain.packages:
-            pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-            package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
-        else:
-            package_db = []
-
         # Add -package-db and -package/-expose-package flags for each Haskell
         # library dependency.
         packages_info = get_packages_info(
@@ -1290,11 +1284,6 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         link_cmd.add(ctx.attrs.linker_flags)
 
         link_cmd.hidden(packages_info.exposed_package_libs)
-
-        package_db_tset = ctx.actions.tset(
-            HaskellPackageDbTSet,
-            children = [package_db[name] for name in toolchain_libs if name in package_db]
-        )
 
         link_cmd.add("-o", outputs[output].as_output())
 
