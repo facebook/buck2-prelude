@@ -35,7 +35,6 @@ load(
 )
 load("@prelude//utils:platform_flavors_util.bzl", "by_platform")
 load("@prelude//utils:utils.bzl", "flatten")
-load("@prelude//utils:strings.bzl", "strip_prefix")
 
 HASKELL_EXTENSIONS = [
     ".hs",
@@ -67,13 +66,8 @@ def is_haskell_boot(x: str) -> bool:
     _, ext = paths.split_extension(x)
     return ext in HASKELL_BOOT_EXTENSIONS
 
-def src_to_module_name(x: str, src_prefix: str = "") -> str:
+def src_to_module_name(x: str) -> str:
     base, _ext = paths.split_extension(x)
-    if src_prefix:
-        prefix = src_prefix if src_prefix.endswith("/") else src_prefix + "/"
-        stripped = strip_prefix(prefix, base)
-        if stripped: base = stripped
-
     return base.replace("/", ".")
 
 def _by_platform(ctx: AnalysisContext, xs: list[(str, list[typing.Any])]) -> list[typing.Any]:
@@ -177,3 +171,34 @@ def get_artifact_suffix(link_style: LinkStyle, enable_profiling: bool, suffix: s
     if enable_profiling:
         artifact_suffix += "-prof"
     return artifact_suffix + suffix
+
+def _source_prefix(source: Artifact, module_name: str) -> str:
+    """Determine the directory prefix of the given artifact, considering that ghc has determined `module_name` for that file."""
+    source_path = paths.replace_extension(source.short_path, "")
+
+    module_name_for_file = src_to_module_name(source_path)
+
+    # assert that source_path (without extension) and its module name have the same length
+    if len(source_path) != len(module_name_for_file):
+        fail("{} should have the same length as {}".format(source_path, module_name_for_file))
+
+    if module_name != module_name_for_file and module_name_for_file.endswith("." + module_name):
+        # N.B. the prefix could have some '.' characters in it, use the source_path to determine the prefix
+        return source_path[0:-len(module_name) - 1]
+
+    return ""
+
+
+def get_source_prefixes(srcs: list[Artifact], module_map: dict[str, str]) -> list[str]:
+    """Determine source prefixes for the given haskell files and a mapping from source file module name to module name."""
+    source_prefixes = {}
+    for path, src in srcs_to_pairs(srcs):
+        if not is_haskell_src(path):
+            continue
+
+        name = src_to_module_name(path)
+        real_name = module_map.get(name)
+        prefix = _source_prefix(src, real_name) if real_name else ""
+        source_prefixes[prefix] = None
+
+    return source_prefixes.keys()

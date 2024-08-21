@@ -18,6 +18,7 @@ load(
     "src_to_module_name",
 )
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
+load("@prelude//:paths.bzl", "paths")
 
 HaskellHaddockInfo = provider(
     fields = {
@@ -42,6 +43,9 @@ _HaddockInfoTSet = transitive_set(
     }
 )
 
+def _haddock_module_to_html(module_name: str) -> str:
+    return module_name.replace(".", "-") + ".html"
+
 def _haddock_dump_interface(
     ctx: AnalysisContext,
     cmd: cmd_args,
@@ -65,9 +69,19 @@ def _haddock_dump_interface(
         for dep_name in graph[module_name]
     ]
 
+    expected_html = outputs[haddock_info.html]
+    module_html = _haddock_module_to_html(module_name)
+
+    if paths.basename(expected_html.short_path) != module_html:
+        html_output = ctx.actions.declare_output("haddock-html", module_html)
+        make_copy = True
+    else:
+        html_output = expected_html 
+        make_copy = False
+
     ctx.actions.run(
         cmd.copy().add(
-            "--odir", cmd_args(outputs[haddock_info.html].as_output(), parent = 1),
+            "--odir", cmd_args(html_output.as_output(), parent = 1),
             "--dump-interface", outputs[haddock_info.haddock].as_output(),
             "--html",
             "--hoogle",
@@ -85,6 +99,10 @@ def _haddock_dump_interface(
         identifier = module_name,
         no_outputs_cleanup = True,
     )
+    if make_copy:
+        # XXX might as well use `symlink_file`` but that does not work with buck2 RE
+        # (see https://github.com/facebook/buck2/issues/222)
+        ctx.actions.copy_file(expected_html.as_output(), html_output)
 
     return ctx.actions.tset(
         _HaddockInfoTSet,
@@ -118,10 +136,10 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileRes
         cmd.add("--source-entity", source_entity)
 
     haddock_infos = {
-        src_to_module_name(hi.short_path, compiled.src_prefix): _HaddockInfo(
+        src_to_module_name(hi.short_path): _HaddockInfo(
             interface = hi,
-            haddock = ctx.actions.declare_output("haddock-interface/{}.haddock".format(src_to_module_name(hi.short_path, compiled.src_prefix))),
-            html = ctx.actions.declare_output("haddock-html/{}.html".format(src_to_module_name(hi.short_path, compiled.src_prefix).replace(".", "-"))),
+            haddock = ctx.actions.declare_output("haddock-interface/{}.haddock".format(src_to_module_name(hi.short_path))),
+            html = ctx.actions.declare_output("haddock-html", _haddock_module_to_html(src_to_module_name(hi.short_path))),
         )
         for hi in compiled.hi
         if not hi.extension.endswith("-boot")

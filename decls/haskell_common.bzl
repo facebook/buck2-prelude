@@ -17,13 +17,6 @@ def _srcs_arg():
 """),
     }
 
-def _src_strip_prefix_arg():
-    return {
-        "src_strip_prefix": attrs.string(default = "", doc = """
-    A prefix to strip from the source files when compiling.
-"""),
-    }
-
 def _deps_arg():
     return {
         "deps": attrs.list(attrs.dep(), default = [], doc = """
@@ -71,7 +64,6 @@ def _external_tools_arg():
 
 haskell_common = struct(
     srcs_arg = _srcs_arg,
-    src_strip_prefix = _src_strip_prefix_arg,
     deps_arg = _deps_arg,
     compiler_flags_arg = _compiler_flags_arg,
     exported_linker_flags_arg = _exported_linker_flags_arg,
