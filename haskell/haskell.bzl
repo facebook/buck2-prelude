@@ -436,7 +436,7 @@ def _make_package(
         pkg_conf = ctx.actions.declare_output("pkg-" + artifact_suffix + ".conf")
         db = ctx.actions.declare_output("db-" + artifact_suffix, dir = True)
 
-    def write_package_conf(ctx, artifacts, resolved, outputs, md_file=md_file, libname=libname):
+    def write_package_conf(ctx, artifacts, _resolved, outputs, md_file=md_file, libname=libname):
         md = artifacts[md_file].read_json()
         module_map = md["module_mapping"]
 
@@ -578,7 +578,7 @@ def _build_haskell_lib(
             if not object.extension.endswith("-boot")
         ]
 
-        def do_link(ctx, artifacts, resolved, outputs, lib=lib, objects=objects):
+        def do_link(ctx, _artifacts, resolved, outputs, lib=lib, objects=objects):
             pkg_deps = resolved[haskell_toolchain.packages.dynamic]
             package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
 
@@ -1262,7 +1262,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     else:
         link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
 
-    def do_link(ctx, artifacts, resolved, outputs, output=output, objects=objects):
+    def do_link(ctx, _artifacts, resolved, outputs, output=output):
         link_cmd = link.copy() # link is already frozen, make a copy
 
         # Add -package-db and -package/-expose-package flags for each Haskell
