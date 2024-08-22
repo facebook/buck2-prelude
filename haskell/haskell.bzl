@@ -436,7 +436,7 @@ def _make_package(
         pkg_conf = ctx.actions.declare_output("pkg-" + artifact_suffix + ".conf")
         db = ctx.actions.declare_output("db-" + artifact_suffix, dir = True)
 
-    def write_package_conf(ctx, artifacts, resolved, outputs, md_file=md_file, libname=libname):
+    def write_package_conf(ctx, artifacts, outputs, md_file=md_file, libname=libname):
         md = artifacts[md_file].read_json()
         module_map = md["module_mapping"]
 
@@ -498,7 +498,6 @@ def _make_package(
 
     ctx.actions.dynamic_output(
         dynamic = [md_file],
-        promises = [],
         inputs = [],
         outputs = [pkg_conf.as_output(), db.as_output()],
         f = write_package_conf
