@@ -1258,7 +1258,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
         link.add(cmd_args(db, prepend = "-package-db"))
         link.add("-package", pkgname)
-        link.hidden(linkable_artifacts)
+        link.add(cmd_args(hidden = linkable_artifacts))
     else:
         link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
 
@@ -1289,7 +1289,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         link_cmd.add(haskell_toolchain.linker_flags)
         link_cmd.add(ctx.attrs.linker_flags)
 
-        link_cmd.hidden(packages_info.exposed_package_libs)
+        link_cmd.add(cmd_args(hidden = packages_info.exposed_package_libs))
 
         package_db_tset = ctx.actions.tset(
             HaskellPackageDbTSet,
@@ -1308,8 +1308,6 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         f = do_link,
     )
 
-    run = cmd_args(output)
-
     if link_style == LinkStyle("shared") or link_group_info != None:
         sos_dir = "__{}__shared_libs_symlink_tree".format(ctx.attrs.name)
         rpath_ref = get_rpath_origin(get_cxx_toolchain_info(ctx).linker_info.type)
@@ -1320,7 +1318,9 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
             out = sos_dir,
             shared_libs = sos,
         )
-        run.hidden(symlink_dir)
+        run = cmd_args(output, hidden = symlink_dir)
+    else:
+        run = cmd_args(output)
 
     sub_targets = {}
     sub_targets.update(_haskell_module_sub_targets(
