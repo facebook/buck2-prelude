@@ -252,7 +252,7 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
     )
 
     ctx.actions.run(
-        cmd_args(script).hidden(script_args),
+        cmd_args(script, hidden = script_args),
         category = "haskell_haddock",
         no_outputs_cleanup = True,
     )
