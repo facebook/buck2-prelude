@@ -276,11 +276,11 @@ def get_packages_info(
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
-    exposed_package_libs = cmd_args()
-    exposed_package_args = cmd_args([package_flag, "base"])
 
-    for lib in libs.traverse():
-        exposed_package_libs.hidden(lib.libs)
+    hidden_args = [l for lib in libs.traverse() for l in lib.libs]
+
+    exposed_package_libs = cmd_args()
+    exposed_package_args = cmd_args([package_flag, "base"], hidden = hidden_args)
 
     packagedb_args = cmd_args(libs.project_as_args(
         "empty_package_db" if use_empty_lib else "package_db",
@@ -367,7 +367,10 @@ def _common_compile_module_args(
     if enable_haddock:
         command.add("-haddock")
 
-    args_for_file = cmd_args()
+    if non_haskell_sources:
+        warning("{} specifies non-haskell file in `srcs`, consider using `srcs_deps` instead".format(ctx.label))
+
+    args_for_file = cmd_args(hidden = non_haskell_sources)
 
     args_for_file.add("-no-link", "-i")
     args_for_file.add("-hide-all-packages")
@@ -388,11 +391,6 @@ def _common_compile_module_args(
         for (path, src) in srcs_to_pairs(ctx.attrs.srcs)
         if not is_haskell_src(path) and not is_haskell_boot(path)
     ]
-
-    if non_haskell_sources:
-        warning("{} specifies non-haskell file in `srcs`, consider using `srcs_deps` instead".format(ctx.label))
-
-        args_for_file.hidden(non_haskell_sources)
 
     # Add args from preprocess-able inputs.
     inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
@@ -491,9 +489,10 @@ def _compile_module(
     toolchain_deps_by_name: dict[str, None],
     source_prefixes: list[str],
 ) -> CompiledModuleTSet:
-    compile_cmd = cmd_args(common_args.command)
+    aux_deps = ctx.attrs.srcs_deps.get(module.source)
+
     # These compiler arguments can be passed in a response file.
-    compile_args_for_file = cmd_args(common_args.args_for_file)
+    compile_args_for_file = cmd_args(common_args.args_for_file, hidden = aux_deps)
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
@@ -535,9 +534,21 @@ def _compile_module(
 
     compile_args_for_file.add(module.source)
 
-    aux_deps = ctx.attrs.srcs_deps.get(module.source)
-    if aux_deps:
-        compile_args_for_file.hidden(aux_deps)
+    abi_tag = ctx.actions.artifact_tag()
+
+    dependency_modules = ctx.actions.tset(
+        CompiledModuleTSet,
+        children = [cross_package_modules] + this_package_modules,
+    )
+
+    compile_cmd = cmd_args(
+        common_args.command,
+        hidden = [
+            compile_args_for_file,
+            abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")),
+            dependency_modules.project_as_args("abi"),
+        ]
+    )
 
     if haskell_toolchain.use_argsfile:
         argsfile = ctx.actions.declare_output(
@@ -545,7 +556,6 @@ def _compile_module(
         )
         ctx.actions.write(argsfile.as_output(), compile_args_for_file, allow_args = True)
         compile_cmd.add(cmd_args(argsfile, format = "@{}"))
-        compile_cmd.hidden(compile_args_for_file)
     else:
         compile_cmd.add(compile_args_for_file)
 
@@ -575,16 +585,11 @@ def _compile_module(
         for dep_name in graph[module_name]
     ]
 
-    dependency_modules = ctx.actions.tset(
-        CompiledModuleTSet,
-        children = [cross_package_modules] + this_package_modules,
-    )
-
     # add each module dir prefix to search path
     for prefix in source_prefixes:
         compile_cmd.add(
             cmd_args(
-                cmd_args(md_file, format = "-i{}", ignore_artifacts=True).parent(),
+                cmd_args(md_file, format = "-i{}", ignore_artifacts=True, parent=1),
                 "/",
                 paths.join(module.prefix_dir, prefix),
                 delimiter=""
@@ -595,10 +600,6 @@ def _compile_module(
     compile_cmd.add(cmd_args(library_deps, prepend = "-package"))
     compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package"))
 
-    abi_tag = ctx.actions.artifact_tag()
-
-    compile_cmd.hidden(
-        abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")))
     compile_cmd.add("-fbyte-code-and-object-code")
     if enable_th:
         compile_cmd.add("-fprefer-byte-code")
@@ -611,7 +612,6 @@ def _compile_module(
 
     compile_cmd.add("--buck2-dep", tagged_dep_file)
     compile_cmd.add("--abi-out", outputs[module.hash].as_output())
-    compile_cmd.hidden(dependency_modules.project_as_args("abi"))
 
     ctx.actions.run(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
