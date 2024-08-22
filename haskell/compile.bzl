@@ -642,6 +642,70 @@ def _compile_module(
 
     return module_tset
 
+def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
+    #def do_compile(ctx, artifacts, resolved, outputs, md_file=md_file, modules=modules):
+    # Collect library dependencies. Note that these don't need to be in a
+    # particular order.
+    toolchain_deps_by_name = {
+        lib.name: None
+        for lib in attr_deps_haskell_toolchain_libraries(arg.ctx)
+    }
+    direct_deps_info = [
+        lib.prof_info[arg.link_style] if arg.enable_profiling else lib.info[arg.link_style]
+        for lib in attr_deps_haskell_link_infos(arg.ctx)
+    ]
+    direct_deps_by_name = {
+        info.value.name: struct(
+            package_db = info.value.empty_db,
+            modules = dynamic_values[info.value.dynamic[arg.enable_profiling]][DynamicCompileResultInfo].modules,
+        )
+        for info in direct_deps_info
+    }
+    common_args = _common_compile_module_args(
+        arg.ctx,
+        resolved = dynamic_values,
+        enable_haddock = arg.enable_haddock,
+        enable_profiling = arg.enable_profiling,
+        link_style = arg.link_style,
+        direct_deps_info = direct_deps_info,
+        pkgname = arg.pkgname,
+    )
+
+    md = artifacts[arg.md_file].read_json()
+    th_modules = md["th_modules"]
+    module_map = md["module_mapping"]
+    graph = md["module_graph"]
+    package_deps = md["package_deps"]
+
+    mapped_modules = { module_map.get(k, k): v for k, v in arg.modules.items() }
+    module_tsets = {}
+    source_prefixes = get_source_prefixes(arg.ctx.attrs.srcs, module_map)
+
+    for module_name in post_order_traversal(graph):
+        module_tsets[module_name] = _compile_module(
+            arg.ctx,
+            common_args = common_args,
+            link_style = arg.link_style,
+            enable_profiling = arg.enable_profiling,
+            enable_th = module_name in th_modules,
+            module_name = module_name,
+            module = mapped_modules[module_name],
+            module_tsets = module_tsets,
+            graph = graph,
+            package_deps = package_deps.get(module_name, {}),
+            outputs = outputs,
+            md_file = arg.md_file,
+            artifact_suffix = arg.artifact_suffix,
+            direct_deps_by_name = direct_deps_by_name,
+            toolchain_deps_by_name = toolchain_deps_by_name,
+            source_prefixes = source_prefixes,
+        )
+
+    return [DynamicCompileResultInfo(modules = module_tsets)]
+
+
+
+_dynamic_do_compile = dynamic_actions(impl = _dynamic_do_compile_impl)
 
 # Compile all the context's sources.
 def compile(
@@ -655,108 +719,6 @@ def compile(
 
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
-    def do_compile(ctx, artifacts, resolved, outputs, md_file=md_file, modules=modules):
-        # Collect library dependencies. Note that these don't need to be in a
-        # particular order.
-        toolchain_deps_by_name = {
-            lib.name: None
-            for lib in attr_deps_haskell_toolchain_libraries(ctx)
-        }
-        direct_deps_info = [
-            lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-            for lib in attr_deps_haskell_link_infos(ctx)
-        ]
-        direct_deps_by_name = {
-            info.value.name: struct(
-                package_db = info.value.empty_db,
-                modules = resolved[info.value.dynamic[enable_profiling]][DynamicCompileResultInfo].modules,
-            )
-            for info in direct_deps_info
-        }
-        common_args = _common_compile_module_args(
-            ctx,
-            resolved = resolved,
-            enable_haddock = enable_haddock,
-            enable_profiling = enable_profiling,
-            link_style = link_style,
-            direct_deps_info = direct_deps_info,
-            pkgname = pkgname,
-        )
-
-        md = artifacts[md_file].read_json()
-        th_modules = md["th_modules"]
-        module_map = md["module_mapping"]
-        graph = md["module_graph"]
-        package_deps = md["package_deps"]
-
-        # boot_rev_deps = {}
-        # for module_name, boot_deps in md["boot_deps"].items():
-        #     for boot_dep in boot_deps:
-        #         boot_rev_deps.setdefault(boot_dep + "-boot", []).append(module_name)
-
-        # # TODO GHC --dep-json should integrate boot modules directly into the dependency graph.
-        # for module_name, module in modules.items():
-        #     if not module_name.endswith("-boot"):
-        #         continue
-
-        #     # deduce the real name from the corresponding non-boot module
-        #     non_boot_module_name = module_name[:-5]
-        #     non_boot_module_name = module_map.get(non_boot_module_name, non_boot_module_name)
-
-        #     boot_module_name = non_boot_module_name + "-boot"
-
-        #     if module_name != boot_module_name:
-        #         module_map[module_name] = boot_module_name
-
-        #     # Add boot modules to the module graph
-        #     graph[boot_module_name] = []
-        #     # TODO GHC --dep-json should report boot module dependencies.
-        #     # The following is a naive approximation of the boot module's dependencies,
-        #     # taking the corresponding module's dependencies
-        #     # minus those that depend on the boot module.
-
-        #     # Add module dependencies for the boot module
-        #     graph[boot_module_name].extend([
-        #         dep
-        #         for dep in graph[non_boot_module_name]
-        #         if not dep in boot_rev_deps[boot_module_name]
-        #     ])
-
-        #     # Add package dependencies for the boot module
-        #     package_deps[boot_module_name] = package_deps.get(non_boot_module_name, [])
-
-        # for module_name, boot_deps in md["boot_deps"].items():
-        #     for boot_dep in boot_deps:
-        #         graph.setdefault(module_name, []).append(boot_dep + "-boot")
-
-        #>>>>>>> 8a06e69b (Handle source prefix for boot modules)
-
-        mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
-        module_tsets = {}
-        source_prefixes = get_source_prefixes(ctx.attrs.srcs, module_map)
-
-        for module_name in post_order_traversal(graph):
-            module_tsets[module_name] = _compile_module(
-                ctx,
-                common_args = common_args,
-                link_style = link_style,
-                enable_profiling = enable_profiling,
-                enable_th = module_name in th_modules,
-                module_name = module_name,
-                module = mapped_modules[module_name],
-                module_tsets = module_tsets,
-                graph = graph,
-                package_deps = package_deps.get(module_name, {}),
-                outputs = outputs,
-                md_file=md_file,
-                artifact_suffix = artifact_suffix,
-                direct_deps_by_name = direct_deps_by_name,
-                toolchain_deps_by_name = toolchain_deps_by_name,
-                source_prefixes = source_prefixes,
-            )
-
-        return [DynamicCompileResultInfo(modules = module_tsets)]
-
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
@@ -768,9 +730,9 @@ def compile(
     ]
     abi_hashes = [module.hash for module in modules.values()]
 
-    dyn_module_tsets = ctx.actions.dynamic_output(
+    dyn_module_tsets = ctx.actions.dynamic_output_new(_dynamic_do_compile(
         dynamic = [md_file],
-        promises = [
+        dynamic_values = [
             info.value.dynamic[enable_profiling]
             for lib in attr_deps_haskell_link_infos(ctx)
             for info in [
@@ -781,7 +743,15 @@ def compile(
         ] + ([ haskell_toolchain.packages.dynamic ] if haskell_toolchain.packages else [ ]),
         inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
-        f = do_compile)
+        arg = struct(
+            artifact_suffix = artifact_suffix,
+            enable_profiling = enable_profiling,
+            link_style = link_style,
+            md_file = md_file,
+            modules = modules,
+            pkgname = pkgname,
+        ),
+    ))
 
     stubs_dir = ctx.actions.declare_output("stubs-" + artifact_suffix, dir=True)
 
