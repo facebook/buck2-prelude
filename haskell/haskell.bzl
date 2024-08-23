@@ -54,7 +54,7 @@ load(
     "@prelude//haskell:compile.bzl",
     "CompileResultInfo",
     "compile",
-    "get_packages_info",
+    "get_packages_info2",
     "target_metadata",
 )
 load(
@@ -85,6 +85,8 @@ load(
     "@prelude//haskell:util.bzl",
     "attr_deps",
     "attr_deps_haskell_link_infos_sans_template_deps",
+    "attr_deps_haskell_lib_infos",
+    "attr_deps_haskell_link_infos",
     "attr_deps_merged_link_infos",
     "attr_deps_profiling_link_infos",
     "attr_deps_shared_library_infos",
@@ -559,6 +561,8 @@ def _dynamic_link_shared_impl(actions, artifacts, dynamic_values, outputs, arg):
         link,
         category = "haskell_link" + arg.artifact_suffix.replace("-", "_"),
     )
+
+    return []
 
 _dynamic_link_shared = dynamic_actions(impl = _dynamic_link_shared_impl)
 
@@ -1077,9 +1081,13 @@ def _dynamic_link_binary_impl(actions, artifacts, dynamic_values, outputs, arg):
 
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
-    packages_info = get_packages_info(
-        arg.ctx,
-        arg.link_style,
+    packages_info = get_packages_info2(
+        actions,
+        deps = arg.deps,
+        direct_deps_link_info = arg.direct_deps_link_info,
+        haskell_toolchain = arg.haskell_toolchain,
+        haskell_direct_deps_lib_infos = arg.haskell_direct_deps_lib_infos,
+        link_style = arg.link_style,
         resolved = dynamic_values,
         specify_pkg_version = False,
         enable_profiling = arg.enable_profiling,
@@ -1091,7 +1099,7 @@ def _dynamic_link_binary_impl(actions, artifacts, dynamic_values, outputs, arg):
     link_cmd.add(cmd_args(packages_info.exposed_package_args))
     link_cmd.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
     link_cmd.add(arg.haskell_toolchain.linker_flags)
-    link_cmd.add(arg.ctx.attrs.linker_flags)
+    link_cmd.add(arg.linker_flags)
 
     link_cmd.add(cmd_args(hidden = packages_info.exposed_package_libs))
 
@@ -1103,6 +1111,8 @@ def _dynamic_link_binary_impl(actions, artifacts, dynamic_values, outputs, arg):
     link_cmd.add("-o", outputs[arg.output].as_output())
 
     actions.run(link_cmd, category = "haskell_link")
+
+    return []
 
 _dynamic_link_binary = dynamic_actions(impl = _dynamic_link_binary_impl)
 
@@ -1319,16 +1329,26 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     else:
         link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
 
+    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
+        ctx,
+        link_style,
+        enable_profiling = enable_profiling,
+    )
+
     ctx.actions.dynamic_output_new(_dynamic_link_binary(
         dynamic = [],
         dynamic_values = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [ ],
         #inputs = objects.values(),
         outputs = [output.as_output()],
         arg = struct(
+            deps = ctx.attrs.deps,
             enable_profiling = enable_profiling,
+            direct_deps_link_info = attr_deps_haskell_link_infos(ctx),
             haskell_toolchain = haskell_toolchain,
+            haskell_direct_deps_lib_infos = haskell_direct_deps_lib_infos,
             link = link,
             link_style = link_style,
+            linker_flags = ctx.attrs.linker_flags,
             output = output,
             toolchain_libs = toolchain_libs,
         ),
