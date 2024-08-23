@@ -296,7 +296,6 @@ def get_packages_info(
     ))
 
     if haskell_toolchain.packages and resolved != None:
-        haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
         pkg_deps = resolved[haskell_toolchain.packages.dynamic]
         package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
 
