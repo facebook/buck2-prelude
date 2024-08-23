@@ -677,6 +677,8 @@ def _compile_module(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
         dep_files = {
             "abi": abi_tag,
+            # FIXME causes an error: `dep_files` value with key `packagedb` has an invalid count of associated outputs. Expected 1, got 2.
+            #
             #"packagedb": packagedb_tag,
         }
     )

@@ -17,10 +17,6 @@ load(
     "@prelude//linking:link_info.bzl",
     "LinkStyle",
 )
-load(
-    "@prelude//haskell:library_info.bzl",
-    "HaskellLibraryInfoTSet",
-)
 
 # A list of `HaskellLibraryInfo`s.
 HaskellLinkInfo = provider(
