@@ -52,13 +52,26 @@ def main():
         default=[],
         help="Add given path to PATH.",
     )
-
     parser.add_argument(
         "--bin-exe",
         type=Path,
         action="append",
         default=[],
         help="Add given exe (more specific than bin-path)",
+    )
+    parser.add_argument(
+        "--extra-env-key",
+        type=str,
+        action="append",
+        default=[],
+        help="Extra environment variable name",
+    )
+    parser.add_argument(
+        "--extra-env-value",
+        type=str,
+        action="append",
+        default=[],
+        help="Extra environment variable value",
     )
 
     args, ghc_args = parser.parse_known_args()
@@ -69,6 +82,16 @@ def main():
     env = os.environ.copy()
     path = env.get("PATH", "")
     env["PATH"] = os.pathsep.join([path] + aux_paths)
+
+    extra_env_keys = [str(k) for k in args.extra_env_key]
+    extra_env_values = [str(v) for v in args.extra_env_value]
+    assert len(extra_env_keys) == len(extra_env_values), "number of --extra-env-key and --extra-env-value flags must match"
+    n_extra_env = len(extra_env_keys)
+    if n_extra_env > 0:
+        for i in range(0, n_extra_env):
+            k = extra_env_keys[i]
+            v = extra_env_values[i]
+            env[k] = v
 
     # Note, Buck2 swallows stdout on successful builds.
     # Redirect to stderr to avoid this.

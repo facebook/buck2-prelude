@@ -182,6 +182,7 @@ def _dynamic_target_metadata_impl(actions, artifacts, dynamic_values, outputs, a
         specify_pkg_version = False,
         enable_profiling = False,
         use_empty_lib = True,
+        for_deps = True,
         resolved = dynamic_values,
     )
     package_flag = _package_flag(arg.haskell_toolchain)
@@ -327,7 +328,8 @@ def get_packages_info2(
     specify_pkg_version: bool,
     enable_profiling: bool,
     use_empty_lib: bool,
-    resolved: dict[DynamicValue, ResolvedDynamicValue]) -> PackagesInfo:
+    resolved: dict[DynamicValue, ResolvedDynamicValue],
+    for_deps: bool = False) -> PackagesInfo:
 
     # Collect library dependencies. Note that these don't need to be in a
     # particular order.
@@ -344,9 +346,14 @@ def get_packages_info2(
     exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"], hidden = hidden_args)
 
-    packagedb_args = cmd_args(libs.project_as_args(
-        "empty_package_db" if use_empty_lib else "package_db",
-    ))
+    if for_deps:
+        package_db_projection = "deps_package_db"
+    elif use_empty_lib:
+        package_db_projection = "empty_package_db"
+    else:
+        package_db_projection = "package_db"
+
+    packagedb_args = cmd_args(libs.project_as_args(package_db_projection))
 
     pkg_deps = resolved[haskell_toolchain.packages.dynamic]
     package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
