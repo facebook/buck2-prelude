@@ -628,7 +628,6 @@ def _build_haskell_lib(
         ctx.actions.dynamic_output_new(_dynamic_link_shared(
             dynamic = [],
             dynamic_values = [haskell_toolchain.packages.dynamic],
-            #inputs = objects,
             outputs = [lib.as_output()],
             arg = struct(
                 artifact_suffix = artifact_suffix,
@@ -1338,7 +1337,6 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     ctx.actions.dynamic_output_new(_dynamic_link_binary(
         dynamic = [],
         dynamic_values = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [ ],
-        #inputs = objects.values(),
         outputs = [output.as_output()],
         arg = struct(
             deps = ctx.attrs.deps,

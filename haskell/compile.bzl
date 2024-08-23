@@ -513,7 +513,6 @@ def _common_compile_module_args(
         format="--bin-path={}/bin",
     ))
 
-    external_tool_paths = [tool[RunInfo] for tool in ctx.attrs.external_tools]
     args_for_file.add(cmd_args(
         external_tool_paths,
         format="--bin-exe={}",
@@ -827,7 +826,6 @@ def compile(
                 lib.info[link_style]
             ]
         ] + ([ haskell_toolchain.packages.dynamic ] if haskell_toolchain.packages else [ ]),
-        #inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
         arg = struct(
             artifact_suffix = artifact_suffix,

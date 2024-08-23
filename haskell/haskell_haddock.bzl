@@ -196,7 +196,6 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileRes
                 lib.info[link_style],
             ]
         ],
-        #inputs = compiled.hi,
         outputs = [output.as_output() for info in haddock_infos.values() for output in [info.haddock, info.html]],
         arg = struct(
             md_file = md_file,
