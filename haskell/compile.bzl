@@ -298,46 +298,23 @@ def get_packages_info(
         use_empty_lib: bool) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
-    # Collect library dependencies. Note that these don't need to be in a
-    # particular order.
-    direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
-    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = [
-        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-        for lib in direct_deps_link_info
-    ])
-
-    # base is special and gets exposed by default
-    package_flag = _package_flag(haskell_toolchain)
-
-    hidden_args = [l for lib in libs.traverse() for l in lib.libs]
-
-    exposed_package_libs = cmd_args()
-    exposed_package_args = cmd_args([package_flag, "base"], hidden = hidden_args)
-
-    packagedb_args = cmd_args(libs.project_as_args(
-        "empty_package_db" if use_empty_lib else "package_db",
-    ))
-
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
         link_style,
         enable_profiling,
     )
 
-    # Expose only the packages we depend on directly
-    for lib in haskell_direct_deps_lib_infos:
-        pkg_name = lib.name
-        if (specify_pkg_version):
-            pkg_name += "-{}".format(lib.version)
-
-        exposed_package_args.add(package_flag, pkg_name)
-
-    return PackagesInfo(
-        exposed_package_libs = exposed_package_libs,
-        exposed_package_args = exposed_package_args,
-        packagedb_args = packagedb_args,
-        transitive_deps = libs,
-        bin_paths = cmd_args(),
+    return get_packages_info2(
+        actions = ctx.actions,
+        deps = [],
+        direct_deps_link_info = attr_deps_haskell_link_infos(ctx),
+        haskell_toolchain = haskell_toolchain,
+        haskell_direct_deps_lib_infos = haskell_direct_deps_lib_infos,
+        link_style = link_style,
+        specify_pkg_version = specify_pkg_version,
+        enable_profiling = enable_profiling,
+        use_empty_lib = use_empty_lib,
+        resolved = {},
     )
 
 def get_packages_info2(
