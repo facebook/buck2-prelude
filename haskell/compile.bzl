@@ -226,11 +226,11 @@ def target_metadata(
     # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
 
     ctx.actions.dynamic_output_new(_dynamic_target_metadata(
+        dynamic = [],
         dynamic_values = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [],
         outputs = [md_file.as_output()],
         arg = struct(
             compiler_flags = ctx.attrs.compiler_flags,
-            ctx = ctx,
             haskell_toolchain = haskell_toolchain,
             md_file = md_file,
             md_gen = md_gen,
@@ -741,7 +741,7 @@ def compile(
                 lib.info[link_style]
             ]
         ] + ([ haskell_toolchain.packages.dynamic ] if haskell_toolchain.packages else [ ]),
-        inputs = ctx.attrs.srcs,
+        #inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
         arg = struct(
             artifact_suffix = artifact_suffix,
