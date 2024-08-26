@@ -565,9 +565,7 @@ def _compile_module(
     compile_args_for_file = cmd_args(common_args.args_for_file, hidden = aux_deps or [])
 
     packagedb_tag = actions.artifact_tag()
-    compile_args_for_file.add(#packagedb_tag.tag_artifacts(
-        common_args.package_env_args #)
-    )
+    compile_args_for_file.add(packagedb_tag.tag_artifacts(common_args.package_env_args))
 
     dep_file = actions.declare_output(".".join([
         label.name,
@@ -637,23 +635,22 @@ def _compile_module(
         children = [cross_package_modules] + this_package_modules,
     )
 
-    compile_cmd = cmd_args(
-        common_args.command,
-        hidden = [
-            compile_args_for_file,
-            abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")),
-            dependency_modules.project_as_args("abi"),
-        ]
-    )
-
+    compile_cmd_args = [common_args.command]
+    compile_cmd_hidden = [
+        abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")),
+        dependency_modules.project_as_args("abi"),
+    ]
     if haskell_toolchain.use_argsfile:
         argsfile = actions.declare_output(
             "haskell_compile_" + artifact_suffix + ".argsfile",
         )
         actions.write(argsfile.as_output(), compile_args_for_file, allow_args = True)
-        compile_cmd.add(cmd_args(argsfile, format = "@{}"))
+        compile_cmd_args.append(cmd_args(argsfile, format = "@{}"))
+        compile_cmd_hidden.append(compile_args_for_file)
     else:
-        compile_cmd.add(compile_args_for_file)
+        compile_cmd_args.append(compile_args_for_file)
+
+    compile_cmd = cmd_args(compile_cmd_args, hidden = compile_cmd_hidden)
 
     # add each module dir prefix to search path
     for prefix in source_prefixes:
@@ -687,9 +684,7 @@ def _compile_module(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
         dep_files = {
             "abi": abi_tag,
-            # FIXME causes an error: `dep_files` value with key `packagedb` has an invalid count of associated outputs. Expected 1, got 2.
-            #
-            #"packagedb": packagedb_tag,
+            "packagedb": packagedb_tag,
         }
     )
 
