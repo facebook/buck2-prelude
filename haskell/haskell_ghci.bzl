@@ -727,7 +727,9 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
         "__{}__".format(ctx.label.name),
         output_artifacts,
     )
-    run = cmd_args(final_ghci_script, hidden=(ctx.attrs.ghci_bin_dep.get(RunInfo) or []) + outputs)
+    ghci_bin_dep = ctx.attrs.ghci_bin_dep.get(RunInfo)
+    hidden_dep = [ghci_bin_dep] if ghci_bin_dep else []
+    run = cmd_args(final_ghci_script, hidden=hidden_dep + outputs)
 
     return [
         DefaultInfo(default_outputs = [root_output_dir]),
