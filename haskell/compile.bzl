@@ -355,8 +355,11 @@ def get_packages_info2(
 
     packagedb_args = cmd_args(libs.project_as_args(package_db_projection))
 
-    pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-    package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
+    if resolved:
+        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+        package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
+    else:
+        package_db = {}
 
     direct_toolchain_libs = [
         dep[HaskellToolchainLibrary].name
