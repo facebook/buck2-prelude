@@ -701,22 +701,12 @@ def _compile_module(
     return module_tset
 
 def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
-    # Collect library dependencies. Note that these don't need to be in a
-    # particular order.
-    toolchain_deps_by_name = {
-        lib.name: None
-        for lib in arg.attr_deps_haskell_toolchain_libraries
-    }
-    direct_deps_info = [
-        lib.prof_info[arg.link_style] if arg.enable_profiling else lib.info[arg.link_style]
-        for lib in arg.attr_deps_haskell_link_infos
-    ]
     direct_deps_by_name = {
         info.value.name: struct(
             package_db = info.value.empty_db,
             modules = dynamic_values[info.value.dynamic[arg.enable_profiling]].providers[DynamicCompileResultInfo].modules,
         )
-        for info in direct_deps_info
+        for info in arg.direct_deps_info
     }
     common_args = _common_compile_module_args(
         actions,
@@ -732,7 +722,7 @@ def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
         enable_haddock = arg.enable_haddock,
         enable_profiling = arg.enable_profiling,
         link_style = arg.link_style,
-        direct_deps_info = direct_deps_info,
+        direct_deps_info = arg.direct_deps_info,
         pkgname = arg.pkgname,
     )
 
@@ -766,7 +756,7 @@ def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
             md_file = arg.md_file,
             artifact_suffix = arg.artifact_suffix,
             direct_deps_by_name = direct_deps_by_name,
-            toolchain_deps_by_name = toolchain_deps_by_name,
+            toolchain_deps_by_name = arg.toolchain_deps_by_name,
             source_prefixes = source_prefixes,
         )
 
@@ -799,6 +789,17 @@ def compile(
     ]
     abi_hashes = [module.hash for module in modules.values()]
 
+    # Collect library dependencies. Note that these don't need to be in a
+    # particular order.
+    toolchain_deps_by_name = {
+        lib.name: None
+        for lib in attr_deps_haskell_toolchain_libraries(ctx)
+    }
+    direct_deps_info = [
+        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        for lib in attr_deps_haskell_link_infos(ctx)
+    ]
+
     dyn_module_tsets = ctx.actions.dynamic_output_new(_dynamic_do_compile(
         dynamic = [md_file],
         dynamic_values = [
@@ -813,10 +814,9 @@ def compile(
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
         arg = struct(
             artifact_suffix = artifact_suffix,
-            attr_deps_haskell_link_infos = attr_deps_haskell_link_infos(ctx),
-            attr_deps_haskell_toolchain_libraries = attr_deps_haskell_toolchain_libraries(ctx),
             compiler_flags = ctx.attrs.compiler_flags,
             deps = ctx.attrs.deps,
+            direct_deps_info = direct_deps_info,
             enable_haddock = enable_haddock,
             enable_profiling = enable_profiling,
             external_tool_paths = [tool[RunInfo] for tool in ctx.attrs.external_tools],
@@ -830,6 +830,7 @@ def compile(
             pkgname = pkgname,
             sources = ctx.attrs.srcs,
             sources_deps = ctx.attrs.srcs_deps,
+            toolchain_deps_by_name = toolchain_deps_by_name,
         ),
     ))
 
