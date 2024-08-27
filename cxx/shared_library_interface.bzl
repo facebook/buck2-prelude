@@ -8,6 +8,9 @@
 load("@prelude//:artifact_tset.bzl", "ArtifactTSet", "make_artifact_tset", "project_artifacts")
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//cxx:preprocessor.bzl", "CPreprocessor", "CPreprocessorInfo")
+load("@prelude//cxx:target_sdk_version.bzl", "get_target_triple")
+load("@prelude//utils:arglike.bzl", "ArgLike")  # @unused Used as a type
+load("@prelude//utils:lazy.bzl", "lazy")
 load(":cxx_context.bzl", "get_cxx_toolchain_info")
 load(":cxx_toolchain_types.bzl", "CxxToolchainInfo")
 load(":headers.bzl", "CHeader")
@@ -90,7 +93,7 @@ def shared_library_interface(
             identifier = shared_lib.short_path,
         )
 
-def create_tbd(ctx: AnalysisContext, exported_headers: list[CHeader], exported_preprocessor: CPreprocessor, transitive_preprocessor: list[CPreprocessorInfo], target: str) -> Artifact:
+def generate_exported_symbols(ctx: AnalysisContext, exported_headers: list[CHeader], exported_preprocessor: CPreprocessor, transitive_preprocessor: list[CPreprocessorInfo]) -> Artifact:
     # Use the c++ compiler to correctly generate c++ symbols.
     compiler_info = get_cxx_toolchain_info(ctx).cxx_compiler_info
 
@@ -103,6 +106,20 @@ def create_tbd(ctx: AnalysisContext, exported_headers: list[CHeader], exported_p
             "path": h.artifact,
             "type": "public",
         })
+
+    # We need to collect all raw_headers that belong in a public include dir
+    include_dirs = ctx.attrs.public_include_directories + ctx.attrs.public_system_include_directories
+    include_dirs = [d if d.endswith("/") else d + "/" for d in include_dirs]
+    if len(include_dirs) > 0:
+        filelist_headers.extend([
+            {
+                "path": h,
+                "type": "public",
+            }
+            for h in exported_preprocessor.raw_headers
+            if lazy.is_any(lambda d: h.short_path.startswith(d), include_dirs)
+        ])
+
     filelist_contents = {
         "headers": filelist_headers,
         "version": "2",
@@ -114,65 +131,97 @@ def create_tbd(ctx: AnalysisContext, exported_headers: list[CHeader], exported_p
     )
 
     # Run the shlib interface tool with the filelist and required args
-    tbd_file = ctx.actions.declare_output(
-        paths.join("__tbd__", ctx.attrs.name + ".tbd"),
+    output_file = ctx.actions.declare_output(
+        paths.join("__tbd__", ctx.attrs.name + ".exported_symbols.txt"),
     )
     args = cmd_args(get_cxx_toolchain_info(ctx).linker_info.mk_shlib_intf[RunInfo])
     args.add([
         "installapi",
-        cmd_args(filelist, format = "--filelist={}"),
+        "--filelist",
+        filelist,
         "-o",
-        tbd_file.as_output(),
-        "-ObjC++",
-        "--target=" + target,
-        "-install_name",
-        ctx.attrs.name,
+        output_file.as_output(),
+        "--target",
+        get_target_triple(ctx),
     ])
     args.add(cmd_args(compiler_info.preprocessor_flags, prepend = "-Xparser"))
     args.add(cmd_args(compiler_info.compiler_flags, prepend = "-Xparser"))
-    args.add(cmd_args(exported_preprocessor.relative_args.args, prepend = "-Xparser"))
+    args.add(cmd_args(exported_preprocessor.args.args, prepend = "-Xparser"))
     for ppinfo in transitive_preprocessor:
         args.add(cmd_args(ppinfo.set.project_as_args("args"), prepend = "-Xparser"))
+        args.add(cmd_args(ppinfo.set.project_as_args("include_dirs"), prepend = "-Xparser"))
+
+    # We need the targets compiler flags to pick up base flags that are applied
+    # in the macros instead of the toolchain for historical reasons.
+    args.add(cmd_args(ctx.attrs.compiler_flags, prepend = "-Xparser"))
+
+    ctx.actions.run(
+        args,
+        category = "exported_symbols",
+        identifier = ctx.attrs.name,
+    )
+
+    return output_file
+
+def generate_tbd_with_symbols(ctx: AnalysisContext, soname: str, exported_symbol_inputs: ArtifactTSet, links: list[ArgLike]) -> Artifact:
+    # Use arglists for the inputs, otherwise we will overflow ARGMAX
+    symbol_args = project_artifacts(ctx.actions, [exported_symbol_inputs])
+    input_argfile, _ = ctx.actions.write("__tbd__/" + ctx.attrs.name + ".symbols.filelist", symbol_args, allow_args = True)
+
+    # Run the shlib interface tool with the merge command
+    tbd_file = ctx.actions.declare_output(
+        paths.join("__tbd__", ctx.attrs.name + ".merged.tbd"),
+    )
+    args = cmd_args(
+        get_cxx_toolchain_info(ctx).linker_info.mk_shlib_intf[RunInfo],
+        "merge",
+        "-install_name",
+        "@rpath/" + soname,
+        "--symbols-filelist",
+        input_argfile,
+        "--target",
+        get_target_triple(ctx),
+        "-o",
+        tbd_file.as_output(),
+        hidden = symbol_args,
+    )
+
+    # Pass through the linker args as we need to honour any flags
+    # related to exported or unexported symbols.
+    for link_args in links:
+        args.add(cmd_args(link_args, prepend = "-Xparser"))
 
     ctx.actions.run(
         args,
         category = "generate_tbd",
         identifier = ctx.attrs.name,
     )
-
     return tbd_file
 
-def merge_tbds(ctx: AnalysisContext, soname: str, tbd_set: ArtifactTSet) -> Artifact:
-    # Run the shlib interface tool with the merge command
-    tbd_file = ctx.actions.declare_output(
-        paths.join("__tbd__", ctx.attrs.name + ".merged.tbd"),
-    )
-    args = cmd_args(get_cxx_toolchain_info(ctx).linker_info.mk_shlib_intf[RunInfo])
-    args.add([
-        "merge",
-        "-install_name",
-        "@rpath/" + soname,
-        project_artifacts(ctx.actions, [tbd_set]),
-        "-o",
-        tbd_file.as_output(),
-    ])
-    ctx.actions.run(
-        args,
-        category = "merge_tbd",
-        identifier = ctx.attrs.name,
-    )
-    return tbd_file
-
-def create_shared_interface_info(ctx: AnalysisContext, tbd_outputs: list[Artifact], deps: list[Dependency]) -> [SharedInterfaceInfo, None]:
+def create_shared_interface_info(ctx: AnalysisContext, symbol_artifacts: list[Artifact], deps: list[Dependency]) -> [SharedInterfaceInfo, None]:
     children = [d[SharedInterfaceInfo].interfaces for d in deps if SharedInterfaceInfo in d]
-    if len(tbd_outputs) == 0 and len(children) == 0:
+    if len(symbol_artifacts) == 0 and len(children) == 0:
         return None
 
     return SharedInterfaceInfo(
         interfaces = make_artifact_tset(
             actions = ctx.actions,
             label = ctx.label,
-            artifacts = tbd_outputs,
+            artifacts = symbol_artifacts,
+            children = children,
+        ),
+    )
+
+def create_shared_interface_info_with_children(ctx: AnalysisContext, symbol_artifacts: list[Artifact], children: list[SharedInterfaceInfo]) -> [SharedInterfaceInfo, None]:
+    children = [d.interfaces for d in children]
+    if len(symbol_artifacts) == 0 and len(children) == 0:
+        return None
+
+    return SharedInterfaceInfo(
+        interfaces = make_artifact_tset(
+            actions = ctx.actions,
+            label = ctx.label,
+            artifacts = symbol_artifacts,
             children = children,
         ),
     )

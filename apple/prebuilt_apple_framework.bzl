@@ -9,6 +9,7 @@ load("@prelude//cxx:cxx_context.bzl", "get_cxx_toolchain_info")
 load(
     "@prelude//cxx:cxx_library_utility.bzl",
     "cxx_attr_exported_linker_flags",
+    "cxx_attr_preferred_linkage",
     "cxx_platform_supported",
 )
 load(
@@ -40,10 +41,12 @@ load(
     "SharedLibraryInfo",
     "merge_shared_libraries",
 )
-load("@prelude//linking:types.bzl", "Linkage")
+load("@prelude//linking:strip.bzl", "strip_object")
 load("@prelude//utils:utils.bzl", "filter_and_map_idx")
 load(":apple_bundle_types.bzl", "AppleBundleInfo", "AppleBundleTypeDefault")
 load(":apple_frameworks.bzl", "to_framework_name")
+load(":apple_toolchain_types.bzl", "AppleToolchainInfo", "AppleToolsInfo")
+load(":apple_utility.bzl", "get_apple_stripped_attr_value_with_default_fallback")
 
 def prebuilt_apple_framework_impl(ctx: AnalysisContext) -> list[Provider]:
     providers = []
@@ -63,7 +66,7 @@ def prebuilt_apple_framework_impl(ctx: AnalysisContext) -> list[Provider]:
         inherited_pp_info = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
         providers.append(cxx_merge_cpreprocessors(
             ctx,
-            [CPreprocessor(relative_args = CPreprocessorArgs(args = ["-F", framework_dir]))],
+            [CPreprocessor(args = CPreprocessorArgs(args = ["-F", framework_dir]))],
             inherited_pp_info,
         ))
 
@@ -78,10 +81,12 @@ def prebuilt_apple_framework_impl(ctx: AnalysisContext) -> list[Provider]:
             name = framework_name,
             pre_flags = args,
         )
+        link_info = LinkInfos(default = link)
+
         providers.append(create_merged_link_info(
             ctx,
             get_cxx_toolchain_info(ctx).pic_behavior,
-            {output_style: LinkInfos(default = link) for output_style in LibOutputStyle},
+            {output_style: link_info for output_style in LibOutputStyle},
         ))
 
         # Create, augment and provide the linkable graph.
@@ -91,8 +96,8 @@ def prebuilt_apple_framework_impl(ctx: AnalysisContext) -> list[Provider]:
                 ctx,
                 linkable_node = create_linkable_node(
                     ctx,
-                    preferred_linkage = Linkage("shared"),
-                    link_infos = {LibOutputStyle("shared_lib"): LinkInfos(default = link)},
+                    preferred_linkage = cxx_attr_preferred_linkage(ctx),
+                    link_infos = {output_style: link_info for output_style in LibOutputStyle},
                     # TODO(cjhopman): this should be set to non-None
                     default_soname = None,
                 ),
@@ -101,15 +106,48 @@ def prebuilt_apple_framework_impl(ctx: AnalysisContext) -> list[Provider]:
         )
         providers.append(linkable_graph)
 
+    providers.append(merge_link_group_lib_info(deps = ctx.attrs.deps))
+    providers.append(merge_shared_libraries(ctx.actions, deps = filter_and_map_idx(SharedLibraryInfo, ctx.attrs.deps)))
+
     # The default output is the provided framework.
-    providers.append(DefaultInfo(default_output = framework_directory_artifact))
+    sub_targets = {
+        "distribution": _sanitize_framework_for_app_distribution(ctx, framework_directory_artifact) + providers,
+    }
+
+    providers.append(DefaultInfo(default_output = framework_directory_artifact, sub_targets = sub_targets))
     providers.append(AppleBundleInfo(
         bundle = framework_directory_artifact,
         bundle_type = AppleBundleTypeDefault,
         skip_copying_swift_stdlib = True,
         contains_watchapp = None,
     ))
-    providers.append(merge_link_group_lib_info(deps = ctx.attrs.deps))
-    providers.append(merge_shared_libraries(ctx.actions, deps = filter_and_map_idx(SharedLibraryInfo, ctx.attrs.deps)))
 
+    return providers
+
+def _sanitize_framework_for_app_distribution(ctx: AnalysisContext, framework_directory_artifact: Artifact) -> list[Provider]:
+    framework_name = to_framework_name(framework_directory_artifact.basename)
+    bundle_for_app_distribution = ctx.actions.declare_output(framework_name + ".framework", dir = True)
+
+    apple_tools = ctx.attrs._apple_tools[AppleToolsInfo]
+    framework_sanitize_command = cmd_args([
+        apple_tools.framework_sanitizer,
+        "--input",
+        framework_directory_artifact,
+        "--output",
+        bundle_for_app_distribution.as_output(),
+    ])
+
+    if get_apple_stripped_attr_value_with_default_fallback(ctx):
+        strip_args = cmd_args("-x")
+        stripped = strip_object(ctx, ctx.attrs._apple_toolchain[AppleToolchainInfo].cxx_toolchain_info, framework_directory_artifact.project(framework_name), strip_args, "framework_distribution")
+        framework_sanitize_command.add("--replacement-binary", stripped)
+
+    ctx.actions.run(framework_sanitize_command, category = "sanitize_prebuilt_apple_framework")
+    providers = [DefaultInfo(default_output = bundle_for_app_distribution)]
+    providers.append(AppleBundleInfo(
+        bundle = bundle_for_app_distribution,
+        bundle_type = AppleBundleTypeDefault,
+        skip_copying_swift_stdlib = True,
+        contains_watchapp = None,
+    ))
     return providers

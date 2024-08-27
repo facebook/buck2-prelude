@@ -30,7 +30,7 @@ cgo_library = prelude_rule(
         The 'go build' command would collect the cgo directives from the source files, however
         with buck the flags needs to be passed in the cgo\\_library manually
 
-        This rule borrows from `cxx\\_binary()`since C/C++ sources are being compiled.
+        This rule borrows from `cxx_binary()` since C/C++ sources are being compiled.
     """,
     examples = """
         ```
@@ -189,6 +189,7 @@ go_binary = prelude_rule(
         go_common.package_root_arg() |
         go_common.cgo_enabled_arg() |
         go_common.race_arg() |
+        go_common.asan_arg() |
         go_common.tags_arg() |
         {
             "resources": attrs.list(attrs.source(), default = [], doc = """
@@ -277,6 +278,7 @@ go_exported_library = prelude_rule(
         go_common.package_root_arg() |
         go_common.cgo_enabled_arg() |
         go_common.race_arg() |
+        go_common.asan_arg() |
         go_common.tags_arg() |
         {
             "resources": attrs.list(attrs.source(), default = [], doc = """
@@ -431,6 +433,7 @@ go_test = prelude_rule(
         go_common.package_root_arg() |
         go_common.cgo_enabled_arg() |
         go_common.race_arg() |
+        go_common.asan_arg() |
         go_common.tags_arg() |
         {
             "resources": attrs.list(attrs.source(), default = [], doc = """
@@ -518,9 +521,18 @@ prebuilt_go_library = prelude_rule(
     ),
 )
 
+go_bootstrap_binary = prelude_rule(
+    name = "go_bootstrap_binary",
+    attrs = (
+        go_common.srcs_arg() |
+        {"entrypoints": attrs.list(attrs.string(), default = [], doc = """Package name or file names""")}
+    ),
+)
+
 go_rules = struct(
     cgo_library = cgo_library,
     go_binary = go_binary,
+    go_bootstrap_binary = go_bootstrap_binary,
     go_exported_library = go_exported_library,
     go_library = go_library,
     go_test = go_test,

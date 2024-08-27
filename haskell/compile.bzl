@@ -8,12 +8,20 @@
 load(
     "@prelude//cxx:preprocessor.bzl",
     "cxx_inherited_preprocessor_infos",
-    "cxx_merge_cpreprocessors",
+    "cxx_merge_cpreprocessors_actions",
 )
 load(
     "@prelude//haskell:library_info.bzl",
     "HaskellLibraryProvider",
     "HaskellLibraryInfoTSet",
+)
+load(
+    "@prelude//haskell:library_info.bzl",
+    "HaskellLibraryInfo",
+)
+load(
+    "@prelude//haskell:link_info.bzl",
+    "HaskellLinkInfo",
 )
 load(
     "@prelude//haskell:toolchain.bzl",
@@ -160,6 +168,54 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
     return modules
 
+def _dynamic_target_metadata_impl(actions, artifacts, dynamic_values, outputs, arg):
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+
+    packages_info = get_packages_info2(
+        actions,
+        arg.deps,
+        arg.direct_deps_link_info,
+        arg.haskell_toolchain,
+        arg.haskell_direct_deps_lib_infos,
+        LinkStyle("shared"),
+        specify_pkg_version = False,
+        enable_profiling = False,
+        use_empty_lib = True,
+        for_deps = True,
+        resolved = dynamic_values,
+    )
+    package_flag = _package_flag(arg.haskell_toolchain)
+    ghc_args = cmd_args()
+    ghc_args.add("-hide-all-packages")
+    ghc_args.add(package_flag, "base")
+
+    ghc_args.add(cmd_args(arg.toolchain_libs, prepend=package_flag))
+    ghc_args.add(cmd_args(packages_info.exposed_package_args))
+    ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+    ghc_args.add(arg.compiler_flags)
+
+    md_args = cmd_args(arg.md_gen)
+    md_args.add(packages_info.bin_paths)
+    md_args.add("--ghc", arg.haskell_toolchain.compiler)
+    md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
+    md_args.add(
+        "--source-prefix",
+        arg.strip_prefix,
+    )
+    md_args.add(cmd_args(arg.sources, format="--source={}"))
+
+    md_args.add(
+        arg.lib_package_name_and_prefix,
+    )
+    md_args.add("--output", outputs[arg.md_file].as_output())
+
+    actions.run(md_args, category = "haskell_metadata", identifier = arg.suffix if arg.suffix else None)
+
+    return []
+
+_dynamic_target_metadata = dynamic_actions(impl = _dynamic_target_metadata_impl)
+
 def target_metadata(
         ctx: AnalysisContext,
         *,
@@ -176,6 +232,12 @@ def target_metadata(
         if HaskellToolchainLibrary in dep
     ]
 
+    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
+        ctx,
+        LinkStyle("shared"),
+        enable_profiling = False,
+    )
+
     # The object and interface file paths are depending on the real module name
     # as inferred by GHC, not the source file path; currently this requires the
     # module name to correspond to the source file path as otherwise GHC will
@@ -184,54 +246,25 @@ def target_metadata(
     #
     # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
 
-    def get_metadata(ctx, _artifacts, resolved, outputs):
-
-        # Add -package-db and -package/-expose-package flags for each Haskell
-        # library dependency.
-
-        packages_info = get_packages_info(
-            ctx,
-            LinkStyle("shared"),
-            specify_pkg_version = False,
-            enable_profiling = False,
-            use_empty_lib = True,
-            for_deps = True,
-            resolved = resolved,
-        )
-        package_flag = _package_flag(haskell_toolchain)
-        ghc_args = cmd_args()
-        ghc_args.add("-hide-all-packages")
-        ghc_args.add(package_flag, "base")
-
-        ghc_args.add(cmd_args(toolchain_libs, prepend=package_flag))
-        ghc_args.add(cmd_args(packages_info.exposed_package_args))
-        ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
-        ghc_args.add(ctx.attrs.compiler_flags)
-
-        md_args = cmd_args(md_gen)
-        md_args.add(packages_info.bin_paths)
-        md_args.add("--ghc", haskell_toolchain.compiler)
-        md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
-        md_args.add(
-            "--source-prefix",
-            _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
-        )
-        md_args.add(cmd_args(sources, format="--source={}"))
-
-        md_args.add(
-            _attr_deps_haskell_lib_package_name_and_prefix(ctx),
-        )
-        md_args.add("--output", outputs[md_file].as_output())
-
-        ctx.actions.run(md_args, category = "haskell_metadata", identifier = suffix if suffix else None)
-
-    ctx.actions.dynamic_output(
+    ctx.actions.dynamic_output_new(_dynamic_target_metadata(
         dynamic = [],
-        promises = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [],
-        inputs = [],
+        dynamic_values = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [],
         outputs = [md_file.as_output()],
-        f = get_metadata,
-    )
+        arg = struct(
+            compiler_flags = ctx.attrs.compiler_flags,
+            deps = ctx.attrs.deps,
+            direct_deps_link_info = attr_deps_haskell_link_infos(ctx),
+            haskell_direct_deps_lib_infos = haskell_direct_deps_lib_infos,
+            haskell_toolchain = haskell_toolchain,
+            lib_package_name_and_prefix =_attr_deps_haskell_lib_package_name_and_prefix(ctx),
+            md_file = md_file,
+            md_gen = md_gen,
+            sources = sources,
+            strip_prefix = _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
+            suffix = suffix,
+            toolchain_libs = toolchain_libs,
+        ),
+    ))
 
     return md_file
 
@@ -263,26 +296,55 @@ def get_packages_info(
         link_style: LinkStyle,
         specify_pkg_version: bool,
         enable_profiling: bool,
-        use_empty_lib: bool,
-        for_deps: bool = False,
-        resolved: None | dict[DynamicValue, ResolvedDynamicValue] = None) -> PackagesInfo:
+        use_empty_lib: bool) -> PackagesInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
+        ctx,
+        link_style,
+        enable_profiling,
+    )
+
+    return get_packages_info2(
+        actions = ctx.actions,
+        deps = [],
+        direct_deps_link_info = attr_deps_haskell_link_infos(ctx),
+        haskell_toolchain = haskell_toolchain,
+        haskell_direct_deps_lib_infos = haskell_direct_deps_lib_infos,
+        link_style = link_style,
+        specify_pkg_version = specify_pkg_version,
+        enable_profiling = enable_profiling,
+        use_empty_lib = use_empty_lib,
+        resolved = {},
+    )
+
+def get_packages_info2(
+    actions: AnalysisActions,
+    deps: list[Dependency],
+    direct_deps_link_info: list[HaskellLinkInfo],
+    haskell_toolchain: HaskellToolchainInfo,
+    haskell_direct_deps_lib_infos: list[HaskellLibraryInfo],
+    link_style: LinkStyle,
+    specify_pkg_version: bool,
+    enable_profiling: bool,
+    use_empty_lib: bool,
+    resolved: dict[DynamicValue, ResolvedDynamicValue],
+    for_deps: bool = False) -> PackagesInfo:
 
     # Collect library dependencies. Note that these don't need to be in a
     # particular order.
-    direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
-    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = [
+    libs = actions.tset(HaskellLibraryInfoTSet, children = [
         lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
         for lib in direct_deps_link_info
     ])
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
-    exposed_package_libs = cmd_args()
-    exposed_package_args = cmd_args([package_flag, "base"])
 
-    for lib in libs.traverse():
-        exposed_package_libs.hidden(lib.libs)
+    hidden_args = [l for lib in libs.traverse() for l in lib.libs]
+
+    exposed_package_libs = cmd_args()
+    exposed_package_args = cmd_args([package_flag, "base"], hidden = hidden_args)
 
     if for_deps:
         package_db_projection = "deps_package_db"
@@ -293,36 +355,29 @@ def get_packages_info(
 
     packagedb_args = cmd_args(libs.project_as_args(package_db_projection))
 
-    if haskell_toolchain.packages and resolved != None:
-        haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+    if resolved:
         pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
-
-        direct_toolchain_libs = [
-            dep[HaskellToolchainLibrary].name
-            for dep in ctx.attrs.deps
-            if HaskellToolchainLibrary in dep
-        ]
-
-        toolchain_libs = direct_toolchain_libs + libs.reduce("packages")
-
-        package_db_tset = ctx.actions.tset(
-            HaskellPackageDbTSet,
-            children = [package_db[name] for name in toolchain_libs if name in package_db]
-        )
-
-        packagedb_args.add(package_db_tset.project_as_args("package_db"))
-
-        direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
-        bin_paths = cmd_args(direct_package_paths, format="--bin-path={}/bin")
+        package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
     else:
-        bin_paths = cmd_args()
+        package_db = {}
 
-    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
-        ctx,
-        link_style,
-        enable_profiling,
+    direct_toolchain_libs = [
+        dep[HaskellToolchainLibrary].name
+        for dep in deps
+        if HaskellToolchainLibrary in dep
+    ]
+
+    toolchain_libs = direct_toolchain_libs + libs.reduce("packages")
+
+    package_db_tset = actions.tset(
+        HaskellPackageDbTSet,
+        children = [package_db[name] for name in toolchain_libs if name in package_db]
     )
+
+    packagedb_args.add(package_db_tset.project_as_args("package_db"))
+
+    direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
+    bin_paths = cmd_args(direct_package_paths, format="--bin-path={}/bin")
 
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
@@ -347,34 +402,51 @@ CommonCompileModuleArgs = record(
 )
 
 def _common_compile_module_args(
-    ctx: AnalysisContext,
+    actions: AnalysisActions,
     *,
+    compiler_flags: list[str],
+    ghc_wrapper: RunInfo,
+    haskell_toolchain: HaskellToolchainInfo,
     resolved: dict[DynamicValue, ResolvedDynamicValue],
     enable_haddock: bool,
     enable_profiling: bool,
     link_style: LinkStyle,
+    main: None | str,
+    label: Label,
+    deps: list[Dependency],
+    external_tool_paths: list[RunInfo],
+    sources: list[Artifact],
     direct_deps_info: list[HaskellLibraryInfoTSet],
     pkgname: str | None = None,
 ) -> CommonCompileModuleArgs:
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+    #haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
-    command = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
+    command = cmd_args(ghc_wrapper)
     command.add("--ghc", haskell_toolchain.compiler)
 
     # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
     # be parsed when inside an argsfile.
     command.add(haskell_toolchain.compiler_flags)
-    command.add(ctx.attrs.compiler_flags)
+    command.add(compiler_flags)
 
     command.add("-c")
 
-    if getattr(ctx.attrs, "main", None) != None:
-        command.add(["-main-is", ctx.attrs.main])
+    if main != None:
+        command.add(["-main-is", main])
 
     if enable_haddock:
         command.add("-haddock")
 
-    args_for_file = cmd_args()
+    non_haskell_sources = [
+        src
+        for (path, src) in srcs_to_pairs(sources)
+        if not is_haskell_src(path) and not is_haskell_boot(path)
+    ]
+
+    if non_haskell_sources:
+        warning("{} specifies non-haskell file in `srcs`, consider using `srcs_deps` instead".format(label))
+
+    args_for_file = cmd_args(hidden = non_haskell_sources)
 
     args_for_file.add("-no-link", "-i")
     args_for_file.add("-hide-all-packages")
@@ -390,20 +462,9 @@ def _common_compile_module_args(
     osuf, hisuf = output_extensions(link_style, enable_profiling)
     args_for_file.add("-osuf", osuf, "-hisuf", hisuf)
 
-    non_haskell_sources = [
-        src
-        for (path, src) in srcs_to_pairs(ctx.attrs.srcs)
-        if not is_haskell_src(path) and not is_haskell_boot(path)
-    ]
-
-    if non_haskell_sources:
-        warning("{} specifies non-haskell file in `srcs`, consider using `srcs_deps` instead".format(ctx.label))
-
-        args_for_file.hidden(non_haskell_sources)
-
     # Add args from preprocess-able inputs.
-    inherited_pre = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
-    pre = cxx_merge_cpreprocessors(ctx, [], inherited_pre)
+    inherited_pre = cxx_inherited_preprocessor_infos(deps)
+    pre = cxx_merge_cpreprocessors_actions(actions, [], inherited_pre)
     pre_args = pre.set.project_as_args("args")
     args_for_file.add(cmd_args(pre_args, format = "-optP={}"))
 
@@ -413,22 +474,22 @@ def _common_compile_module_args(
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
 
-    libs = ctx.actions.tset(HaskellLibraryInfoTSet, children = direct_deps_info)
+    libs = actions.tset(HaskellLibraryInfoTSet, children = direct_deps_info)
 
     direct_toolchain_libs = [
         dep[HaskellToolchainLibrary].name
-        for dep in ctx.attrs.deps
+        for dep in deps
         if HaskellToolchainLibrary in dep
     ]
     toolchain_libs = direct_toolchain_libs + libs.reduce("packages")
 
     if haskell_toolchain.packages:
         pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-        package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
+        package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
     else:
         package_db = []
 
-    package_db_tset = ctx.actions.tset(
+    package_db_tset = actions.tset(
         HaskellPackageDbTSet,
         children = [package_db[name] for name in toolchain_libs if name in package_db]
     )
@@ -439,7 +500,6 @@ def _common_compile_module_args(
         format="--bin-path={}/bin",
     ))
 
-    external_tool_paths = [tool[RunInfo] for tool in ctx.attrs.external_tools]
     args_for_file.add(cmd_args(
         external_tool_paths,
         format="--bin-exe={}",
@@ -452,8 +512,8 @@ def _common_compile_module_args(
     #   The set of package-dbs can be known at the package level, not just the
     #   module level. So, we could generate this file outside of the
     #   dynamic_output action.
-    package_env_file = ctx.actions.declare_output(".".join([
-        ctx.label.name,
+    package_env_file = actions.declare_output(".".join([
+        label.name,
         "package-db",
         output_extensions(link_style, enable_profiling)[1],
         "env",
@@ -463,7 +523,7 @@ def _common_compile_module_args(
         packagedb_args,
         format = "package-db {}",
     ).relative_to(package_env_file, parent = 1))
-    ctx.actions.write(
+    actions.write(
         package_env_file,
         package_env,
     )
@@ -480,12 +540,14 @@ def _common_compile_module_args(
     )
 
 def _compile_module(
-    ctx: AnalysisContext,
+    actions: AnalysisActions,
     *,
     common_args: CommonCompileModuleArgs,
     link_style: LinkStyle,
     enable_profiling: bool,
     enable_th: bool,
+    haskell_toolchain: HaskellToolchainInfo,
+    label: Label,
     module_name: str,
     module: _Module,
     module_tsets: dict[str, CompiledModuleTSet],
@@ -496,19 +558,17 @@ def _compile_module(
     artifact_suffix: str,
     direct_deps_by_name: dict[str, typing.Any],
     toolchain_deps_by_name: dict[str, None],
+    aux_deps: None | list[Artifact],
     source_prefixes: list[str],
 ) -> CompiledModuleTSet:
-    compile_cmd = cmd_args(common_args.command)
     # These compiler arguments can be passed in a response file.
-    compile_args_for_file = cmd_args(common_args.args_for_file)
+    compile_args_for_file = cmd_args(common_args.args_for_file, hidden = aux_deps or [])
 
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
-    packagedb_tag = ctx.actions.artifact_tag()
+    packagedb_tag = actions.artifact_tag()
     compile_args_for_file.add(packagedb_tag.tag_artifacts(common_args.package_env_args))
 
-    dep_file = ctx.actions.declare_output(".".join([
-        ctx.label.name,
+    dep_file = actions.declare_output(".".join([
+        label.name,
         module_name or "pkg",
         "package-db",
         output_extensions(link_style, enable_profiling)[1],
@@ -542,32 +602,7 @@ def _compile_module(
 
     compile_args_for_file.add(module.source)
 
-    aux_deps = ctx.attrs.srcs_deps.get(module.source)
-    if aux_deps:
-        compile_args_for_file.hidden(aux_deps)
-
-    src_envs = ctx.attrs.srcs_envs.get(module.source)
-    if src_envs:
-        for k, v in src_envs:
-            compile_args_for_file.add(cmd_args(
-                k,
-                format="--extra-env-key={}",
-            ))
-            compile_args_for_file.add(cmd_args(
-                v,
-                format="--extra-env-value={}",
-            ))
-
-
-    if haskell_toolchain.use_argsfile:
-        argsfile = ctx.actions.declare_output(
-            "haskell_compile_" + artifact_suffix + ".argsfile",
-        )
-        ctx.actions.write(argsfile.as_output(), compile_args_for_file, allow_args = True)
-        compile_cmd.add(cmd_args(argsfile, format = "@{}"))
-        compile_cmd.hidden(compile_args_for_file)
-    else:
-        compile_cmd.add(compile_args_for_file)
+    abi_tag = actions.artifact_tag()
 
     toolchain_deps = []
     library_deps = []
@@ -585,7 +620,7 @@ def _compile_module(
             fail("Unknown library dependency '{}'. Add the library to the `deps` attribute".format(dep_pkgname))
 
     # Transitive module dependencies from other packages.
-    cross_package_modules = ctx.actions.tset(
+    cross_package_modules = actions.tset(
         CompiledModuleTSet,
         children = exposed_package_modules,
     )
@@ -595,16 +630,33 @@ def _compile_module(
         for dep_name in graph[module_name]
     ]
 
-    dependency_modules = ctx.actions.tset(
+    dependency_modules = actions.tset(
         CompiledModuleTSet,
         children = [cross_package_modules] + this_package_modules,
     )
+
+    compile_cmd_args = [common_args.command]
+    compile_cmd_hidden = [
+        abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")),
+        dependency_modules.project_as_args("abi"),
+    ]
+    if haskell_toolchain.use_argsfile:
+        argsfile = actions.declare_output(
+            "haskell_compile_" + artifact_suffix + ".argsfile",
+        )
+        actions.write(argsfile.as_output(), compile_args_for_file, allow_args = True)
+        compile_cmd_args.append(cmd_args(argsfile, format = "@{}"))
+        compile_cmd_hidden.append(compile_args_for_file)
+    else:
+        compile_cmd_args.append(compile_args_for_file)
+
+    compile_cmd = cmd_args(compile_cmd_args, hidden = compile_cmd_hidden)
 
     # add each module dir prefix to search path
     for prefix in source_prefixes:
         compile_cmd.add(
             cmd_args(
-                cmd_args(md_file, format = "-i{}", ignore_artifacts=True).parent(),
+                cmd_args(md_file, format = "-i{}", ignore_artifacts=True, parent=1),
                 "/",
                 paths.join(module.prefix_dir, prefix),
                 delimiter=""
@@ -615,25 +667,20 @@ def _compile_module(
     compile_cmd.add(cmd_args(library_deps, prepend = "-package"))
     compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package"))
 
-    abi_tag = ctx.actions.artifact_tag()
-
-    compile_cmd.hidden(
-        abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")))
     compile_cmd.add("-fbyte-code-and-object-code")
     if enable_th:
         compile_cmd.add("-fprefer-byte-code")
 
     compile_cmd.add(cmd_args(dependency_modules.reduce("packagedb_deps").keys(), prepend = "--buck2-package-db"))
 
-    dep_file = ctx.actions.declare_output("dep-{}_{}".format(module_name, artifact_suffix)).as_output()
+    dep_file = actions.declare_output("dep-{}_{}".format(module_name, artifact_suffix)).as_output()
 
     tagged_dep_file = abi_tag.tag_artifacts(dep_file)
 
     compile_cmd.add("--buck2-dep", tagged_dep_file)
     compile_cmd.add("--abi-out", outputs[module.hash].as_output())
-    compile_cmd.hidden(dependency_modules.project_as_args("abi"))
 
-    ctx.actions.run(
+    actions.run(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
         dep_files = {
             "abi": abi_tag,
@@ -641,7 +688,7 @@ def _compile_module(
         }
     )
 
-    module_tset = ctx.actions.tset(
+    module_tset = actions.tset(
         CompiledModuleTSet,
         value = CompiledModuleInfo(
             abi = module.hash,
@@ -653,6 +700,71 @@ def _compile_module(
 
     return module_tset
 
+def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
+    direct_deps_by_name = {
+        info.value.name: struct(
+            package_db = info.value.empty_db,
+            modules = dynamic_values[info.value.dynamic[arg.enable_profiling]].providers[DynamicCompileResultInfo].modules,
+        )
+        for info in arg.direct_deps_info
+    }
+    common_args = _common_compile_module_args(
+        actions,
+        compiler_flags = arg.compiler_flags,
+        deps = arg.deps,
+        external_tool_paths = arg.external_tool_paths,
+        ghc_wrapper = arg.ghc_wrapper,
+        haskell_toolchain = arg.haskell_toolchain,
+        label = arg.label,
+        main = arg.main,
+        resolved = dynamic_values,
+        sources = arg.sources,
+        enable_haddock = arg.enable_haddock,
+        enable_profiling = arg.enable_profiling,
+        link_style = arg.link_style,
+        direct_deps_info = arg.direct_deps_info,
+        pkgname = arg.pkgname,
+    )
+
+    md = artifacts[arg.md_file].read_json()
+    th_modules = md["th_modules"]
+    module_map = md["module_mapping"]
+    graph = md["module_graph"]
+    package_deps = md["package_deps"]
+
+    mapped_modules = { module_map.get(k, k): v for k, v in arg.modules.items() }
+    module_tsets = {}
+    source_prefixes = get_source_prefixes(arg.sources, module_map)
+
+    for module_name in post_order_traversal(graph):
+        module = mapped_modules[module_name]
+        module_tsets[module_name] = _compile_module(
+            actions,
+            aux_deps = arg.sources_deps.get(module.source),
+            common_args = common_args,
+            link_style = arg.link_style,
+            enable_profiling = arg.enable_profiling,
+            enable_th = module_name in th_modules,
+            haskell_toolchain = arg.haskell_toolchain,
+            label = arg.label,
+            module_name = module_name,
+            module = module,
+            module_tsets = module_tsets,
+            graph = graph,
+            package_deps = package_deps.get(module_name, {}),
+            outputs = outputs,
+            md_file = arg.md_file,
+            artifact_suffix = arg.artifact_suffix,
+            direct_deps_by_name = direct_deps_by_name,
+            toolchain_deps_by_name = arg.toolchain_deps_by_name,
+            source_prefixes = source_prefixes,
+        )
+
+    return [DynamicCompileResultInfo(modules = module_tsets)]
+
+
+
+_dynamic_do_compile = dynamic_actions(impl = _dynamic_do_compile_impl)
 
 # Compile all the context's sources.
 def compile(
@@ -666,66 +778,6 @@ def compile(
 
     modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
 
-    def do_compile(ctx, artifacts, resolved, outputs, md_file=md_file, modules=modules):
-        # Collect library dependencies. Note that these don't need to be in a
-        # particular order.
-        toolchain_deps_by_name = {
-            lib.name: None
-            for lib in attr_deps_haskell_toolchain_libraries(ctx)
-        }
-        direct_deps_info = [
-            lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-            for lib in attr_deps_haskell_link_infos(ctx)
-        ]
-        direct_deps_by_name = {
-            info.value.name: struct(
-                package_db = info.value.empty_db,
-                modules = resolved[info.value.dynamic[enable_profiling]][DynamicCompileResultInfo].modules,
-            )
-            for info in direct_deps_info
-        }
-        common_args = _common_compile_module_args(
-            ctx,
-            resolved = resolved,
-            enable_haddock = enable_haddock,
-            enable_profiling = enable_profiling,
-            link_style = link_style,
-            direct_deps_info = direct_deps_info,
-            pkgname = pkgname,
-        )
-
-        md = artifacts[md_file].read_json()
-        th_modules = md["th_modules"]
-        module_map = md["module_mapping"]
-        graph = md["module_graph"]
-        package_deps = md["package_deps"]
-
-        mapped_modules = { module_map.get(k, k): v for k, v in modules.items() }
-        module_tsets = {}
-        source_prefixes = get_source_prefixes(ctx.attrs.srcs, module_map)
-
-        for module_name in post_order_traversal(graph):
-            module_tsets[module_name] = _compile_module(
-                ctx,
-                common_args = common_args,
-                link_style = link_style,
-                enable_profiling = enable_profiling,
-                enable_th = module_name in th_modules,
-                module_name = module_name,
-                module = mapped_modules[module_name],
-                module_tsets = module_tsets,
-                graph = graph,
-                package_deps = package_deps.get(module_name, {}),
-                outputs = outputs,
-                md_file=md_file,
-                artifact_suffix = artifact_suffix,
-                direct_deps_by_name = direct_deps_by_name,
-                toolchain_deps_by_name = toolchain_deps_by_name,
-                source_prefixes = source_prefixes,
-            )
-
-        return [DynamicCompileResultInfo(modules = module_tsets)]
-
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
@@ -737,9 +789,20 @@ def compile(
     ]
     abi_hashes = [module.hash for module in modules.values()]
 
-    dyn_module_tsets = ctx.actions.dynamic_output(
+    # Collect library dependencies. Note that these don't need to be in a
+    # particular order.
+    toolchain_deps_by_name = {
+        lib.name: None
+        for lib in attr_deps_haskell_toolchain_libraries(ctx)
+    }
+    direct_deps_info = [
+        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+        for lib in attr_deps_haskell_link_infos(ctx)
+    ]
+
+    dyn_module_tsets = ctx.actions.dynamic_output_new(_dynamic_do_compile(
         dynamic = [md_file],
-        promises = [
+        dynamic_values = [
             info.value.dynamic[enable_profiling]
             for lib in attr_deps_haskell_link_infos(ctx)
             for info in [
@@ -748,9 +811,28 @@ def compile(
                 lib.info[link_style]
             ]
         ] + ([ haskell_toolchain.packages.dynamic ] if haskell_toolchain.packages else [ ]),
-        inputs = ctx.attrs.srcs,
         outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
-        f = do_compile)
+        arg = struct(
+            artifact_suffix = artifact_suffix,
+            compiler_flags = ctx.attrs.compiler_flags,
+            deps = ctx.attrs.deps,
+            direct_deps_info = direct_deps_info,
+            enable_haddock = enable_haddock,
+            enable_profiling = enable_profiling,
+            external_tool_paths = [tool[RunInfo] for tool in ctx.attrs.external_tools],
+            ghc_wrapper = ctx.attrs._ghc_wrapper[RunInfo],
+            haskell_toolchain = haskell_toolchain,
+            label = ctx.label,
+            link_style = link_style,
+            main = getattr(ctx.attrs, "main", None),
+            md_file = md_file,
+            modules = modules,
+            pkgname = pkgname,
+            sources = ctx.attrs.srcs,
+            sources_deps = ctx.attrs.srcs_deps,
+            toolchain_deps_by_name = toolchain_deps_by_name,
+        ),
+    ))
 
     stubs_dir = ctx.actions.declare_output("stubs-" + artifact_suffix, dir=True)
 

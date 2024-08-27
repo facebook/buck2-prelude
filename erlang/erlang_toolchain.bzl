@@ -129,9 +129,6 @@ multi_version_toolchain_rule = rule(
     is_toolchain_rule = True,
 )
 
-def as_target(name: str) -> str:
-    return ":" + name
-
 def _config_erlang_toolchain_impl(ctx: AnalysisContext) -> list[Provider]:
     """ rule for erlang toolchain
     """
@@ -145,10 +142,8 @@ def _config_erlang_toolchain_impl(ctx: AnalysisContext) -> list[Provider]:
     # get otp binaries
     binaries_info = ctx.attrs.otp_binaries[ErlangOTPBinariesInfo]
     erl = cmd_args([binaries_info.erl] + emu_flags)
-    erlc = cmd_args(binaries_info.erlc)
-    escript = cmd_args(binaries_info.escript)
-    erlc.hidden(binaries_info.erl)
-    escript.hidden(binaries_info.erl)
+    erlc = cmd_args(binaries_info.erlc, hidden = binaries_info.erl)
+    escript = cmd_args(binaries_info.escript, hidden = binaries_info.erl)
     tools_binaries = ToolsBinaries(
         erl = binaries_info.erl,
         erlc = binaries_info.erl,
@@ -274,7 +269,7 @@ def _gen_parse_transform_beam(
         erlc,
         "+deterministic",
         "-o",
-        cmd_args(output.as_output()).parent(),
+        cmd_args(output.as_output(), parent = 1),
         src,
     ])
     ctx.actions.run(cmd, category = "erlc", identifier = src.short_path)
@@ -311,7 +306,7 @@ def _gen_util_beams(
                 erlc,
                 "+deterministic",
                 "-o",
-                cmd_args(output.as_output()).parent(),
+                cmd_args(output.as_output(), parent = 1),
                 src,
             ],
             category = "erlc",
@@ -389,29 +384,5 @@ toolchain_utilities = rule(
         "include_erts": attrs.source(),
         "release_variables_builder": attrs.source(),
         "utility_modules": attrs.list(attrs.source()),
-    },
-)
-
-# Resources that need to be plugged in through toolchain// :
-# - jsone
-
-toolchain_resources = rule(
-    impl = lambda ctx: [
-        DefaultInfo(
-            sub_targets = {
-                "jsone": ctx.attrs.jsone.providers,
-            },
-        ),
-    ],
-    attrs = {
-        "jsone": attrs.dep(),
-    },
-    is_toolchain_rule = True,
-)
-
-toolchain_resources_internal = rule(
-    impl = lambda ctx: ctx.attrs._resources.providers,
-    attrs = {
-        "_resources": attrs.toolchain_dep(default = "toolchains//:erlang-resources"),
     },
 )

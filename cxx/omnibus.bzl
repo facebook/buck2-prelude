@@ -39,13 +39,14 @@ load(
 )
 load(
     "@prelude//linking:shared_libraries.bzl",
-    "SharedLibrary",
+    "SharedLibrary",  # @unused Used as a type
+    "create_shlib",
 )
 load("@prelude//linking:types.bzl", "Linkage")
 load("@prelude//utils:expect.bzl", "expect")
 load(
     "@prelude//utils:graph_utils.bzl",
-    "breadth_first_traversal_by",
+    "depth_first_traversal_by",
     "post_order_traversal",
 )
 load("@prelude//utils:utils.bzl", "flatten", "value_or")
@@ -143,7 +144,8 @@ def get_roots(deps: list[Dependency]) -> dict[Label, LinkableRootInfo]:
     roots = {}
     for dep in deps:
         if LinkableRootInfo in dep:
-            roots[dep.label] = dep[LinkableRootInfo]
+            root = dep[LinkableRootInfo]
+            roots[root.label] = root
     return roots
 
 def get_excluded(deps: list[Dependency] = []) -> dict[Label, None]:
@@ -155,11 +157,13 @@ def get_excluded(deps: list[Dependency] = []) -> dict[Label, None]:
     return excluded_nodes
 
 def create_linkable_root(
+        label: Label,
         link_infos: LinkInfos,
         name: [str, None] = None,
         deps: list[LinkableGraph | Dependency] = []) -> LinkableRootInfo:
     # Only include dependencies that are linkable.
     return LinkableRootInfo(
+        label = label,
         name = name,
         link_infos = link_infos,
         deps = linkable_deps(deps),
@@ -196,7 +200,7 @@ def _link_deps(
     def find_deps(node: Label):
         return get_deps_for_link(link_infos[node], LinkStrategy("shared"), pic_behavior)
 
-    return breadth_first_traversal_by(link_infos, deps, find_deps)
+    return depth_first_traversal_by(link_infos, deps, find_deps)
 
 def _create_root(
         ctx: AnalysisContext,
@@ -709,7 +713,7 @@ def create_omnibus_libraries(
         )
         if root.name != None:
             libraries.append(
-                SharedLibrary(
+                create_shlib(
                     soname = root.name,
                     lib = product.shared_library,
                     label = label,
@@ -730,7 +734,7 @@ def create_omnibus_libraries(
             allow_cache_upload = True,
         )
         libraries.append(
-            SharedLibrary(
+            create_shlib(
                 soname = _omnibus_soname(ctx),
                 lib = omnibus.linked_object,
                 label = ctx.label,

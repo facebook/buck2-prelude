@@ -10,12 +10,12 @@ load(
     "CxxToolchainInfo",
 )
 load(
-    "@prelude//linking:link_info.bzl",
-    "LinkStyle",
-)
-load(
     "@prelude//haskell:library_info.bzl",
     "HaskellLibraryInfoTSet",
+)
+load(
+    "@prelude//linking:link_info.bzl",
+    "LinkStyle",
 )
 
 # A list of `HaskellLibraryInfo`s.

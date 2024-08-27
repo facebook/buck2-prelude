@@ -5,5 +5,11 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
-def xcode_prebuild_script_impl(_ctx: AnalysisContext) -> list[Provider]:
-    return [DefaultInfo()]
+load("@prelude//:is_buck2.bzl", "is_buck2")
+load(":source_listing_impl.bzl?v2_only", "SourceListingInfoAlias", "source_listing_impl")
+
+SourceListingInfo = SourceListingInfoAlias
+
+def source_listing(exclude = None):
+    if is_buck2():
+        source_listing_impl(exclude = exclude or [])

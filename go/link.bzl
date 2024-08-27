@@ -12,6 +12,7 @@ load(
     "executable_shared_lib_arguments",
     "make_link_args",
 )
+load("@prelude//cxx:linker.bzl", "get_default_shared_library_name", "get_shared_library_name_linker_flags")
 load(
     "@prelude//linking:link_info.bzl",
     "LinkStyle",
@@ -34,7 +35,6 @@ load(
     "GoPkg",  # @Unused used as type
     "make_importcfg",
     "merge_pkgs",
-    "pkg_artifacts",
 )
 load(":toolchain.bzl", "GoToolchainInfo", "get_toolchain_env_vars")
 
@@ -44,8 +44,9 @@ GoPkgLinkInfo = provider(fields = {
 })
 
 GoBuildMode = enum(
-    "executable",
-    "c_shared",
+    "executable",  # non-pic executable
+    "c_shared",  # pic C-shared library
+    "c_archive",  # pic C-static library
 )
 
 def _build_mode_param(mode: GoBuildMode) -> str:
@@ -53,6 +54,8 @@ def _build_mode_param(mode: GoBuildMode) -> str:
         return "exe"
     if mode == GoBuildMode("c_shared"):
         return "c-shared"
+    if mode == GoBuildMode("c_archive"):
+        return "c-archive"
     fail("unexpected: {}", mode)
 
 def get_inherited_link_pkgs(deps: list[Dependency]) -> dict[str, GoPkg]:
@@ -90,24 +93,35 @@ def _process_shared_dependencies(
 
 def link(
         ctx: AnalysisContext,
-        main: Artifact,
-        pkgs: dict[str, Artifact] = {},
+        main: GoPkg,
+        pkgs: dict[str, GoPkg] = {},
         deps: list[Dependency] = [],
         build_mode: GoBuildMode = GoBuildMode("executable"),
         link_mode: [str, None] = None,
         link_style: LinkStyle = LinkStyle("static"),
         linker_flags: list[typing.Any] = [],
         external_linker_flags: list[typing.Any] = [],
-        shared: bool = False,
-        race: bool = False):
+        race: bool = False,
+        asan: bool = False):
     go_toolchain = ctx.attrs._go_toolchain[GoToolchainInfo]
     if go_toolchain.env_go_os == "windows":
         executable_extension = ".exe"
         shared_extension = ".dll"
+        archive_extension = ".lib"
     else:
         executable_extension = ""
         shared_extension = ".so"
-    file_extension = shared_extension if build_mode == GoBuildMode("c_shared") else executable_extension
+        archive_extension = ".a"
+
+    if build_mode == GoBuildMode("c_shared"):
+        file_extension = shared_extension
+        use_shared_code = True  # PIC
+    elif build_mode == GoBuildMode("c_archive"):
+        file_extension = archive_extension
+        use_shared_code = True  # PIC
+    else:  # GoBuildMode("executable")
+        file_extension = executable_extension
+        use_shared_code = False  # non-PIC
     output = ctx.actions.declare_output(ctx.label.name + file_extension)
 
     cmd = cmd_args()
@@ -122,13 +136,18 @@ def link(
     if race:
         cmd.add("-race")
 
+    if asan:
+        cmd.add("-asan")
+
     # Add inherited Go pkgs to library search path.
     all_pkgs = merge_pkgs([
         pkgs,
-        pkg_artifacts(get_inherited_link_pkgs(deps)),
+        get_inherited_link_pkgs(deps),
     ])
 
-    importcfg = make_importcfg(ctx, "", all_pkgs, with_importmap = False)
+    identifier_prefix = ctx.label.name + "_" + _build_mode_param(build_mode)
+
+    importcfg = make_importcfg(ctx, identifier_prefix, all_pkgs, use_shared_code, with_importmap = False)
 
     cmd.add("-importcfg", importcfg)
 
@@ -137,7 +156,7 @@ def link(
     if link_mode == None:
         if build_mode == GoBuildMode("c_shared"):
             link_mode = "external"
-        elif shared:
+        if build_mode == GoBuildMode("c_archive"):
             link_mode = "external"
 
     if link_mode != None:
@@ -152,15 +171,20 @@ def link(
         # Gather external link args from deps.
         ext_links = get_link_args_for_strategy(ctx, cxx_inherited_link_info(deps), to_link_strategy(link_style))
         ext_link_args_output = make_link_args(
+            ctx,
             ctx.actions,
             cxx_toolchain,
             [ext_links],
         )
-        ext_link_args = cmd_args()
+        ext_link_args = cmd_args(hidden = ext_link_args_output.hidden)
         ext_link_args.add(cmd_args(executable_args.extra_link_args, quote = "shell"))
         ext_link_args.add(external_linker_flags)
         ext_link_args.add(ext_link_args_output.link_args)
-        ext_link_args.hidden(ext_link_args_output.hidden)
+
+        if build_mode == GoBuildMode("c_shared"):
+            soname = get_default_shared_library_name(cxx_toolchain.linker_info, ctx.label)
+            soname_flags = get_shared_library_name_linker_flags(cxx_toolchain.linker_info.type, soname)
+            ext_link_args.add(soname_flags)
 
         # Delegate to C++ linker...
         # TODO: It feels a bit inefficient to generate a wrapper file for every
@@ -175,12 +199,12 @@ def link(
             delimiter = " ",
         )
         linker_wrapper, _ = ctx.actions.write(
-            "__{}_cxx_link_wrapper__.{}".format(ctx.label.name, "bat" if is_win else "sh"),
+            "__{}_cxx_link_wrapper__.{}".format(identifier_prefix, "bat" if is_win else "sh"),
             ([] if is_win else ["#!/bin/sh"]) + [cxx_link_cmd],
             allow_args = True,
             is_executable = True,
         )
-        cmd.add("-extld", linker_wrapper).hidden(cxx_link_cmd)
+        cmd.add("-extld", linker_wrapper, cmd_args(hidden = cxx_link_cmd))
         cmd.add("-extldflags", cmd_args(
             cxx_toolchain.linker_info.linker_flags,
             go_toolchain.external_linker_flags,
@@ -190,10 +214,10 @@ def link(
 
     cmd.add(linker_flags)
 
-    cmd.add(main)
+    cmd.add(main.pkg_shared if use_shared_code else main.pkg)
 
     env = get_toolchain_env_vars(go_toolchain)
 
-    ctx.actions.run(cmd, env = env, category = "go_link")
+    ctx.actions.run(cmd, env = env, category = "go_link", identifier = identifier_prefix)
 
     return (output, executable_args.runtime_files, executable_args.external_debug_info)

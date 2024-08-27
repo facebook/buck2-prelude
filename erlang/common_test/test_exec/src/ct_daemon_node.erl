@@ -74,7 +74,7 @@ start(
     % We should forward emu flags here,
     % see T129435667
     Port = ct_runner:start_test_node(
-        os:find_executable("erl"),
+        [os:find_executable("erl")],
         [],
         CodePaths,
         ConfigFiles,
@@ -130,7 +130,7 @@ alive() ->
 
 %% @doc node main entry point
 -spec node_main([node()]) -> no_return().
-node_main([Parent, OutputDirAtom, InstrumentCTLogs]) ->
+node_main([Parent, OutputDirAtom]) ->
     ok = application:load(test_exec),
     OutputDir = erlang:atom_to_list(OutputDirAtom),
 
@@ -138,7 +138,7 @@ node_main([Parent, OutputDirAtom, InstrumentCTLogs]) ->
     erlang:system_flag(backtrace_depth, 20),
 
     %% setup logger and prepare IO
-    ok = ct_daemon_logger:setup(OutputDir, InstrumentCTLogs),
+    ok = ct_daemon_logger:start(OutputDir),
 
     true = net_kernel:connect_node(Parent),
 
@@ -173,7 +173,7 @@ ensure_distribution(Type, RandomName, Cookie) ->
                 ([] = os:cmd("epmd -daemon")),
             Name = list_to_atom(
                 lists:flatten(
-                    io_lib:format("ct_daemon~s", [RandomName])
+                    io_lib:format("ct_daemon~s@localhost", [RandomName])
                 )
             ),
             {ok, _Pid} = net_kernel:start(Name, #{name_domain => Type}),
@@ -194,7 +194,6 @@ build_daemon_args(Type, Node, Cookie, Options, OutputDir) ->
             longnames -> "-name";
             shortnames -> "-sname"
         end,
-    InstrumentCTLogs = erlang:whereis(ct_logs) =:= undefined,
     [
         DistArg,
         convert_atom_arg(Node),
@@ -207,8 +206,7 @@ build_daemon_args(Type, Node, Cookie, Options, OutputDir) ->
         convert_atom_arg(?MODULE),
         "node_main",
         convert_atom_arg(erlang:node()),
-        OutputDir,
-        convert_atom_arg(InstrumentCTLogs)
+        OutputDir
     ].
 
 -spec convert_atom_arg(atom()) -> string().
@@ -217,13 +215,8 @@ convert_atom_arg(Arg) ->
 
 -spec get_config_files() -> [file:filename_all()].
 get_config_files() ->
-    _ = application:load(test_exec),
-    PrivDir = code:priv_dir(test_exec),
-    [
-        ConfigFile
-     || ConfigFile <- filelib:wildcard(filename:join(PrivDir, "*")),
-        filename:extension(ConfigFile) =:= ".config"
-    ].
+    %% get config files from command line
+    [F || {config, F} <- init:get_arguments()].
 
 -spec gen_output_dir(RandomName :: string()) -> file:filename().
 gen_output_dir(RandomName) ->

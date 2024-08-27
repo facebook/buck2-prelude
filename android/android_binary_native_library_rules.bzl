@@ -25,7 +25,7 @@ load(
 load("@prelude//cxx:link_types.bzl", "link_options")
 load(
     "@prelude//cxx:symbols.bzl",
-    "extract_global_syms",
+    "extract_defined_syms",
     "extract_undefined_syms",
 )
 load("@prelude//java:java_library.bzl", "compile_to_jar")  # @unused
@@ -54,15 +54,17 @@ load(
     "@prelude//linking:shared_libraries.bzl",
     "SharedLibrary",  # @unused Used as a type
     "SharedLibraryInfo",  # @unused Used as a type
+    "create_shlib",
     "get_strip_non_global_flags",
     "merge_shared_libraries",
     "traverse_shared_library_info",
-    "with_unique_sonames",
+    "with_unique_str_sonames",
 )
 load("@prelude//linking:strip.bzl", "strip_object")
 load("@prelude//linking:types.bzl", "Linkage")
+load("@prelude//utils:argfile.bzl", "argfile")
 load("@prelude//utils:expect.bzl", "expect")
-load("@prelude//utils:graph_utils.bzl", "breadth_first_traversal_by", "post_order_traversal", "pre_order_traversal")
+load("@prelude//utils:graph_utils.bzl", "GraphTraversal", "depth_first_traversal_by", "post_order_traversal", "pre_order_traversal")
 load("@prelude//utils:set.bzl", "set", "set_type")  # @unused Used as a type
 load("@prelude//utils:utils.bzl", "dedupe_by_value")
 
@@ -81,16 +83,13 @@ load("@prelude//utils:utils.bzl", "dedupe_by_value")
 # 2. As assets. These are passed to the APK build as assets, and are stored at
 #    `assets/lib/<ABI>/library.so` In the root module, we only package a native library as an
 #    asset if it is eligible to be an asset (e.g. `can_be_asset` on a `cxx_library`), and
-#    `package_asset_libraries` is set to True for the APK. We will additionally compress all the
-#    assets into a single `assets/lib/libs.xz` (or `assets/libs/libs.zstd` for `zstd` compression)
-#    if `compress_asset_libraries` is set to True for the APK. Regardless of whether we compress
-#    the assets or not, we create a metadata file at `assets/libs/metadata.txt` that has a single
-#    line entry for each packaged asset consisting of '<ABI/library_name> <file_size> <sha256>'.
+#    `package_asset_libraries` is set to True for the APK. We create a metadata file at
+#    `assets/libs/metadata.txt` that has a single line entry for each packaged asset consisting of
+#    '<ABI/library_name> <file_size> <sha256>'.
 #
 #    Any native library that is not part of the root module (i.e. it is part of some other Voltron
-#    module) is automatically packaged as an asset, and the assets for each module are compressed
-#    to a single `assets/<module_name>/libs.xz` only if `compress_asset_libraries` is set to True.
-#    Similarly, the metadata for each module is stored at `assets/<module_name>/libs.txt`.
+#    module) is automatically packaged as an asset. Similarly, the metadata for each module is stored
+#    at `assets/<module_name>/libs.txt`.
 
 def get_android_binary_native_library_info(
         enhance_ctx: EnhancementContext,
@@ -129,6 +128,7 @@ def get_android_binary_native_library_info(
             root_module_native_lib_assets = [],
             non_root_module_native_lib_assets = [],
             generated_java_code = [],
+            unstripped_shared_libraries = None,
         )
 
     native_libs = ctx.actions.declare_output("native_libs_symlink")
@@ -137,7 +137,6 @@ def get_android_binary_native_library_info(
     native_lib_assets_for_primary_apk = ctx.actions.declare_output("native_lib_assets_for_primary_apk_symlink")
     stripped_native_linkable_assets_for_primary_apk = ctx.actions.declare_output("stripped_native_linkable_assets_for_primary_apk_symlink")
     root_module_metadata_assets = ctx.actions.declare_output("root_module_metadata_assets_symlink")
-    root_module_compressed_lib_assets = ctx.actions.declare_output("root_module_compressed_lib_assets_symlink")
     non_root_module_metadata_assets = ctx.actions.declare_output("non_root_module_metadata_assets_symlink")
     non_root_module_lib_assets = ctx.actions.declare_output("non_root_module_lib_assets_symlink")
 
@@ -155,7 +154,6 @@ def get_android_binary_native_library_info(
         unstripped_native_libraries_files,
         stripped_native_linkable_assets_for_primary_apk,
         root_module_metadata_assets,
-        root_module_compressed_lib_assets,
         non_root_module_metadata_assets,
         non_root_module_lib_assets,
     ]
@@ -241,7 +239,7 @@ def get_android_binary_native_library_info(
             ),
         )
 
-    def dynamic_native_libs_info(ctx: AnalysisContext, artifacts, resolved, outputs):
+    def dynamic_native_libs_info(ctx: AnalysisContext, artifacts, outputs):
         get_module_from_target = all_targets_in_root_module
         if apk_module_graph_file:
             get_module_from_target = get_apk_module_graph_info(ctx, apk_module_graph_file, artifacts).target_to_module_mapping_function
@@ -375,9 +373,8 @@ def get_android_binary_native_library_info(
         ctx.actions.symlink_file(outputs[native_lib_assets_for_primary_apk], dynamic_info.native_lib_assets_for_primary_apk if dynamic_info.native_lib_assets_for_primary_apk else ctx.actions.symlinked_dir("empty_native_lib_assets", {}))
         ctx.actions.symlink_file(outputs[stripped_native_linkable_assets_for_primary_apk], dynamic_info.stripped_native_linkable_assets_for_primary_apk if dynamic_info.stripped_native_linkable_assets_for_primary_apk else ctx.actions.symlinked_dir("empty_stripped_native_linkable_assets", {}))
         ctx.actions.symlink_file(outputs[root_module_metadata_assets], dynamic_info.root_module_metadata_assets)
-        ctx.actions.symlink_file(outputs[root_module_compressed_lib_assets], dynamic_info.root_module_compressed_lib_assets)
         ctx.actions.symlink_file(outputs[non_root_module_metadata_assets], dynamic_info.non_root_module_metadata_assets)
-        ctx.actions.symlink_file(outputs[non_root_module_lib_assets], dynamic_info.non_root_module_lib_assets)
+        ctx.actions.symlink_file(outputs[non_root_module_lib_assets], dynamic_info.non_root_module_lib_assets if dynamic_info.non_root_module_lib_assets else ctx.actions.symlinked_dir("empty_non_root_module_lib_assets", {}))
 
     ctx.actions.dynamic_output(dynamic = dynamic_inputs, inputs = [], outputs = [o.as_output() for o in dynamic_outputs], f = dynamic_native_libs_info)
     all_native_libs = ctx.actions.symlinked_dir("debug_all_native_libs", {"others": native_libs, "primary": native_libs_always_in_primary_apk})
@@ -396,9 +393,10 @@ def get_android_binary_native_library_info(
         shared_libraries = included_shared_lib_targets,
         native_libs_for_primary_apk = native_libs_for_primary_apk,
         exopackage_info = exopackage_info,
-        root_module_native_lib_assets = [native_lib_assets_for_primary_apk, stripped_native_linkable_assets_for_primary_apk, root_module_metadata_assets, root_module_compressed_lib_assets],
+        root_module_native_lib_assets = [native_lib_assets_for_primary_apk, stripped_native_linkable_assets_for_primary_apk, root_module_metadata_assets],
         non_root_module_native_lib_assets = [non_root_module_metadata_assets, non_root_module_lib_assets],
         generated_java_code = generated_java_code,
+        unstripped_shared_libraries = unstripped_native_libraries_files,
     )
 
 _NativeLibSubtargetArtifacts = record(
@@ -530,9 +528,8 @@ _NativeLibsAndAssetsInfo = record(
     native_lib_assets_for_primary_apk = Artifact | None,
     stripped_native_linkable_assets_for_primary_apk = Artifact | None,
     root_module_metadata_assets = Artifact,
-    root_module_compressed_lib_assets = Artifact,
     non_root_module_metadata_assets = Artifact,
-    non_root_module_lib_assets = Artifact,
+    non_root_module_lib_assets = [Artifact, None],
 )
 
 def _get_exopackage_info(
@@ -552,7 +549,6 @@ def _get_native_libs_and_assets(
         all_prebuilt_native_library_dirs: list[PrebuiltNativeLibraryDir],
         platform_to_native_linkables: dict[str, dict[str, SharedLibrary]]) -> _NativeLibsAndAssetsInfo:
     is_packaging_native_libs_as_assets_supported = getattr(ctx.attrs, "package_asset_libraries", False)
-    enabled_voltron_non_asset_libs = ctx.attrs._android_toolchain[AndroidToolchainInfo].enabled_voltron_non_asset_libs
 
     prebuilt_native_library_dirs = []
     prebuilt_native_library_dirs_always_in_primary_apk = []
@@ -573,10 +569,8 @@ def _get_native_libs_and_assets(
         if not is_root_module(module):
             if native_lib.is_asset:
                 prebuilt_native_library_dir_module_assets_map.setdefault(module, []).append(native_lib)
-            elif enabled_voltron_non_asset_libs:
-                prebuilt_native_library_dir_module_libs_map.setdefault(module, []).append(native_lib)
             else:
-                prebuilt_native_library_dirs.append(native_lib)
+                prebuilt_native_library_dir_module_libs_map.setdefault(module, []).append(native_lib)
         elif native_lib.is_asset and is_packaging_native_libs_as_assets_supported:
             expect(not native_lib.for_primary_apk, "{} which is marked as needing to be in the primary APK cannot be an asset".format(native_lib_target))
             prebuilt_native_library_dir_assets_for_primary_apk.append(native_lib)
@@ -611,52 +605,36 @@ def _get_native_libs_and_assets(
             package_as_assets = True,
             module = module,
         ))
-    if enabled_voltron_non_asset_libs:
-        for module, native_lib_dir in prebuilt_native_library_dir_module_libs_map.items():
-            native_lib_module_assets_map.setdefault(module, []).append(_filter_prebuilt_native_library_dir(
-                ctx,
-                native_lib_dir,
-                "native_lib_libs_for_module_{}".format(module),
-                package_as_assets = False,
-                module = module,
-            ))
+    for module, native_lib_dir in prebuilt_native_library_dir_module_libs_map.items():
+        native_lib_module_assets_map.setdefault(module, []).append(_filter_prebuilt_native_library_dir(
+            ctx,
+            native_lib_dir,
+            "native_lib_libs_for_module_{}".format(module),
+            package_as_assets = False,
+            module = module,
+        ))
 
     stripped_linkables = _get_native_linkables(ctx, platform_to_native_linkables, get_module_from_target, is_packaging_native_libs_as_assets_supported)
     for module, native_linkable_assets in stripped_linkables.linkable_module_assets_map.items():
         native_lib_module_assets_map.setdefault(module, []).append(native_linkable_assets)
 
     root_module_metadata_srcs = {}
-    root_module_compressed_lib_srcs = {}
     non_root_module_metadata_srcs = {}
-    non_root_module_compressed_lib_srcs = {}
-    non_root_module_uncompressed_libs = []
+    non_root_module_libs_srcs = []
     assets_for_primary_apk = filter(None, [native_lib_assets_for_primary_apk, stripped_linkables.linkable_assets_for_primary_apk])
     stripped_linkable_assets_for_primary_apk = stripped_linkables.linkable_assets_for_primary_apk
     if assets_for_primary_apk:
-        metadata_file, native_library_paths = _get_native_libs_as_assets_metadata(ctx, assets_for_primary_apk, ROOT_MODULE)
+        metadata_file = _get_native_libs_as_assets_metadata(ctx, assets_for_primary_apk, ROOT_MODULE)
         root_module_metadata_srcs[paths.join(_get_native_libs_as_assets_dir(ROOT_MODULE), "metadata.txt")] = metadata_file
-        if ctx.attrs.compress_asset_libraries:
-            compressed_lib_dir = _get_compressed_native_libs_as_assets(ctx, assets_for_primary_apk, native_library_paths, ROOT_MODULE)
-            root_module_compressed_lib_srcs[_get_native_libs_as_assets_dir(ROOT_MODULE)] = compressed_lib_dir
-
-            # Since we're storing these as compressed assets, we need to ignore the uncompressed libs.
-            native_lib_assets_for_primary_apk = None
-            stripped_linkable_assets_for_primary_apk = None
 
     for module, native_lib_assets in native_lib_module_assets_map.items():
-        metadata_file, native_library_paths = _get_native_libs_as_assets_metadata(ctx, native_lib_assets, module)
-        libs_metadata_path = "libs.txt"
-        if ctx.attrs._android_toolchain[AndroidToolchainInfo].enabled_voltron_non_asset_libs:
-            libs_metadata_path = paths.join("assets", "libs.txt")
+        metadata_file = _get_native_libs_as_assets_metadata(ctx, native_lib_assets, module)
+        libs_metadata_path = paths.join("assets", "libs.txt")
         non_root_module_metadata_srcs[paths.join(_get_native_libs_as_assets_dir(module), libs_metadata_path)] = metadata_file
-        if ctx.attrs.compress_asset_libraries:
-            compressed_lib_dir = _get_compressed_native_libs_as_assets(ctx, native_lib_assets, native_library_paths, module)
-            non_root_module_compressed_lib_srcs[_get_native_libs_as_assets_dir(module)] = compressed_lib_dir
-        else:
-            non_root_module_uncompressed_libs.extend(native_lib_assets)
+        non_root_module_libs_srcs.extend(native_lib_assets)
 
-    if non_root_module_uncompressed_libs:
-        expect(not non_root_module_compressed_lib_srcs, "Cannot have both uncompressed and compressed native libraries for a non-root module")
+    non_root_module_libs = None
+    if non_root_module_libs_srcs:
         non_root_module_libs = ctx.actions.declare_output("non_root_module_libs")
         ctx.actions.run(
             cmd_args([
@@ -664,11 +642,9 @@ def _get_native_libs_and_assets(
                 "--output-dir",
                 non_root_module_libs.as_output(),
                 "--library-dirs",
-            ] + non_root_module_uncompressed_libs),
+            ] + non_root_module_libs_srcs),
             category = "combine_non_root_module_native_libs",
         )
-    else:
-        non_root_module_libs = ctx.actions.symlinked_dir("non_root_module_libs", non_root_module_compressed_lib_srcs)
 
     combined_native_libs = ctx.actions.declare_output("combined_native_libs", dir = True)
     native_libs_metadata = ctx.actions.declare_output("native_libs_metadata.txt")
@@ -700,7 +676,6 @@ def _get_native_libs_and_assets(
         native_lib_assets_for_primary_apk = native_lib_assets_for_primary_apk,
         stripped_native_linkable_assets_for_primary_apk = stripped_linkable_assets_for_primary_apk,
         root_module_metadata_assets = ctx.actions.symlinked_dir("root_module_metadata_assets", root_module_metadata_srcs),
-        root_module_compressed_lib_assets = ctx.actions.symlinked_dir("root_module_compressed_lib_assets", root_module_compressed_lib_srcs),
         non_root_module_metadata_assets = ctx.actions.symlinked_dir("non_root_module_metadata_assets", non_root_module_metadata_srcs),
         non_root_module_lib_assets = non_root_module_libs,
     )
@@ -714,20 +689,16 @@ def _filter_prebuilt_native_library_dir(
     cpu_filters = ctx.attrs.cpu_filters or CPU_FILTER_TO_ABI_DIRECTORY.keys()
     abis = [CPU_FILTER_TO_ABI_DIRECTORY[cpu] for cpu in cpu_filters]
     filter_tool = ctx.attrs._android_toolchain[AndroidToolchainInfo].filter_prebuilt_native_library_dir[RunInfo]
-    native_libs_dirs = [native_lib.dir for native_lib in native_libs]
-    native_libs_dirs_file = ctx.actions.write("{}_list.txt".format(identifier), native_libs_dirs)
+    native_libs_dirs_file = argfile(actions = ctx.actions, name = "{}_list.txt".format(identifier), args = [native_lib.dir for native_lib in native_libs])
     base_output_dir = ctx.actions.declare_output(identifier, dir = True)
-    if ctx.attrs._android_toolchain[AndroidToolchainInfo].enabled_voltron_non_asset_libs:
-        if module == ROOT_MODULE:
-            output_dir = base_output_dir.project(_get_native_libs_as_assets_dir(module)) if package_as_assets else base_output_dir
-        elif package_as_assets:
-            output_dir = base_output_dir.project(paths.join(_get_native_libs_as_assets_dir(module), "assets"))
-        else:
-            output_dir = base_output_dir.project(paths.join(_get_native_libs_as_assets_dir(module), "lib"))
-    else:
+    if module == ROOT_MODULE:
         output_dir = base_output_dir.project(_get_native_libs_as_assets_dir(module)) if package_as_assets else base_output_dir
+    elif package_as_assets:
+        output_dir = base_output_dir.project(paths.join(_get_native_libs_as_assets_dir(module), "assets"))
+    else:
+        output_dir = base_output_dir.project(paths.join(_get_native_libs_as_assets_dir(module), "lib"))
     ctx.actions.run(
-        cmd_args([filter_tool, native_libs_dirs_file, output_dir.as_output(), "--abis"] + abis).hidden(native_libs_dirs),
+        cmd_args([filter_tool, native_libs_dirs_file, output_dir.as_output(), "--abis"] + abis),
         category = "filter_prebuilt_native_library_dir",
         identifier = identifier,
     )
@@ -746,7 +717,6 @@ def _get_native_linkables(
         platform_to_native_linkables: dict[str, dict[str, SharedLibrary]],
         get_module_from_target: typing.Callable,
         package_native_libs_as_assets_enabled: bool) -> _StrippedNativeLinkables:
-    enabled_voltron_non_asset_libs = ctx.attrs._android_toolchain[AndroidToolchainInfo].enabled_voltron_non_asset_libs
     stripped_native_linkables_srcs = {}
     stripped_native_linkables_always_in_primary_apk_srcs = {}
     stripped_native_linkable_assets_for_primary_apk_srcs = {}
@@ -772,30 +742,22 @@ def _get_native_linkables(
                 not native_linkable.for_primary_apk or not native_linkable.can_be_asset,
                 "{} which is marked as needing to be in the primary APK cannot be an asset".format(native_linkable_target),
             )
-            if native_linkable.can_be_asset and not is_root_module(module):
-                if enabled_voltron_non_asset_libs:
-                    native_libs_assets_dir = paths.join(_get_native_libs_as_assets_dir(module), "assets")
+
+            if is_root_module(module):
+                if native_linkable.can_be_asset and package_native_libs_as_assets_enabled:
+                    native_libs_assets_dir = paths.join(_get_native_libs_as_assets_dir(module))
+                    so_name_path = paths.join(native_libs_assets_dir, abi_directory, so_name)
+                    stripped_native_linkable_assets_for_primary_apk_srcs[so_name_path] = lib
                 else:
-                    native_libs_assets_dir = _get_native_libs_as_assets_dir(module)
-                so_name_path = paths.join(native_libs_assets_dir, abi_directory, so_name)
-                stripped_native_linkable_module_assets_srcs.setdefault(module, {})[so_name_path] = lib
-            elif native_linkable.can_be_asset and package_native_libs_as_assets_enabled:
-                if enabled_voltron_non_asset_libs:
-                    native_libs_assets_dir = paths.join(_get_native_libs_as_assets_dir(module), "assets")
-                else:
-                    native_libs_assets_dir = _get_native_libs_as_assets_dir(module)
-                so_name_path = paths.join(native_libs_assets_dir, abi_directory, so_name)
-                stripped_native_linkable_assets_for_primary_apk_srcs[so_name_path] = lib
-            elif (enabled_voltron_non_asset_libs and  #  TODO: when cleaning up this code, restructure if statements to be more clear (start with root module, then non-root module cases)
-                  not native_linkable.can_be_asset and not is_root_module(module)):
-                so_name_path = paths.join(_get_native_libs_as_assets_dir(module), "lib", abi_directory, so_name)
-                stripped_native_linkable_module_assets_srcs.setdefault(module, {})[so_name_path] = lib
+                    so_name_path = paths.join(abi_directory, so_name)
+                    if native_linkable.for_primary_apk:
+                        stripped_native_linkables_always_in_primary_apk_srcs[so_name_path] = lib
+                    else:
+                        stripped_native_linkables_srcs[so_name_path] = lib
             else:
-                so_name_path = paths.join(abi_directory, so_name)
-                if native_linkable.for_primary_apk:
-                    stripped_native_linkables_always_in_primary_apk_srcs[so_name_path] = lib
-                else:
-                    stripped_native_linkables_srcs[so_name_path] = lib
+                module_dir = "assets" if native_linkable.can_be_asset else "lib"
+                so_name_path = paths.join(_get_native_libs_as_assets_dir(module), module_dir, abi_directory, so_name)
+                stripped_native_linkable_module_assets_srcs.setdefault(module, {})[so_name_path] = lib
 
     stripped_native_linkables = ctx.actions.symlinked_dir(
         "stripped_native_linkables",
@@ -826,41 +788,22 @@ def _get_native_linkables(
 def _get_native_libs_as_assets_metadata(
         ctx: AnalysisContext,
         native_lib_assets: list[Artifact],
-        module: str) -> (Artifact, Artifact):
-    native_lib_assets_file = ctx.actions.write("{}/native_lib_assets".format(module), [cmd_args([native_lib_asset, _get_native_libs_as_assets_dir(module)], delimiter = "/") for native_lib_asset in native_lib_assets])
+        module: str) -> Artifact:
+    native_lib_assets_file = argfile(
+        actions = ctx.actions,
+        name = "{}/native_lib_assets".format(module),
+        args = [cmd_args([native_lib_asset, _get_native_libs_as_assets_dir(module)], delimiter = "/") for native_lib_asset in native_lib_assets],
+    )
     metadata_output = ctx.actions.declare_output("{}/native_libs_as_assets_metadata.txt".format(module))
-    native_library_paths = ctx.actions.declare_output("{}/native_libs_as_assets_paths.txt".format(module))
     metadata_cmd = cmd_args([
         ctx.attrs._android_toolchain[AndroidToolchainInfo].native_libs_as_assets_metadata[RunInfo],
         "--native-library-dirs",
         native_lib_assets_file,
         "--metadata-output",
         metadata_output.as_output(),
-        "--native-library-paths-output",
-        native_library_paths.as_output(),
-    ]).hidden(native_lib_assets)
+    ])
     ctx.actions.run(metadata_cmd, category = "get_native_libs_as_assets_metadata", identifier = module)
-    return metadata_output, native_library_paths
-
-def _get_compressed_native_libs_as_assets(
-        ctx: AnalysisContext,
-        native_lib_assets: list[Artifact],
-        native_library_paths: Artifact,
-        module: str) -> Artifact:
-    output_dir = ctx.actions.declare_output("{}/compressed_native_libs_as_assets_dir".format(module))
-    compressed_libraries_cmd = cmd_args([
-        ctx.attrs._android_toolchain[AndroidToolchainInfo].compress_libraries[RunInfo],
-        "--libraries",
-        native_library_paths,
-        "--output-dir",
-        output_dir.as_output(),
-        "--compression-type",
-        ctx.attrs.asset_compression_algorithm or "xz",
-        "--xz-compression-level",
-        str(ctx.attrs.xz_compression_level),
-    ]).hidden(native_lib_assets)
-    ctx.actions.run(compressed_libraries_cmd, category = "compress_native_libs_as_assets", identifier = module)
-    return output_dir
+    return metadata_output
 
 def _get_native_libs_as_assets_dir(module: str) -> str:
     return "assets/{}".format("lib" if is_root_module(module) else module)
@@ -872,7 +815,7 @@ def get_default_shared_libs(ctx: AnalysisContext, deps: list[Dependency], shared
     )
     return {
         soname: shared_lib
-        for soname, shared_lib in with_unique_sonames(traverse_shared_library_info(shared_library_info)).items()
+        for soname, shared_lib in with_unique_str_sonames(traverse_shared_library_info(shared_library_info)).items()
         if not (shared_libraries_to_exclude and shared_libraries_to_exclude.contains(shared_lib.label.raw_target()))
     }
 
@@ -988,12 +931,6 @@ def run_mergemap_codegen(ctx: AnalysisContext, merged_library_map: Artifact) -> 
     ctx.actions.run(args, category = "mergemap_codegen")
     return mapping_java
 
-def expect_dedupe(v):
-    # asserts that the input list is unique
-    o = dedupe_by_value(v)
-    expect(len(o) == len(v), "expected `{}` to be a list of unique items, but it wasn't. deduped list was `{}`.", v, o)
-    return v
-
 # We can't merge a prebuilt shared (that has no archive) and must use it's original info.
 # Ideally this would probably be structured info on the linkablenode.
 def _is_prebuilt_shared(node_data: LinkableNode) -> bool:
@@ -1064,10 +1001,10 @@ def _shared_lib_for_prebuilt_shared(
         )
 
     shlib = node_data.shared_libs.libraries[0]
-    soname = shlib.soname
+    soname = shlib.soname.ensure_str()
     shlib = shlib.lib
     output_path = _platform_output_path(soname, platform)
-    return SharedLibrary(
+    return create_shlib(
         lib = shlib,
         stripped_lib = strip_lib(ctx, cxx_toolchain, shlib.output, output_path),
         link_args = None,
@@ -1248,8 +1185,8 @@ def _get_merged_linkables_for_platform(
                     # exported linker flags for shared libs are in their linkinfo itself and are not exported from dependents
                     exported_linker_flags = None,
                 )
-                group_shared_libs[shared_lib.soname] = MergedSharedLibrary(
-                    soname = shared_lib.soname,
+                group_shared_libs[shared_lib.soname.ensure_str()] = MergedSharedLibrary(
+                    soname = shared_lib.soname.ensure_str(),
                     lib = shared_lib,
                     apk_module = group_data.apk_module,
                     solib_constituents = [],
@@ -1272,7 +1209,7 @@ def _get_merged_linkables_for_platform(
             expect(target_to_link_group[key] == group)
             node = linkable_nodes[key]
 
-            default_solibs = list([shlib.soname for shlib in node.shared_libs.libraries])
+            default_solibs = list([shlib.soname.ensure_str() for shlib in node.shared_libs.libraries])
             if not default_solibs and node.preferred_linkage == Linkage("static"):
                 default_solibs = [node.default_soname]
 
@@ -1328,7 +1265,7 @@ def _get_merged_linkables_for_platform(
             soname = soname,
             link_args = link_args,
             cxx_toolchain = cxx_toolchain,
-            shared_lib_deps = [link_group_linkable_nodes[label].shared_lib.soname for label in shlib_deps],
+            shared_lib_deps = [link_group_linkable_nodes[label].shared_lib.soname.ensure_str() for label in shlib_deps],
             label = group_data.constituents[0],
             can_be_asset = can_be_asset,
         )
@@ -1408,12 +1345,12 @@ def _create_all_relinkable_links(
             final = final_platform_to_native_linkables[platform][soname]
             original_args, _ = ctx.actions.write(
                 "{}/{}/original.args".format(platform, soname),
-                [unpack_link_args(args, True, LinkOrdering("topological")) for args in lib.link_args] if lib.link_args else "",
+                [unpack_link_args(args, LinkOrdering("topological")) for args in lib.link_args] if lib.link_args else "",
                 allow_args = True,
             )
             final_args, _ = ctx.actions.write(
                 "{}/{}/final.args".format(platform, soname),
-                [unpack_link_args(args, True, LinkOrdering("topological")) for args in final.link_args] if final.link_args else "",
+                [unpack_link_args(args, LinkOrdering("topological")) for args in final.link_args] if final.link_args else "",
                 allow_args = True,
             )
             debug_outputs["{}/{}/original.args".format(platform, soname)] = original_args
@@ -1473,16 +1410,16 @@ def _create_relinkable_links(
                 can_be_asset = node.can_be_asset,
             )
         shared_lib_overrides[target] = LinkInfo(
-            name = shared_lib.soname,
+            name = shared_lib.soname.ensure_str(),
             pre_flags = node.linker_flags.exported_flags,
             linkables = [SharedLibLinkable(
                 lib = shared_lib.lib.output,
             )],
             post_flags = node.linker_flags.exported_post_flags,
         )
-        shared_libs[shared_lib.soname] = shared_lib
+        shared_libs[shared_lib.soname.ensure_str()] = shared_lib
 
-    return {lib.soname: lib for lib in shared_libs.values()}, debug_link_deps
+    return {lib.soname.ensure_str(): lib for lib in shared_libs.values()}, debug_link_deps
 
 # To support migration from a tset-based link strategy, we are trying to match buck's internal tset
 # traversal logic here.  Look for implementation of TopologicalTransitiveSetIteratorGen
@@ -1491,7 +1428,7 @@ def _rust_matching_topological_traversal(
         get_nodes_to_traverse_func: typing.Callable) -> list[typing.Any]:
     counts = {}
 
-    for label in breadth_first_traversal_by(None, roots, get_nodes_to_traverse_func):
+    for label in depth_first_traversal_by(None, roots, get_nodes_to_traverse_func, GraphTraversal("preorder-right-to-left")):
         for dep in get_nodes_to_traverse_func(label):
             if dep in counts:
                 counts[dep] += 1
@@ -1652,6 +1589,20 @@ def _create_merged_link_args(
 # 5. extract the list of undefined symbols in the relinked libs (i.e. those symbols needed from dependencies and what had been
 #    used in (1) above from higher nodes).
 def relink_libraries(ctx: AnalysisContext, libraries_by_platform: dict[str, dict[str, SharedLibrary]]) -> dict[str, dict[str, SharedLibrary]]:
+    relinker_extra_deps = getattr(ctx.attrs, "relinker_extra_deps", None)
+    red_linkables = {}
+    if relinker_extra_deps:
+        for red_elem in relinker_extra_deps:
+            for platform, red in red_elem.items():
+                red_link_graph = red.get(LinkableGraph)
+                expect(red_link_graph != None, "relinker_extra_deps (`{}`) should be a linkable target", red.label)
+                red_linkable = red_link_graph.nodes.value.linkable
+                expect(red_linkable != None, "relinker_extra_deps (`{}`) should be a linkable target", red.label)
+                expect(red_linkable.preferred_linkage == Linkage("static"), "buck2 currently only supports preferred_linkage='static' relinker_extra_deps")
+                if platform not in red_linkables:
+                    red_linkables[platform] = []
+                red_linkables[platform].append((red.label, red_linkable.link_infos[LibOutputStyle("pic_archive")].default))
+
     relinked_libraries_by_platform = {}
     for platform, shared_libraries in libraries_by_platform.items():
         cxx_toolchain = ctx.attrs._cxx_toolchain[platform][CxxToolchainInfo]
@@ -1688,7 +1639,11 @@ def relink_libraries(ctx: AnalysisContext, libraries_by_platform: dict[str, dict
                 provided_symbols = provided_symbols_file,
                 needed_symbols = needed_symbols_for_this,
             )
-            relinker_link_args = original_shared_library.link_args + [LinkArgs(flags = [cmd_args(relinker_version_script, format = "-Wl,--version-script={}")])]
+            relinker_link_args = (
+                original_shared_library.link_args +
+                [LinkArgs(flags = [cmd_args(relinker_version_script, format = "-Wl,--version-script={}")])] +
+                ([LinkArgs(infos = [set_link_info_link_whole(red_linkable[1]) for red_linkable in red_linkables[platform]])] if len(red_linkables) > 0 else [])
+            )
 
             shared_lib = create_shared_lib(
                 ctx,
@@ -1710,10 +1665,10 @@ def relink_libraries(ctx: AnalysisContext, libraries_by_platform: dict[str, dict
     return relinked_libraries_by_platform
 
 def extract_provided_symbols(ctx: AnalysisContext, toolchain: CxxToolchainInfo, lib: Artifact) -> Artifact:
-    return extract_global_syms(ctx, toolchain, lib, "relinker_extract_provided_symbols")
+    return extract_defined_syms(ctx, toolchain, lib, "relinker_extract_provided_symbols")
 
 def create_relinker_version_script(actions: AnalysisActions, relinker_allowlist: list[regex], output: Artifact, provided_symbols: Artifact, needed_symbols: list[Artifact]):
-    def create_version_script(ctx, artifacts, resolved, outputs):
+    def create_version_script(ctx, artifacts, outputs):
         all_needed_symbols = {}
         for symbols_file in needed_symbols:
             for line in artifacts[symbols_file].read_string().strip().split("\n"):
@@ -1752,7 +1707,7 @@ def extract_undefined_symbols(ctx: AnalysisContext, toolchain: CxxToolchainInfo,
     return extract_undefined_syms(ctx, toolchain, lib, "relinker_extract_undefined_symbols")
 
 def union_needed_symbols(actions: AnalysisActions, output: Artifact, needed_symbols: list[Artifact]):
-    def compute_union(ctx, artifacts, resolved, outputs):
+    def compute_union(ctx, artifacts, outputs):
         unioned_symbols = {}
         for symbols_file in needed_symbols:
             for line in artifacts[symbols_file].read_string().strip().split("\n"):
@@ -1805,7 +1760,7 @@ def create_shared_lib(
     )
 
     shlib = link_result.linked_object
-    return SharedLibrary(
+    return create_shlib(
         lib = shlib,
         stripped_lib = strip_lib(ctx, cxx_toolchain, shlib.output),
         shlib_deps = shared_lib_deps,

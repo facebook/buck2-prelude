@@ -5,7 +5,7 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
-load("@prelude//:artifact_tset.bzl", "ArtifactTSet")  # @unused Used as a type
+load("@prelude//:artifact_tset.bzl", "ArtifactInfoTag", "ArtifactTSet")
 load(
     "@prelude//cxx:link_groups_types.bzl",
     "LinkGroupInfo",  # @unused Used as a type
@@ -25,7 +25,7 @@ load(
 )
 load(":argsfiles.bzl", "CompileArgsfiles")
 load(
-    ":compile.bzl",
+    ":cxx_sources.bzl",
     "CxxSrcWithFlags",  # @unused Used as a type
 )
 load(
@@ -97,6 +97,8 @@ CxxRuleAdditionalParams = record(
     subtargets = field(dict, {}),  # [str: ["provider"]]
     # Might be used to expose additional providers to cxx layer (e.g to support #headers subtarget for Swift)
     additional_providers_factory = field([typing.Callable, None], None),  # ([CPreprocessorInfo, None]) -> ["provider"]:
+    # The list of tags that should be applied to generated ArtifactTSet of debug information.
+    external_debug_info_tags = field(list[ArtifactInfoTag], []),
 )
 
 # Parameters that allows to configure/extend generic implementation of C++ rules.
@@ -154,6 +156,8 @@ CxxRuleConstructorParams = record(
     soname = field([str, None], None),
     # Optional argument to override the default name of the executable being produced.
     executable_name = field([str, None], None),
+    # Optional argument to set the deffile for the windows linker on a dll
+    deffile = field([Artifact, None], None),
     # If passed to cxx_executable, this field will be used to determine
     # a shared subtarget's default output should be stripped.
     strip_executable = field(bool, False),
@@ -192,8 +196,21 @@ CxxRuleConstructorParams = record(
     extra_linker_outputs_factory = field(typing.Callable, lambda _context: ([], {})),
     # Whether to allow cache uploads for locally-linked executables.
     exe_allow_cache_upload = field(bool, False),
-    # The target triple to use when generating shared library interfaces
-    shared_library_interface_target = field([str, None], None),
     # Extra shared library interfaces to propagate, eg from mixed Swift libraries.
     extra_shared_library_interfaces = field([list[Artifact], None], None),
+    # Compiler flags
+    compiler_flags = field(list[typing.Any], []),
+    lang_compiler_flags = field(dict[typing.Any, typing.Any], {}),
+    # Platform compiler flags
+    platform_compiler_flags = field(list[(str, typing.Any)], []),
+    lang_platform_compiler_flags = field(dict[typing.Any, typing.Any], {}),
+    # Preprocessor flags
+    preprocessor_flags = field(list[typing.Any], []),
+    lang_preprocessor_flags = field(dict[typing.Any, typing.Any], {}),
+    # Platform preprocessor flags
+    platform_preprocessor_flags = field(list[(str, typing.Any)], []),
+    lang_platform_preprocessor_flags = field(dict[typing.Any, typing.Any], {}),
+    # modulename-Swift.h header for building objc targets that rely on this swift dep
+    swift_objc_header = field([Artifact, None], None),
+    error_handler = field([typing.Callable, None], None),
 )

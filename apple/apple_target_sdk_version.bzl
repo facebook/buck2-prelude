@@ -7,7 +7,21 @@
 
 load("@prelude//apple:apple_toolchain_types.bzl", "AppleToolchainInfo")
 load("@prelude//cxx:preprocessor.bzl", "CPreprocessor", "CPreprocessorArgs")
+load("@prelude//cxx:target_sdk_version.bzl", "get_target_sdk_version")
 load(":apple_sdk.bzl", "get_apple_sdk_name")
+
+_TARGET_TRIPLE_MAP = {
+    "appletvos": "{architecture}-apple-tvos{version}",
+    "appletvsimulator": "{architecture}-apple-tvos{version}-simulator",
+    "iphoneos": "{architecture}-apple-ios{version}",
+    "iphonesimulator": "{architecture}-apple-ios{version}-simulator",
+    "maccatalyst": "{architecture}-apple-ios{version}-macabi",
+    "macosx": "{architecture}-apple-macosx{version}",
+    "visionos": "{architecture}-apple-xros{version}",
+    "visionsimulator": "{architecture}-apple-xros{version}-simulator",
+    "watchos": "{architecture}-apple-watchos{version}",
+    "watchsimulator": "{architecture}-apple-watchos{version}-simulator",
+}
 
 # TODO(T112099448): In the future, the min version flag should live on the apple_toolchain()
 # TODO(T113776898): Switch to -mtargetos= flag which should live on the apple_toolchain()
@@ -20,22 +34,38 @@ _APPLE_MIN_VERSION_FLAG_SDK_MAP = {
     "watchsimulator": "-mwatchsimulator-version-min",
 }
 
-# Returns the target SDK version for apple_(binary|library) and uses
-# apple_toolchain() min version as a fallback. This is the central place
-# where the version for a particular node is defined, no other places
-# should be accessing `attrs.target_sdk_version` or `attrs.min_version`.
-def get_min_deployment_version_for_node(ctx: AnalysisContext) -> [None, str]:
-    toolchain_min_version = ctx.attrs._apple_toolchain[AppleToolchainInfo].min_version
-    if toolchain_min_version == "":
-        toolchain_min_version = None
-    return getattr(ctx.attrs, "target_sdk_version", None) or toolchain_min_version
+# Returns the target_sdk_version specified for this build, falling
+# back to the toolchain version when unset.
+def get_min_deployment_version_for_node(ctx: AnalysisContext) -> str:
+    version = get_target_sdk_version(ctx)
+    if version == None:
+        fail("No target_sdk_version set on target or toolchain")
+
+    return version
+
+def get_versioned_target_triple(ctx: AnalysisContext) -> str:
+    target_sdk_version = get_min_deployment_version_for_node(ctx) or ""
+    return _get_target_triple(ctx, target_sdk_version)
+
+def get_unversioned_target_triple(ctx: AnalysisContext) -> str:
+    return _get_target_triple(ctx, "")
+
+def _get_target_triple(ctx: AnalysisContext, target_sdk_version: str) -> str:
+    apple_toolchain_info = ctx.attrs._apple_toolchain[AppleToolchainInfo]
+    architecture = apple_toolchain_info.architecture
+    if architecture == None:
+        fail("Need to set `architecture` field of apple_toolchain(), target: {}".format(ctx.label))
+
+    sdk_name = apple_toolchain_info.sdk_name
+    target_triple_format_str = _TARGET_TRIPLE_MAP.get(sdk_name)
+    if target_triple_format_str == None:
+        fail("Could not find target triple for sdk = {}".format(sdk_name))
+
+    return target_triple_format_str.format(architecture = architecture, version = target_sdk_version)
 
 # Returns the min deployment flag to pass to the compiler + linker
 def _get_min_deployment_version_target_flag(ctx: AnalysisContext) -> [None, str]:
     target_sdk_version = get_min_deployment_version_for_node(ctx)
-    if target_sdk_version == None:
-        return None
-
     sdk_name = get_apple_sdk_name(ctx)
     min_version_flag = _APPLE_MIN_VERSION_FLAG_SDK_MAP.get(sdk_name)
     if min_version_flag == None:
@@ -76,5 +106,5 @@ def get_min_deployment_version_target_preprocessor_flags(ctx: AnalysisContext) -
 
     args = cmd_args(min_version_flag)
     return [CPreprocessor(
-        relative_args = CPreprocessorArgs(args = [args]),
+        args = CPreprocessorArgs(args = [args]),
     )]

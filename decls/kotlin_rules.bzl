@@ -169,6 +169,7 @@ kotlin_library = prelude_rule(
         jvm_common.provided_deps() |
         jvm_common.exported_provided_deps() |
         jvm_common.k2() |
+        jvm_common.incremental() |
         buck.labels_arg() |
         {
             "abi_generation_mode": attrs.option(attrs.enum(AbiGenerationMode), default = None),
@@ -178,7 +179,6 @@ kotlin_library = prelude_rule(
             "contacts": attrs.list(attrs.string(), default = []),
             "default_host_platform": attrs.option(attrs.configuration_label(), default = None),
             "extra_arguments": attrs.list(attrs.string(), default = []),
-            "extra_non_source_only_abi_kotlinc_arguments": attrs.list(attrs.string(), default = []),
             "java_version": attrs.option(attrs.string(), default = None),
             "javac": attrs.option(attrs.source(), default = None),
             "jar_postprocessor": attrs.option(attrs.exec_dep(), default = None),
@@ -225,13 +225,13 @@ kotlin_test = prelude_rule(
                  `glob(['**/*Test.kt'])`.
             """),
             "resources": attrs.list(attrs.source(), default = [], doc = """
-                Same as `kotlin\\_library()`.
+                Same as `kotlin_library()`.
             """),
         } |
         buck.test_label_arg() |
         {
             "deps": attrs.list(attrs.dep(), default = [], doc = """
-                Same as `kotlin\\_library()`.
+                Same as `kotlin_library()`.
                  // org.junit.rules.Timeout was not introduced until 4.7.
                  Must include JUnit (version 4.7 or later) as a dependency for JUnit tests.
                  Must include TestNG (version 6.2 or later) and hamcrest as a dependencies for TestNG tests.
@@ -259,6 +259,7 @@ kotlin_test = prelude_rule(
             """),
         } |
         jvm_common.k2() |
+        jvm_common.incremental() |
         jvm_common.test_env() |
         {
             "abi_generation_mode": attrs.option(attrs.enum(AbiGenerationMode), default = None),
@@ -275,7 +276,6 @@ kotlin_test = prelude_rule(
             "exported_provided_deps": attrs.list(attrs.dep(), default = []),
             "extra_arguments": attrs.list(attrs.string(), default = []),
             "extra_kotlinc_arguments": attrs.list(attrs.string(), default = []),
-            "extra_non_source_only_abi_kotlinc_arguments": attrs.list(attrs.string(), default = []),
             "friend_paths": attrs.list(attrs.dep(), default = []),
             "java_version": attrs.option(attrs.string(), default = None),
             "java": attrs.option(attrs.dep(), default = None),

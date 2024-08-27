@@ -5,24 +5,23 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
-load("@fbsource//tools/build_defs:buckconfig.bzl", "read")
-# @oss-disable: load("@fbsource//tools/build_defs/apple:build_mode_defs.bzl", get_build_mode = "build_mode") 
 load("@fbsource//tools/build_defs/buck2:is_buck2.bzl", "is_buck2")
+load("@prelude//apple:apple_platforms.bzl", "APPLE_PLATFORMS_KEY")
 load("@prelude//platforms/apple:base.bzl", "BUILD_MODE_TO_CONSTRAINTS_MAP", "apple_build_mode_backed_platform", "is_buck2_mac_platform", "is_mobile_platform")
 load(
     "@prelude//platforms/apple:build_mode.bzl",
     "APPLE_BUILD_MODES",
-    "BUILD_MODE_LOCAL",
-    "get_build_mode" # @oss-enable
+    "get_build_mode",
+    "get_build_mode_debug",
 )
 load(
     "@prelude//platforms/apple:constants.bzl",
-    "APPLE_PLATFORMS_KEY",
     "ios_platforms",
     "mac_catalyst_platforms",
     "mac_platforms",
 )
 load("@prelude//platforms/apple:platforms_map.bzl", "APPLE_PLATFORMS_MAP")
+load("@prelude//utils:buckconfig.bzl", "read")
 
 _SUPPORTED_IOS_PLATFORMS = [
     ios_platforms.IPHONEOS_ARM64,
@@ -57,6 +56,23 @@ def apple_target_platforms(
         supported_cxx_platforms = DEFAULT_SUPPORTED_CXX_PLATFORMS,  # Cxx platforms to generate platforms for
         supported_build_modes = APPLE_BUILD_MODES):  # Build modes to generate platforms for
     """ Define architecture and sdk specific platforms alongside the base platform. """
+
+    # HACK: Apps shouldn't be generating platforms for cxx_platforms they don't support. However, to support cases where other apps
+    # depend on shared libraries that don't generate particular platforms, and set a cxx.default_platform on the command line, we need
+    # to make the graph parseable and generate the missing target platforms. They will never be used, but need to exist in the config
+    # backed world.
+    config_based_platform = read("cxx", "default_platform")
+    if config_based_platform != None and config_based_platform not in supported_cxx_platforms:
+        supported_cxx_platforms = list(supported_cxx_platforms)
+        if config_based_platform in _SUPPORTED_MACOS_PLATFORMS:
+            for p in _SUPPORTED_MACOS_PLATFORMS:
+                if p not in supported_cxx_platforms:
+                    supported_cxx_platforms.append(p)
+
+        if config_based_platform in _SUPPORTED_MAC_CATALYST_PLATFORMS:
+            for p in _SUPPORTED_MAC_CATALYST_PLATFORMS:
+                if p not in supported_cxx_platforms:
+                    supported_cxx_platforms.append(p)
 
     # Form defaults
     constraint_values = constraint_values or []
@@ -105,7 +121,7 @@ def apple_target_platforms(
 
     analysis_platform = _get_analysis_platform_for_supported_platforms(supported_cxx_platforms)
     analysis_platform_dep = get_default_target_platform_for_platform(analysis_platform)
-    analysis_platform_build_mode_constraints = build_mode_constraint_values.get(BUILD_MODE_LOCAL, [])
+    analysis_platform_build_mode_constraints = build_mode_constraint_values.get(get_build_mode_debug(), [])
 
     platform_rule(
         name = base_name + "-analysis",

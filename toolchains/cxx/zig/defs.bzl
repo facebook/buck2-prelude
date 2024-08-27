@@ -172,11 +172,18 @@ def _zig_distribution_impl(ctx: AnalysisContext) -> list[Provider]:
     dst = ctx.actions.declare_output("zig")
     path_tpl = "{}/" + ctx.attrs.prefix + "/zig" + ctx.attrs.suffix
     src = cmd_args(ctx.attrs.dist[DefaultInfo].default_outputs[0], format = path_tpl)
-    ctx.actions.run(["ln", "-sf", cmd_args(src).relative_to(dst, parent = 1), dst.as_output()], category = "cp_compiler")
+    ctx.actions.run(
+        ["ln", "-sf", cmd_args(src, relative_to = (dst, 1)), dst.as_output()],
+        category = "cp_compiler",
+    )
 
-    compiler = cmd_args([dst])
-    compiler.hidden(ctx.attrs.dist[DefaultInfo].default_outputs)
-    compiler.hidden(ctx.attrs.dist[DefaultInfo].other_outputs)
+    compiler = cmd_args(
+        [dst],
+        hidden = [
+            ctx.attrs.dist[DefaultInfo].default_outputs,
+            ctx.attrs.dist[DefaultInfo].other_outputs,
+        ],
+    )
 
     return [
         ctx.attrs.dist[DefaultInfo],
@@ -222,13 +229,15 @@ def _http_archive_impl(ctx: AnalysisContext) -> list[Provider]:
         [
             cmd_args(output, format = "mkdir -p {}"),
             cmd_args(output, format = "cd {}"),
-            cmd_args(flags, archive, delimiter = " ").relative_to(output),
+            cmd_args(flags, archive, delimiter = " ", relative_to = output),
         ],
         is_executable = True,
         allow_args = True,
     )
-    ctx.actions.run(cmd_args(["/bin/sh", script])
-        .hidden([archive, output.as_output()]), category = "http_archive")
+    ctx.actions.run(
+        cmd_args(["/bin/sh", script], hidden = [archive, output.as_output()]),
+        category = "http_archive",
+    )
 
     return [DefaultInfo(default_output = output)]
 
@@ -429,7 +438,13 @@ cxx_zig_toolchain = rule(
         "cxx_compiler_flags": attrs.list(attrs.arg(), default = []),
         "cxx_preprocessor_flags": attrs.list(attrs.arg(), default = []),
         "distribution": attrs.exec_dep(providers = [RunInfo, ZigDistributionInfo]),
-        "link_style": attrs.enum(LinkStyle.values(), default = "static"),
+        "link_style": attrs.enum(
+            LinkStyle.values(),
+            default = "static",
+            doc = """
+            The default value of the `link_style` attribute for rules that use this toolchain.
+            """,
+        ),
         "linker_flags": attrs.list(attrs.arg(), default = []),
         "make_comp_db": attrs.dep(providers = [RunInfo], default = DEFAULT_MAKE_COMP_DB),
         "shared_dep_runtime_ld_flags": attrs.list(attrs.arg(), default = []),

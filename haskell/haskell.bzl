@@ -54,7 +54,7 @@ load(
     "@prelude//haskell:compile.bzl",
     "CompileResultInfo",
     "compile",
-    "get_packages_info",
+    "get_packages_info2",
     "target_metadata",
 )
 load(
@@ -85,6 +85,8 @@ load(
     "@prelude//haskell:util.bzl",
     "attr_deps",
     "attr_deps_haskell_link_infos_sans_template_deps",
+    "attr_deps_haskell_lib_infos",
+    "attr_deps_haskell_link_infos",
     "attr_deps_merged_link_infos",
     "attr_deps_profiling_link_infos",
     "attr_deps_shared_library_infos",
@@ -293,12 +295,14 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
         link_infos[link_style] = LinkInfos(
             default = LinkInfo(
                 pre_flags = ctx.attrs.exported_linker_flags,
+                post_flags = ctx.attrs.exported_post_linker_flags,
                 linkables = linkables,
             ),
         )
         prof_link_infos[link_style] = LinkInfos(
             default = LinkInfo(
                 pre_flags = ctx.attrs.exported_linker_flags,
+                post_flags = ctx.attrs.exported_post_linker_flags,
                 linkables = prof_linkables,
             ),
         )
@@ -440,7 +444,7 @@ def _make_package(
         pkg_conf = ctx.actions.declare_output("pkg-" + artifact_suffix + ".conf")
         db = ctx.actions.declare_output("db-" + artifact_suffix, dir = True)
 
-    def write_package_conf(ctx, artifacts, _resolved, outputs, md_file=md_file, libname=libname):
+    def write_package_conf(ctx, artifacts, outputs, md_file=md_file, libname=libname):
         md = artifacts[md_file].read_json()
         module_map = md["module_mapping"]
 
@@ -512,7 +516,6 @@ def _make_package(
 
     ctx.actions.dynamic_output(
         dynamic = [md_file],
-        promises = [],
         inputs = [],
         outputs = [pkg_conf.as_output(), db.as_output()],
         f = write_package_conf
@@ -538,6 +541,44 @@ def _get_haskell_shared_library_name_linker_flags(linker_type: str, soname: str)
         return ["-Wl,-install_name,@rpath/{}".format(soname)]
     else:
         fail("Unknown linker type '{}'.".format(linker_type))
+
+def _dynamic_link_shared_impl(actions, artifacts, dynamic_values, outputs, arg):
+    pkg_deps = dynamic_values[arg.haskell_toolchain.packages.dynamic]
+    package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
+
+    package_db_tset = actions.tset(
+        HaskellPackageDbTSet,
+        children = [package_db[name] for name in arg.toolchain_libs if name in package_db]
+    )
+
+    link = cmd_args(arg.haskell_toolchain.linker)
+    link.add(arg.haskell_toolchain.linker_flags)
+    link.add(arg.linker_flags)
+    link.add("-hide-all-packages")
+    link.add(cmd_args(arg.toolchain_libs, prepend = "-package"))
+    link.add(cmd_args(package_db_tset.project_as_args("package_db"), prepend="-package-db"))
+    link.add("-o", outputs[arg.lib].as_output())
+    link.add(
+        get_shared_library_flags(arg.linker_info.type),
+        "-dynamic",
+        cmd_args(
+            _get_haskell_shared_library_name_linker_flags(arg.linker_info.type, arg.libfile),
+            prepend = "-optl",
+        ),
+    )
+
+    link.add(arg.objects)
+
+    link.add(cmd_args(unpack_link_args(arg.infos), prepend = "-optl"))
+
+    actions.run(
+        link,
+        category = "haskell_link" + arg.artifact_suffix.replace("-", "_"),
+    )
+
+    return []
+
+_dynamic_link_shared = dynamic_actions(impl = _dynamic_link_shared_impl)
 
 def _build_haskell_lib(
         ctx,
@@ -592,52 +633,28 @@ def _build_haskell_lib(
             if not object.extension.endswith("-boot")
         ]
 
-        def do_link(ctx, _artifacts, resolved, outputs, lib=lib, objects=objects):
-            pkg_deps = resolved[haskell_toolchain.packages.dynamic]
-            package_db = pkg_deps[DynamicHaskellPackageDbInfo].packages
-
-            package_db_tset = ctx.actions.tset(
-                HaskellPackageDbTSet,
-                children = [package_db[name] for name in toolchain_libs if name in package_db]
-            )
-
-            link = cmd_args(haskell_toolchain.linker)
-            link.add(haskell_toolchain.linker_flags)
-            link.add(ctx.attrs.linker_flags)
-            link.add("-hide-all-packages")
-            link.add(cmd_args(toolchain_libs, prepend = "-package"))
-            link.add(cmd_args(package_db_tset.project_as_args("package_db"), prepend="-package-db"))
-            link.add("-o", outputs[lib].as_output())
-            link.add(
-                get_shared_library_flags(linker_info.type),
-                "-dynamic",
-                cmd_args(
-                    _get_haskell_shared_library_name_linker_flags(linker_info.type, libfile),
-                    prepend = "-optl",
-                ),
-            )
-
-            link.add(objects)
-
-            infos = get_link_args_for_strategy(
-                ctx,
-                nlis,
-                to_link_strategy(link_style),
-            )
-            link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
-
-            ctx.actions.run(
-                link,
-                category = "haskell_link" + artifact_suffix.replace("-", "_"),
-            )
-
-        ctx.actions.dynamic_output(
-            dynamic = [],
-            promises = [haskell_toolchain.packages.dynamic],
-            inputs = objects,
-            outputs = [lib.as_output()],
-            f = do_link,
+        infos = get_link_args_for_strategy(
+            ctx,
+            nlis,
+            to_link_strategy(link_style),
         )
+
+        ctx.actions.dynamic_output_new(_dynamic_link_shared(
+            dynamic = [],
+            dynamic_values = [haskell_toolchain.packages.dynamic],
+            outputs = [lib.as_output()],
+            arg = struct(
+                artifact_suffix = artifact_suffix,
+                haskell_toolchain = haskell_toolchain,
+                infos = infos,
+                lib = lib,
+                libfile = libfile,
+                linker_flags = ctx.attrs.linker_flags,
+                linker_info = linker_info,
+                objects = objects,
+                toolchain_libs = toolchain_libs,
+            ),
+        ))
 
         solibs[libfile] = LinkedObject(output = lib, unstripped_output = lib)
         libs = [lib]
@@ -1080,6 +1097,41 @@ def _make_link_package(
 
     return db
 
+def _dynamic_link_binary_impl(actions, artifacts, dynamic_values, outputs, arg):
+    link_cmd = arg.link.copy() # link is already frozen, make a copy
+
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+    packages_info = get_packages_info2(
+        actions,
+        deps = arg.deps,
+        direct_deps_link_info = arg.direct_deps_link_info,
+        haskell_toolchain = arg.haskell_toolchain,
+        haskell_direct_deps_lib_infos = arg.haskell_direct_deps_lib_infos,
+        link_style = arg.link_style,
+        resolved = dynamic_values,
+        specify_pkg_version = False,
+        enable_profiling = arg.enable_profiling,
+        use_empty_lib = False,
+    )
+
+    link_cmd.add("-hide-all-packages")
+    link_cmd.add(cmd_args(arg.toolchain_libs, prepend = "-package"))
+    link_cmd.add(cmd_args(packages_info.exposed_package_args))
+    link_cmd.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+    link_cmd.add(arg.haskell_toolchain.linker_flags)
+    link_cmd.add(arg.linker_flags)
+
+    link_cmd.add(cmd_args(hidden = packages_info.exposed_package_libs))
+
+    link_cmd.add("-o", outputs[arg.output].as_output())
+
+    actions.run(link_cmd, category = "haskell_link")
+
+    return []
+
+_dynamic_link_binary = dynamic_actions(impl = _dynamic_link_binary_impl)
+
 def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     enable_profiling = ctx.attrs.enable_profiling
 
@@ -1139,6 +1191,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
     sos = []
 
+    link_strategy = to_link_strategy(link_style)
     if link_group_info != None:
         own_binary_link_flags = []
         auto_link_groups = {}
@@ -1161,6 +1214,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         if auto_link_group_specs != None:
             linked_link_groups = create_link_groups(
                 ctx = ctx,
+                link_strategy = link_strategy,
                 link_group_mappings = link_group_info.mappings,
                 link_group_preferred_linkage = link_group_preferred_linkage,
                 executable_deps = executable_deps,
@@ -1188,7 +1242,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
             roots = get_dedupped_roots_from_groups(link_group_info.groups.values()),
         )
 
-        labels_to_links_map = get_filtered_labels_to_links_map(
+        labels_to_links = get_filtered_labels_to_links_map(
             public_nodes = public_nodes,
             linkable_graph_node_map = linkable_graph_node_map,
             link_group = None,
@@ -1199,7 +1253,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
                 name: (lib.label, lib.shared_link_infos)
                 for name, lib in link_group_libs.items()
             },
-            link_strategy = to_link_strategy(link_style),
+            link_strategy = link_strategy,
             roots = (
                 [
                     d.linkable_graph.nodes.value.label
@@ -1231,14 +1285,15 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
                 pre_flags = own_binary_link_flags,
             ),
         )
-        link_infos.extend(get_filtered_links(labels_to_links_map, set(public_nodes)))
+        link_infos.extend(get_filtered_links(labels_to_links.map, set(public_nodes)))
         infos = LinkArgs(infos = link_infos)
 
         link_group_ctx = LinkGroupContext(
             link_group_mappings = link_group_info.mappings,
             link_group_libs = link_group_libs,
             link_group_preferred_linkage = link_group_preferred_linkage,
-            labels_to_links_map = labels_to_links_map,
+            labels_to_links_map = labels_to_links.map,
+            targets_consumed_by_link_groups = {},
         )
 
         for shared_lib in traverse_shared_library_info(shlib_info):
@@ -1286,46 +1341,33 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
         link.add(cmd_args(db, prepend = "-package-db"))
         link.add("-package", pkgname)
-        link.hidden(linkable_artifacts)
+        link.add(cmd_args(hidden = linkable_artifacts))
     else:
         link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
 
-    def do_link(ctx, _artifacts, resolved, outputs, output=output):
-        link_cmd = link.copy() # link is already frozen, make a copy
-
-        # Add -package-db and -package/-expose-package flags for each Haskell
-        # library dependency.
-        packages_info = get_packages_info(
-            ctx,
-            link_style,
-            resolved = resolved,
-            specify_pkg_version = False,
-            enable_profiling = enable_profiling,
-            use_empty_lib = False,
-        )
-
-        link_cmd.add("-hide-all-packages")
-        link_cmd.add(cmd_args(toolchain_libs, prepend = "-package"))
-        link_cmd.add(cmd_args(packages_info.exposed_package_args))
-        link_cmd.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
-        link_cmd.add(haskell_toolchain.linker_flags)
-        link_cmd.add(ctx.attrs.linker_flags)
-
-        link_cmd.hidden(packages_info.exposed_package_libs)
-
-        link_cmd.add("-o", outputs[output].as_output())
-
-        ctx.actions.run(link_cmd, category = "haskell_link")
-
-    ctx.actions.dynamic_output(
-        dynamic = [],
-        promises = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [ ],
-        inputs = objects.values(),
-        outputs = [output.as_output()],
-        f = do_link,
+    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
+        ctx,
+        link_style,
+        enable_profiling = enable_profiling,
     )
 
-    run = cmd_args(output)
+    ctx.actions.dynamic_output_new(_dynamic_link_binary(
+        dynamic = [],
+        dynamic_values = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [ ],
+        outputs = [output.as_output()],
+        arg = struct(
+            deps = ctx.attrs.deps,
+            direct_deps_link_info = attr_deps_haskell_link_infos(ctx),
+            enable_profiling = enable_profiling,
+            haskell_direct_deps_lib_infos = haskell_direct_deps_lib_infos,
+            haskell_toolchain = haskell_toolchain,
+            link = link,
+            link_style = link_style,
+            linker_flags = ctx.attrs.linker_flags,
+            output = output,
+            toolchain_libs = toolchain_libs,
+        ),
+    ))
 
     if link_style == LinkStyle("shared") or link_group_info != None:
         sos_dir = "__{}__shared_libs_symlink_tree".format(ctx.attrs.name)
@@ -1337,7 +1379,9 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
             out = sos_dir,
             shared_libs = sos,
         )
-        run.hidden(symlink_dir)
+        run = cmd_args(output, hidden = symlink_dir)
+    else:
+        run = cmd_args(output)
 
     sub_targets = {}
     sub_targets.update(_haskell_module_sub_targets(

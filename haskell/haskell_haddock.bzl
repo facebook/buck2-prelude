@@ -47,7 +47,7 @@ def _haddock_module_to_html(module_name: str) -> str:
     return module_name.replace(".", "-") + ".html"
 
 def _haddock_dump_interface(
-    ctx: AnalysisContext,
+    actions: AnalysisActions,
     cmd: cmd_args,
     module_name: str,
     module_tsets: dict[str, _HaddockInfoTSet],
@@ -57,7 +57,7 @@ def _haddock_dump_interface(
     outputs: dict[Artifact, Artifact]) -> _HaddockInfoTSet:
 
     # Transitive module dependencies from other packages.
-    cross_package_modules = ctx.actions.tset(
+    cross_package_modules = actions.tset(
         CompiledModuleTSet,
         children = module_deps,
     )
@@ -73,13 +73,13 @@ def _haddock_dump_interface(
     module_html = _haddock_module_to_html(module_name)
 
     if paths.basename(expected_html.short_path) != module_html:
-        html_output = ctx.actions.declare_output("haddock-html", module_html)
+        html_output = actions.declare_output("haddock-html", module_html)
         make_copy = True
     else:
-        html_output = expected_html 
+        html_output = expected_html
         make_copy = False
 
-    ctx.actions.run(
+    actions.run(
         cmd.copy().add(
             "--odir", cmd_args(html_output.as_output(), parent = 1),
             "--dump-interface", outputs[haddock_info.haddock].as_output(),
@@ -102,14 +102,54 @@ def _haddock_dump_interface(
     if make_copy:
         # XXX might as well use `symlink_file`` but that does not work with buck2 RE
         # (see https://github.com/facebook/buck2/issues/222)
-        ctx.actions.copy_file(expected_html.as_output(), html_output)
+        actions.copy_file(expected_html.as_output(), html_output)
 
-    return ctx.actions.tset(
+    return actions.tset(
         _HaddockInfoTSet,
         value = _HaddockInfo(interface = haddock_info.interface, haddock = outputs[haddock_info.haddock], html = outputs[haddock_info.html]),
         children = this_package_modules,
     )
 
+def _dynamic_haddock_dump_interfaces_impl(actions, artifacts, dynamic_values, outputs, arg):
+    md = artifacts[arg.md_file].read_json()
+    module_map = md["module_mapping"]
+    graph = md["module_graph"]
+    package_deps = md["package_deps"]
+
+    dynamic_info_lib = {}
+
+    for lib in arg.direct_deps_link_info:
+        info = lib.info[arg.link_style]
+        direct = info.value
+        dynamic = direct.dynamic[False]
+        dynamic_info = dynamic_values[dynamic].providers[DynamicCompileResultInfo]
+
+        dynamic_info_lib[direct.name] = dynamic_info
+
+    haddock_infos = { module_map.get(k, k): v for k, v in arg.haddock_infos.items() }
+    module_tsets = {}
+
+    for module_name in post_order_traversal(graph):
+        module_deps = [
+            info.modules[mod]
+            for lib, info in dynamic_info_lib.items()
+            for mod in package_deps.get(module_name, {}).get(lib, [])
+        ]
+
+        module_tsets[module_name] = _haddock_dump_interface(
+            actions,
+            arg.dyn_cmd.copy(),
+            module_name = module_name,
+            module_tsets = module_tsets,
+            haddock_info = haddock_infos[module_name],
+            module_deps = module_deps,
+                graph = graph,
+            outputs = outputs,
+        )
+
+    return []
+
+_dynamic_haddock_dump_interfaces = dynamic_actions(impl = _dynamic_haddock_dump_interfaces_impl)
 
 def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileResultInfo, md_file: Artifact) -> HaskellHaddockInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -147,46 +187,9 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileRes
 
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
 
-    def haddock_dump_interfaces(ctx, artifacts, resolved, outputs, md_file=md_file, dyn_cmd=cmd.copy(), haddock_infos=haddock_infos):
-        md = artifacts[md_file].read_json()
-        module_map = md["module_mapping"]
-        graph = md["module_graph"]
-        package_deps = md["package_deps"]
-
-        dynamic_info_lib = {}
-
-        for lib in direct_deps_link_info:
-            info = lib.info[link_style]
-            direct = info.value
-            dynamic = direct.dynamic[False]
-            dynamic_info = resolved[dynamic][DynamicCompileResultInfo]
-
-            dynamic_info_lib[direct.name] = dynamic_info
-
-        haddock_infos = { module_map.get(k, k): v for k, v in haddock_infos.items() }
-        module_tsets = {}
-
-        for module_name in post_order_traversal(graph):
-            module_deps = [
-                info.modules[mod]
-                for lib, info in dynamic_info_lib.items()
-                for mod in package_deps.get(module_name, {}).get(lib, [])
-            ]
-
-            module_tsets[module_name] = _haddock_dump_interface(
-                ctx,
-                dyn_cmd.copy(),
-                module_name = module_name,
-                module_tsets = module_tsets,
-                haddock_info = haddock_infos[module_name],
-                module_deps = module_deps,
-                graph = graph,
-                outputs = outputs,
-            )
-
-    ctx.actions.dynamic_output(
+    ctx.actions.dynamic_output_new(_dynamic_haddock_dump_interfaces(
         dynamic = [md_file],
-        promises = [
+        dynamic_values = [
             info.value.dynamic[False]
             for lib in direct_deps_link_info
             for info in [
@@ -195,10 +198,15 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileRes
                 lib.info[link_style],
             ]
         ],
-        inputs = compiled.hi,
         outputs = [output.as_output() for info in haddock_infos.values() for output in [info.haddock, info.html]],
-        f = haddock_dump_interfaces,
-    )
+        arg = struct(
+            direct_deps_link_info = direct_deps_link_info,
+            dyn_cmd = cmd.copy(),
+            haddock_infos = haddock_infos,
+            link_style = link_style,
+            md_file = md_file,
+        ),
+    ))
 
     return HaskellHaddockInfo(
         interfaces = [i.haddock for i in haddock_infos.values()],
@@ -252,7 +260,7 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
     )
 
     ctx.actions.run(
-        cmd_args(script).hidden(script_args),
+        cmd_args(script, hidden = script_args),
         category = "haskell_haddock",
         no_outputs_cleanup = True,
     )

@@ -1,3 +1,9 @@
+load("@prelude//utils:source_listing.bzl", "source_listing")
+
+oncall("build_infra")
+
+source_listing()
+
 prelude = native  # Avoid warnings and auto-formatters
 
 # The short list of ubiquitous, mainstream operating systems:
@@ -112,6 +118,23 @@ config_setting(
     name = "wasi",
     constraint_values = [
         "//os/constraints:wasi",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+config_setting(
+    name = "linux-sgx",
+    constraint_values = [
+        "//os/constraints:linux",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+config_setting(
+    name = "linux-arm64",
+    constraint_values = [
+        "//cpu/constraints:arm64",
+        "//os/constraints:linux",
     ],
     visibility = ["PUBLIC"],
 )

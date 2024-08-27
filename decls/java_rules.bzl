@@ -59,6 +59,7 @@ jar_genrule = prelude_rule(
             "enable_sandbox": attrs.option(attrs.bool(), default = None),
             "environment_expansion_separator": attrs.option(attrs.string(), default = None),
             "labels": attrs.list(attrs.string(), default = []),
+            "weight": attrs.option(attrs.int(), default = None),
             "licenses": attrs.list(attrs.source(), default = []),
             "need_android_tools": attrs.bool(default = False),
             "remote": attrs.option(attrs.bool(), default = None),
@@ -231,7 +232,7 @@ java_library = prelude_rule(
                  If any of the files in this list end in `.src.zip`,
                  then the entries in the ZIP file that end in `.java` will be
                  included as ordinary inputs to compilation. This is common when using
-                 a `genrule()`to auto-generate some Java source code that
+                 a `genrule()` to auto-generate some Java source code that
                  needs to be compiled with some hand-written Java code.
             """),
         } |
@@ -379,7 +380,7 @@ java_test = prelude_rule(
                 Same as `std_out_log_level`, but for std err.
             """),
             "use_cxx_libraries": attrs.option(attrs.bool(), default = None, doc = """
-                Whether or not to build and link against `cxx\\_library()`dependencies when testing.
+                Whether or not to build and link against `cxx_library()` dependencies when testing.
             """),
             "cxx_library_whitelist": attrs.list(attrs.dep(), default = [], doc = """
                 EXPERIMENTAL.
@@ -403,6 +404,7 @@ java_test = prelude_rule(
             "exported_deps": attrs.list(attrs.dep(), default = []),
             "exported_provided_deps": attrs.list(attrs.dep(), default = []),
             "extra_arguments": attrs.list(attrs.string(), default = []),
+            "jar_postprocessor": attrs.option(attrs.exec_dep(), default = None),
             "java_version": attrs.option(attrs.string(), default = None),
             "java": attrs.option(attrs.dep(), default = None),
             "javac": attrs.option(attrs.source(), default = None),

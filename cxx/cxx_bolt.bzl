@@ -27,6 +27,8 @@ def bolt(ctx: AnalysisContext, prebolt_output: Artifact, external_debug_info: Ar
     if not bolt_msdk or not cxx_use_bolt(ctx):
         fail("Cannot use bolt if bolt_msdk is not available or bolt profile is not available")
 
+    materialized_external_debug_info = project_artifacts(ctx.actions, [external_debug_info])
+
     # bolt command format:
     # {llvm_bolt} {input_bin} -o $OUT -data={fdata} {args}
     args = cmd_args(
@@ -36,10 +38,8 @@ def bolt(ctx: AnalysisContext, prebolt_output: Artifact, external_debug_info: Ar
         postbolt_output.as_output(),
         cmd_args(ctx.attrs.bolt_profile, format = "-data={}"),
         ctx.attrs.bolt_flags,
+        hidden = materialized_external_debug_info,
     )
-
-    materialized_external_debug_info = project_artifacts(ctx.actions, [external_debug_info])
-    args.hidden(materialized_external_debug_info)
 
     ctx.actions.run(
         args,
@@ -48,4 +48,24 @@ def bolt(ctx: AnalysisContext, prebolt_output: Artifact, external_debug_info: Ar
         local_only = get_cxx_toolchain_info(ctx).linker_info.link_binaries_locally,
     )
 
-    return postbolt_output
+    output = postbolt_output
+
+    if hasattr(ctx.attrs, "strip_stapsdt") and ctx.attrs.strip_stapsdt:
+        stripped_postbolt_output = ctx.actions.declare_output(output_name + "-nostapsdt")
+        ctx.actions.run(
+            # We --rename-section instead of --remove-section because objcopy's processing
+            # in an invalid ELF file
+            cmd_args([
+                get_cxx_toolchain_info(ctx).binary_utilities_info.objcopy,
+                "--rename-section",
+                ".stapsdt.base=.deleted_stapsdt_base_section",
+                postbolt_output,
+                stripped_postbolt_output.as_output(),
+            ]),
+            category = "bolt_strip_stapsdt",
+            identifier = identifier,
+            local_only = get_cxx_toolchain_info(ctx).linker_info.link_binaries_locally,
+        )
+        output = stripped_postbolt_output
+
+    return output

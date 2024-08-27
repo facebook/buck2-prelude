@@ -25,6 +25,7 @@ def android_prebuilt_aar_impl(ctx: AnalysisContext) -> list[Provider]:
     jni = ctx.actions.declare_output("jni", dir = True)
     annotation_jars_dir = ctx.actions.declare_output("annotation_jars", dir = True)
     proguard_config = ctx.actions.declare_output("proguard.txt")
+    lint_jar = ctx.actions.declare_output("lint.jar")
 
     android_toolchain = ctx.attrs._android_toolchain[AndroidToolchainInfo]
     unpack_aar_tool = android_toolchain.unpack_aar[RunInfo]
@@ -53,6 +54,8 @@ def android_prebuilt_aar_impl(ctx: AnalysisContext) -> list[Provider]:
         proguard_config.as_output(),
         "--jar-builder-tool",
         jar_builder_tool,
+        "--lint-jar-path",
+        lint_jar.as_output(),
     ]
 
     ctx.actions.run(unpack_aar_cmd, category = "android_unpack_aar")
@@ -78,15 +81,18 @@ def android_prebuilt_aar_impl(ctx: AnalysisContext) -> list[Provider]:
         required_for_source_only_abi = ctx.attrs.required_for_source_only_abi,
     )
 
-    java_library_info, java_packaging_info, shared_library_info, linkable_graph, cxx_resource_info, template_placeholder_info, java_library_intellij_info = create_java_library_providers(
+    java_library_info, java_packaging_info, global_code_info, shared_library_info, linkable_graph, cxx_resource_info, template_placeholder_info, java_library_intellij_info = create_java_library_providers(
         ctx = ctx,
         library_output = library_output_classpath_entry,
+        global_code_config = java_toolchain.global_code_config,
         exported_deps = ctx.attrs.deps,
         provided_deps = ctx.attrs.desugar_deps,
         needs_desugar = True,
         is_prebuilt_jar = True,
         annotation_jars_dir = annotation_jars_dir,
         proguard_config = proguard_config,
+        lint_jar = lint_jar,
+        sources_jar = ctx.attrs.source_jar,
     )
 
     native_library = PrebuiltNativeLibraryDir(
@@ -99,6 +105,7 @@ def android_prebuilt_aar_impl(ctx: AnalysisContext) -> list[Provider]:
     return [
         java_library_info,
         java_packaging_info,
+        global_code_info,
         shared_library_info,
         cxx_resource_info,
         linkable_graph,
