@@ -131,14 +131,11 @@ def recompute_abi_hash(ghc, abi_out):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
     hi_file = abi_out.with_suffix("")
 
-    cmd = [ghc, "--show-iface", hi_file]
-    for line in subprocess.check_output(cmd, text=True).splitlines():
-        if "ABI hash:" in line:
-            hash = line.split(":", 1)[1]
-            with open(abi_out, "w") as outfile:
-                print(hash, file=outfile)
-            return
-    raise RuntimeError("ABI hash not found in ghc output")
+    cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file]
+
+    hash = subprocess.check_output(cmd, text=True).split(maxsplit=1)[0]
+
+    abi_out.write_text(hash)
 
 
 if __name__ == "__main__":
