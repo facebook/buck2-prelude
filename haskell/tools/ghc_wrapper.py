@@ -131,7 +131,7 @@ def recompute_abi_hash(ghc, abi_out):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
     hi_file = abi_out.with_suffix("")
 
-    cmd = [ghc, "--show-iface-abi-hash", hi_file]
+    cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file]
 
     hash = subprocess.check_output(cmd, text=True).split(maxsplit=1)[0]
 
