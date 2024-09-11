@@ -64,7 +64,7 @@ def _external_tools_arg():
 
 def _srcs_envs_arg():
     return {
-        "srcs_envs": attrs.dict(attrs.source(), attrs.list(attrs.tuple(attrs.string(), attrs.arg())), default = {}, doc = """
+        "srcs_envs": attrs.dict(attrs.source(), attrs.dict(attrs.string(), attrs.arg()), default = {}, doc = """
     Individual run-time env for each source compilation.
 """),
     }

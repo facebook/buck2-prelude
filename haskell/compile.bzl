@@ -561,6 +561,7 @@ def _compile_module(
     direct_deps_by_name: dict[str, typing.Any],
     toolchain_deps_by_name: dict[str, None],
     aux_deps: None | list[Artifact],
+    src_envs: None | dict[str, ArgLike],
     source_prefixes: list[str],
 ) -> CompiledModuleTSet:
     # These compiler arguments can be passed in a response file.
@@ -642,6 +643,16 @@ def _compile_module(
         abi_tag.tag_artifacts(dependency_modules.project_as_args("interfaces")),
         dependency_modules.project_as_args("abi"),
     ]
+    if src_envs:
+        for k, v in src_envs.items():
+            compile_args_for_file.add(cmd_args(
+                k,
+                format="--extra-env-key={}",
+            ))
+            compile_args_for_file.add(cmd_args(
+                v,
+                format="--extra-env-value={}",
+            ))
     if haskell_toolchain.use_argsfile:
         argsfile = actions.declare_output(
             "haskell_compile_" + artifact_suffix + ".argsfile",
@@ -743,6 +754,7 @@ def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
         module_tsets[module_name] = _compile_module(
             actions,
             aux_deps = arg.sources_deps.get(module.source),
+            src_envs = arg.srcs_envs.get(module.source),
             common_args = common_args,
             link_style = arg.link_style,
             enable_profiling = arg.enable_profiling,
@@ -832,6 +844,7 @@ def compile(
             pkgname = pkgname,
             sources = ctx.attrs.srcs,
             sources_deps = ctx.attrs.srcs_deps,
+            srcs_envs = ctx.attrs.srcs_envs,
             toolchain_deps_by_name = toolchain_deps_by_name,
         ),
     ))
