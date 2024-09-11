@@ -5,6 +5,8 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
+load("@prelude//utils:arglike.bzl", "ArgLike")
+
 load(
     "@prelude//cxx:preprocessor.bzl",
     "cxx_inherited_preprocessor_infos",
@@ -404,7 +406,7 @@ CommonCompileModuleArgs = record(
 def _common_compile_module_args(
     actions: AnalysisActions,
     *,
-    compiler_flags: list[str],
+    compiler_flags: list[ArgLike],
     ghc_wrapper: RunInfo,
     haskell_toolchain: HaskellToolchainInfo,
     resolved: dict[DynamicValue, ResolvedDynamicValue],
