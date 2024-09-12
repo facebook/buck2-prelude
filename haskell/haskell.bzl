@@ -551,14 +551,16 @@ def _dynamic_link_shared_impl(actions, artifacts, dynamic_values, outputs, arg):
         children = [package_db[name] for name in arg.toolchain_libs if name in package_db]
     )
 
-    link = cmd_args(arg.haskell_toolchain.linker)
-    link.add(arg.haskell_toolchain.linker_flags)
-    link.add(arg.linker_flags)
-    link.add("-hide-all-packages")
-    link.add(cmd_args(arg.toolchain_libs, prepend = "-package"))
-    link.add(cmd_args(package_db_tset.project_as_args("package_db"), prepend="-package-db"))
-    link.add("-o", outputs[arg.lib].as_output())
-    link.add(
+    link_args = cmd_args()
+    link_cmd_args = [cmd_args(arg.haskell_toolchain.linker)]
+    link_cmd_hidden = []
+
+    link_args.add(arg.haskell_toolchain.linker_flags)
+    link_args.add(arg.linker_flags)
+    link_args.add("-hide-all-packages")
+    link_args.add(cmd_args(arg.toolchain_libs, prepend = "-package"))
+    link_args.add(cmd_args(package_db_tset.project_as_args("package_db"), prepend="-package-db"))
+    link_args.add(
         get_shared_library_flags(arg.linker_info.type),
         "-dynamic",
         cmd_args(
@@ -567,12 +569,26 @@ def _dynamic_link_shared_impl(actions, artifacts, dynamic_values, outputs, arg):
         ),
     )
 
-    link.add(arg.objects)
+    link_args.add(arg.objects)
 
-    link.add(cmd_args(unpack_link_args(arg.infos), prepend = "-optl"))
+    link_args.add(cmd_args(unpack_link_args(arg.infos), prepend = "-optl"))
+
+
+    if arg.use_argsfile_at_link:
+        argsfile = actions.declare_output(
+            "haskell_link_" + arg.artifact_suffix.replace("-", "_") + ".argsfile",
+        )
+        actions.write(argsfile.as_output(), link_args, allow_args = True)
+        link_cmd_args.append(cmd_args(argsfile, format = "@{}"))
+        link_cmd_hidden.append(link_args)
+    else:
+        link_cmd_args.append(link_args)
+
+    link_cmd = cmd_args(link_cmd_args, hidden = link_cmd_hidden)
+    link_cmd.add("-o", outputs[arg.lib].as_output())
 
     actions.run(
-        link,
+        link_cmd,
         category = "haskell_link" + arg.artifact_suffix.replace("-", "_"),
     )
 
@@ -653,6 +669,7 @@ def _build_haskell_lib(
                 linker_info = linker_info,
                 objects = objects,
                 toolchain_libs = toolchain_libs,
+                use_argsfile_at_link = ctx.attrs.use_argsfile_at_link,
             ),
         ))
 

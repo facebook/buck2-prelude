@@ -69,6 +69,13 @@ def _srcs_envs_arg():
 """),
     }
 
+def _use_argsfile_at_link_arg():
+    return {
+        "use_argsfile_at_link": attrs.bool(default = False, doc = """
+    Use response file at linking.
+"""),
+    }
+
 haskell_common = struct(
     srcs_arg = _srcs_arg,
     deps_arg = _deps_arg,
@@ -77,4 +84,5 @@ haskell_common = struct(
     scripts_arg = _scripts_arg,
     external_tools_arg = _external_tools_arg,
     srcs_envs_arg = _srcs_envs_arg,
+    use_argsfile_at_link_arg = _use_argsfile_at_link_arg,
 )
