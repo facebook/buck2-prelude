@@ -422,8 +422,6 @@ def _common_compile_module_args(
     direct_deps_info: list[HaskellLibraryInfoTSet],
     pkgname: str | None = None,
 ) -> CommonCompileModuleArgs:
-    #haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
     command = cmd_args(ghc_wrapper)
     command.add("--ghc", haskell_toolchain.compiler)
 
