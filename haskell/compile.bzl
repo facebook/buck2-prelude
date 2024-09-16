@@ -50,6 +50,7 @@ load(
     "@prelude//linking:link_info.bzl",
     "LinkStyle",
 )
+load("@prelude//utils:argfile.bzl", "at_argfile")
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
@@ -654,12 +655,12 @@ def _compile_module(
                 format="--extra-env-value={}",
             ))
     if haskell_toolchain.use_argsfile:
-        argsfile = actions.declare_output(
-            "haskell_compile_" + artifact_suffix + ".argsfile",
-        )
-        actions.write(argsfile.as_output(), compile_args_for_file, allow_args = True)
-        compile_cmd_args.append(cmd_args(argsfile, format = "@{}"))
-        compile_cmd_hidden.append(compile_args_for_file)
+        compile_cmd_args.append(at_argfile(
+            actions = actions,
+            name = "haskell_compile_" + artifact_suffix + ".argsfile",
+            args = compile_args_for_file,
+            allow_args = True,
+        ))
     else:
         compile_cmd_args.append(compile_args_for_file)
 

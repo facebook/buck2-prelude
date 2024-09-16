@@ -146,6 +146,7 @@ load(
     "@prelude//python:python.bzl",
     "PythonLibraryInfo",
 )
+load("@prelude//utils:argfile.bzl", "at_argfile")
 load("@prelude//utils:set.bzl", "set")
 load("@prelude//utils:utils.bzl", "filter_and_map_idx", "flatten")
 
@@ -573,14 +574,13 @@ def _dynamic_link_shared_impl(actions, artifacts, dynamic_values, outputs, arg):
 
     link_args.add(cmd_args(unpack_link_args(arg.infos), prepend = "-optl"))
 
-
     if arg.use_argsfile_at_link:
-        argsfile = actions.declare_output(
-            "haskell_link_" + arg.artifact_suffix.replace("-", "_") + ".argsfile",
-        )
-        actions.write(argsfile.as_output(), link_args, allow_args = True)
-        link_cmd_args.append(cmd_args(argsfile, format = "@{}"))
-        link_cmd_hidden.append(link_args)
+        link_cmd_args.append(at_argfile(
+            actions = actions,
+            name = "haskell_link_" + arg.artifact_suffix.replace("-", "_") + ".argsfile",
+            args = link_args,
+            allow_args = True,
+        ))
     else:
         link_cmd_args.append(link_args)
 
