@@ -1144,8 +1144,6 @@ def _dynamic_link_binary_impl(actions, artifacts, dynamic_values, outputs, arg):
     link_cmd.add(arg.haskell_toolchain.linker_flags)
     link_cmd.add(arg.linker_flags)
 
-    link_cmd.add(cmd_args(hidden = packages_info.exposed_package_libs))
-
     link_cmd.add("-o", outputs[arg.output].as_output())
 
     actions.run(link_cmd, category = "haskell_link")

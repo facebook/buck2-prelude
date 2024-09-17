@@ -101,7 +101,6 @@ CompileResultInfo = record(
 )
 
 PackagesInfo = record(
-    exposed_package_libs = cmd_args,
     exposed_package_args = cmd_args,
     packagedb_args = cmd_args,
     transitive_deps = field(HaskellLibraryInfoTSet),
@@ -340,7 +339,6 @@ def get_packages_info2(
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
 
-    exposed_package_libs = cmd_args()
     exposed_package_args = cmd_args([package_flag, "base"])
 
     if for_deps:
@@ -399,7 +397,6 @@ def get_packages_info2(
         exposed_package_args.add(package_flag, pkg_name)
 
     return PackagesInfo(
-        exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
         packagedb_args = packagedb_args,
         transitive_deps = libs,
