@@ -168,6 +168,11 @@ def _attr_preferred_linkage(ctx: AnalysisContext) -> Linkage:
 
 # --
 
+def haskell_toolchain_library_impl(ctx: AnalysisContext):
+    return [DefaultInfo(), HaskellToolchainLibrary(name = ctx.attrs.name)]
+
+# --
+
 def _get_haskell_prebuilt_libs(
         ctx,
         link_style: LinkStyle,
