@@ -87,6 +87,7 @@ load(
     "attr_deps_haskell_link_infos_sans_template_deps",
     "attr_deps_haskell_lib_infos",
     "attr_deps_haskell_link_infos",
+    "attr_deps_haskell_toolchain_libraries",
     "attr_deps_merged_link_infos",
     "attr_deps_profiling_link_infos",
     "attr_deps_shared_library_infos",
@@ -641,7 +642,7 @@ def _build_haskell_lib(
     # only gather direct dependencies
     uniq_infos = [x[link_style].value for x in linfos]
 
-    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
+    toolchain_libs = [dep.name for dep in attr_deps_haskell_toolchain_libraries(ctx)] 
 
     if link_style == LinkStyle("shared"):
         lib = ctx.actions.declare_output(lib_short_path)

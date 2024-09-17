@@ -229,11 +229,7 @@ def target_metadata(
     md_gen = ctx.attrs._generate_target_metadata[RunInfo]
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    toolchain_libs = [
-        dep[HaskellToolchainLibrary].name
-        for dep in ctx.attrs.deps
-        if HaskellToolchainLibrary in dep
-    ]
+    toolchain_libs = [dep.name for dep in attr_deps_haskell_toolchain_libraries(ctx)]
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
