@@ -285,15 +285,17 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
         ]
 
         hlibinfos[link_style] = hlibinfo
-        hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlibinfo, children = [
-            lib.info[link_style]
-            for lib in haskell_infos
-        ])
+        hlinkinfos[link_style] = ctx.actions.tset(
+            HaskellLibraryInfoTSet,
+            value = hlibinfo,
+            children = [lib.info[link_style] for lib in haskell_infos],
+        )
         prof_hlibinfos[link_style] = prof_hlibinfo
-        prof_hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = prof_hlibinfo, children = [
-            lib.prof_info[link_style]
-            for lib in haskell_infos
-        ])
+        prof_hlinkinfos[link_style] = ctx.actions.tset(
+            HaskellLibraryInfoTSet,
+            value = prof_hlibinfo,
+            children = [lib.prof_info[link_style] for lib in haskell_infos],
+        )
         link_infos[link_style] = LinkInfos(
             default = LinkInfo(
                 pre_flags = ctx.attrs.exported_linker_flags,

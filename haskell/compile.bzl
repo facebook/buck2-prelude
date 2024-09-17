@@ -331,10 +331,13 @@ def get_packages_info2(
 
     # Collect library dependencies. Note that these don't need to be in a
     # particular order.
-    libs = actions.tset(HaskellLibraryInfoTSet, children = [
-        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-        for lib in direct_deps_link_info
-    ])
+    libs = actions.tset(
+        HaskellLibraryInfoTSet,
+        children = [
+            lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+            for lib in direct_deps_link_info
+        ],
+    )
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
