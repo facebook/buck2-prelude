@@ -40,9 +40,22 @@ def _exported_linker_flags_arg():
 """),
     }
 
+def _scripts_arg():
+    return {
+        "_generate_target_metadata": attrs.dep(
+            providers = [RunInfo],
+            default = "prelude//haskell/tools:generate_target_metadata",
+        ),
+        "_ghc_wrapper": attrs.dep(
+            providers = [RunInfo],
+            default = "prelude//haskell/tools:ghc_wrapper",
+        ),
+    }
+
 haskell_common = struct(
     srcs_arg = _srcs_arg,
     deps_arg = _deps_arg,
     compiler_flags_arg = _compiler_flags_arg,
     exported_linker_flags_arg = _exported_linker_flags_arg,
+    scripts_arg = _scripts_arg,
 )
