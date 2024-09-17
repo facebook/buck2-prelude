@@ -39,3 +39,9 @@ HaskellToolchainInfo = provider(
         "script_template_processor": provider_field(typing.Any, default = None),
     },
 )
+
+HaskellToolchainLibrary = provider(
+    fields = {
+        "name": provider_field(str),
+    },
+)
