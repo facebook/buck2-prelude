@@ -344,10 +344,8 @@ def get_packages_info2(
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
 
-    hidden_args = [l for lib in libs.traverse() for l in lib.libs]
-
     exposed_package_libs = cmd_args()
-    exposed_package_args = cmd_args([package_flag, "base"], hidden = hidden_args)
+    exposed_package_args = cmd_args([package_flag, "base"])
 
     if for_deps:
         package_db_projection = "deps_package_db"
@@ -356,7 +354,23 @@ def get_packages_info2(
     else:
         package_db_projection = "package_db"
 
-    packagedb_args = cmd_args(libs.project_as_args(package_db_projection))
+    packagedb_args = cmd_args()
+    packagedb_set = {}
+
+    for lib in libs.traverse():
+        if for_deps:
+            db = lib.deps_db
+        elif use_empty_lib:
+            db = lib.empty_db
+        else:
+            db = lib.db
+        packagedb_set[db] = None
+        hidden_args = cmd_args(hidden = [
+            lib.import_dirs.values(),
+            lib.stub_dirs,
+            lib.libs,
+        ])
+        exposed_package_args.add(hidden_args)
 
     if resolved:
         pkg_deps = resolved[haskell_toolchain.packages.dynamic]
@@ -376,6 +390,10 @@ def get_packages_info2(
         HaskellPackageDbTSet,
         children = [package_db[name] for name in toolchain_libs if name in package_db]
     )
+
+    # These we need to add for all the packages/dependencies, i.e.
+    # direct and transitive (e.g. `fbcode-common-hs-util-hs-array`)
+    packagedb_args.add(packagedb_set.keys())
 
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 

@@ -638,7 +638,9 @@ def _build_haskell_lib(
 
     linfos = [x.prof_info if enable_profiling else x.info for x in hlis]
 
+    # only gather direct dependencies
     uniq_infos = [x[link_style].value for x in linfos]
+
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
     if link_style == LinkStyle("shared"):
@@ -1088,7 +1090,9 @@ def _make_link_package(
     pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + "_link.conf", conf)
     db = ctx.actions.declare_output("db-" + artifact_suffix + "_link", dir = True)
 
-    db_deps = [x.db for x in hlis]
+    # While the list of hlis is unique, there may be multiple packages in the same db.
+    # Cutting down the GHC_PACKAGE_PATH significantly speeds up GHC.
+    db_deps = {x.db: None for x in hlis}.keys()
 
     # So that ghc-pkg can find the DBs for the dependencies. We might
     # be able to use flags for this instead, but this works.
