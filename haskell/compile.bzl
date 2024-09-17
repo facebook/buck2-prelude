@@ -348,23 +348,17 @@ def get_packages_info2(
     exposed_package_args = cmd_args([package_flag, "base"])
 
     if for_deps:
-        package_db_projection = "deps_package_db"
+        get_db = lambda l: l.deps_db
     elif use_empty_lib:
-        package_db_projection = "empty_package_db"
+        get_db = lambda l: l.empty_db
     else:
-        package_db_projection = "package_db"
+        get_db = lambda l: l.db
 
     packagedb_args = cmd_args()
     packagedb_set = {}
 
     for lib in libs.traverse():
-        if for_deps:
-            db = lib.deps_db
-        elif use_empty_lib:
-            db = lib.empty_db
-        else:
-            db = lib.db
-        packagedb_set[db] = None
+        packagedb_set[get_db(lib)] = None
         hidden_args = cmd_args(hidden = [
             lib.import_dirs.values(),
             lib.stub_dirs,
