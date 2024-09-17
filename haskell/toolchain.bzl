@@ -5,6 +5,8 @@
 # License, Version 2.0 found in the LICENSE-APACHE file in the root directory
 # of this source tree.
 
+load("@prelude//utils:arglike.bzl", "ArgLike")
+
 HaskellPlatformInfo = provider(fields = {
     "name": provider_field(typing.Any, default = None),
 })
@@ -37,6 +39,7 @@ HaskellToolchainInfo = provider(
         "ghci_packager": provider_field(typing.Any, default = None),
         "cache_links": provider_field(typing.Any, default = None),
         "script_template_processor": provider_field(typing.Any, default = None),
+        "packages": provider_field(typing.Any, default = None),
     },
 )
 
@@ -45,3 +48,25 @@ HaskellToolchainLibrary = provider(
         "name": provider_field(str),
     },
 )
+
+HaskellPackagesInfo = record(
+    dynamic = DynamicValue,
+)
+
+HaskellPackage = record(
+    db = ArgLike,
+    path = Artifact,
+)
+
+def _haskell_package_info_as_package_db(p: HaskellPackage):
+    return cmd_args(p.db)
+
+HaskellPackageDbTSet = transitive_set(
+    args_projections = {
+        "package_db": _haskell_package_info_as_package_db,
+    }
+)
+
+DynamicHaskellPackageDbInfo = provider(fields = {
+    "packages": dict[str, HaskellPackageDbTSet],
+})
