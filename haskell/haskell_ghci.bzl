@@ -332,6 +332,11 @@ def _build_haskell_omnibus_so(ctx: AnalysisContext) -> HaskellOmnibusData:
         so_symlinks_root = so_symlinks_root,
     )
 
+def _get_default_output(dependency: Dependency | None) -> Artifact | None:
+    if dependency == None:
+        return None
+    return dependency.get(DefaultInfo).default_outputs[0]
+
 # Use the script_template_processor.py script to generate a script from a
 # script template.
 def _replace_macros_in_script_template(
@@ -355,12 +360,12 @@ def _replace_macros_in_script_template(
         preload_libs: [str, None] = None) -> Artifact:
     toolchain_paths = {
         BINUTILS_PATH: haskell_toolchain.ghci_binutils_path,
-        GHCI_LIB_PATH: haskell_toolchain.ghci_lib_path.get(DefaultInfo).default_outputs[0],
+        GHCI_LIB_PATH: _get_default_output(haskell_toolchain.ghci_lib_path),
         CC_PATH: haskell_toolchain.ghci_cc_path,
         CPP_PATH: haskell_toolchain.ghci_cpp_path,
         CXX_PATH: haskell_toolchain.ghci_cxx_path,
-        GHCI_PACKAGER: haskell_toolchain.ghci_packager.get(DefaultInfo).default_outputs[0],
-        GHCI_GHC_PATH: haskell_toolchain.ghci_ghc_path.get(DefaultInfo).default_outputs[0],
+        GHCI_PACKAGER: _get_default_output(haskell_toolchain.ghci_packager),
+        GHCI_GHC_PATH: _get_default_output(haskell_toolchain.ghci_ghc_path),
     }
 
     if ghci_bin != None:
@@ -472,7 +477,7 @@ def _write_iserv_script(
         script_template = ghci_iserv_template,
         output_name = iserv_script_name,
         haskell_toolchain = haskell_toolchain,
-        ghci_iserv_path = ghci_iserv_path.get(DefaultInfo).default_outputs[0],
+        ghci_iserv_path = _get_default_output(ghci_iserv_path),
         preload_libs = preload_libs,
     )
     return iserv_script
