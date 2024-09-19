@@ -53,6 +53,7 @@ def _scripts_arg():
             providers = [RunInfo],
             default = "prelude//haskell/tools:ghc_wrapper",
         ),
+        "_worker": attrs.option(attrs.exec_dep(providers = [WorkerInfo]), default = None),
     }
 
 def _external_tools_arg():
