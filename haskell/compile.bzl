@@ -242,7 +242,7 @@ def target_metadata(
         sources: list[Artifact],
         suffix: str = "",
     ) -> Artifact:
-    md_file = ctx.actions.declare_output(ctx.attrs.name + suffix + ".md.json")
+    md_file = ctx.actions.declare_output(ctx.label.name + suffix + ".md.json")
     md_gen = ctx.attrs._generate_target_metadata[RunInfo]
 
     libname = repr(ctx.label.path).replace("//", "_").replace("/", "_") + "_" + ctx.label.name

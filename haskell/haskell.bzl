@@ -1225,7 +1225,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
     toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
 
-    output = ctx.actions.declare_output(ctx.attrs.name)
+    output = ctx.actions.declare_output(ctx.label.name)
     link = cmd_args(haskell_toolchain.compiler)
 
     objects = {}
@@ -1434,7 +1434,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     ))
 
     if link_style == LinkStyle("shared") or link_group_info != None:
-        sos_dir = "__{}__shared_libs_symlink_tree".format(ctx.attrs.name)
+        sos_dir = "__{}__shared_libs_symlink_tree".format(ctx.label.name)
         rpath_ref = get_rpath_origin(get_cxx_toolchain_info(ctx).linker_info.type)
         rpath_ldflag = "-Wl,{}/{}".format(rpath_ref, sos_dir)
         link.add("-optl", "-Wl,-rpath", "-optl", rpath_ldflag)
