@@ -407,7 +407,7 @@ def get_packages_info2(
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
     direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
-    bin_paths = cmd_args(direct_package_paths, format="--bin-path={}/bin")
+    bin_paths = cmd_args(direct_package_paths, prepend="--bin-path", format="{}/bin")
 
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
@@ -527,7 +527,8 @@ def _common_compile_module_args(
     direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
     args_for_file.add(cmd_args(
         direct_package_paths,
-        format="--bin-path={}/bin",
+        prepend="--bin-path",
+        format="{}/bin",
     ))
 
     args_for_file.add(cmd_args(
