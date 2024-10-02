@@ -142,7 +142,7 @@ def determine_module_mapping(ghc_depends, source_prefix):
             if len(boot_sources) != 1:
                 raise RuntimeError(f"Expected at most one Haskell boot file for module '{modname}' but got '{boot_sources}'.")
 
-            boot_apparent_name = src_to_module_name(strip_prefix_(source_prefix, sources[0]).lstrip("/")) + "-boot"
+            boot_apparent_name = src_to_module_name(strip_prefix_(source_prefix, boot_sources[0]).lstrip("/")) + "-boot"
 
             if boot_apparent_name != boot_modname:
                 result[boot_apparent_name] = boot_modname
@@ -190,6 +190,7 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
         json_fname = os.path.join(dname, "depends.json")
         make_fname = os.path.join(dname, "depends.make")
         haskell_sources = list(filter(is_haskell_src, sources))
+        haskell_boot_sources = list(filter (is_haskell_boot, sources))
         args = [
             ghc, "-M", "-include-pkg-deps",
             # Note: `-outputdir '.'` removes the prefix of all targets:
@@ -197,7 +198,7 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths):
             "-outputdir", ".",
             "-dep-json", json_fname,
             "-dep-makefile", make_fname,
-        ] + ghc_args + haskell_sources
+        ] + ghc_args + haskell_sources + haskell_boot_sources
 
         env = os.environ.copy()
         path = env.get("PATH", "")
