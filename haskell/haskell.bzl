@@ -569,7 +569,7 @@ def _dynamic_link_shared_impl(actions, pkg_deps, lib, arg):
     link_cmd_args = [cmd_args(arg.haskell_toolchain.linker)]
     link_cmd_hidden = []
 
-    link_args.add("--worker-id=ABCDE")
+    link_args.add("--worker-id={}".format(arg.worker_id))
     link_args.add(arg.haskell_toolchain.linker_flags)
     link_args.add(arg.linker_flags)
     link_args.add("-hide-all-packages")
@@ -694,6 +694,7 @@ def _build_haskell_lib(
                 objects = objects,
                 toolchain_libs = toolchain_libs,
                 use_argsfile_at_link = ctx.attrs.use_argsfile_at_link,
+                worker_id = pkgname,
             ),
         ))
 

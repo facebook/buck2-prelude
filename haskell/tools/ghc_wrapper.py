@@ -37,6 +37,9 @@ def main():
         help="Path to a package db that is used during the module compilation",
     )
     parser.add_argument(
+        "--worker-id", required=True, type=str, help="worker id",
+    )
+    parser.add_argument(
         "--ghc", required=True, type=str, help="Path to the Haskell compiler GHC."
     )
     parser.add_argument(
@@ -75,7 +78,7 @@ def main():
     )
 
     args, ghc_args = parser.parse_known_args()
-    worker_args = ["--worker-id=ABCDE"]
+    worker_args = ["--worker-id={}".format(args.worker_id)]
 
     print("WOOROROR", file=sys.stderr)
     cmd = [args.ghc] + worker_args + ghc_args
@@ -101,7 +104,7 @@ def main():
     if returncode != 0:
         return returncode
 
-    recompute_abi_hash(args.ghc, args.abi_out)
+    recompute_abi_hash(args.ghc, args.abi_out, args.worker_id)
 
     # write an empty dep file, to signal that all tagged files are unused
     try:
@@ -129,10 +132,10 @@ def main():
     return 0
 
 
-def recompute_abi_hash(ghc, abi_out):
+def recompute_abi_hash(ghc, abi_out, worker_id):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
     hi_file = abi_out.with_suffix("")
-    worker_args = ["--worker-id=ABCDE"]
+    worker_args = ["--worker-id={}".format(worker_id)]
 
     cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file] + worker_args
 

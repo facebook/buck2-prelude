@@ -201,6 +201,7 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     md_args = cmd_args(arg.md_gen)
     md_args.add(packages_info.bin_paths)
     md_args.add("--ghc", arg.haskell_toolchain.compiler)
+    md_args.add("--worker-id", arg.worker_id)
     md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
     md_args.add(
         "--source-prefix",
@@ -240,6 +241,9 @@ def target_metadata(
     md_file = ctx.actions.declare_output(ctx.attrs.name + suffix + ".md.json")
     md_gen = ctx.attrs._generate_target_metadata[RunInfo]
 
+    libname = repr(ctx.label.path).replace("//", "_").replace("/", "_") + "_" + ctx.label.name
+    pkgname = libname.replace("_", "-")
+
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     toolchain_libs = [dep.name for dep in attr_deps_haskell_toolchain_libraries(ctx)]
 
@@ -272,6 +276,7 @@ def target_metadata(
             strip_prefix = _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
             suffix = suffix,
             toolchain_libs = toolchain_libs,
+            worker_id = pkgname,
         ),
     ))
 
@@ -443,7 +448,8 @@ def _common_compile_module_args(
 ) -> CommonCompileModuleArgs:
     command = cmd_args(ghc_wrapper)
     command.add("--ghc", haskell_toolchain.compiler)
-
+    worker_id = pkgname
+    command.add("--worker-id", worker_id)
     # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
     # be parsed when inside an argsfile.
     command.add(haskell_toolchain.compiler_flags)
