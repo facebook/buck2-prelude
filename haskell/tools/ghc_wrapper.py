@@ -75,8 +75,10 @@ def main():
     )
 
     args, ghc_args = parser.parse_known_args()
+    worker_args = ["--worker-id=ABCDE"]
 
-    cmd = [args.ghc] + ghc_args
+    print("WOOROROR", file=sys.stderr)
+    cmd = [args.ghc] + worker_args + ghc_args
 
     aux_paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()] + [str(os.path.dirname(binexepath)) for binexepath in args.bin_exe]
     env = os.environ.copy()
@@ -130,8 +132,9 @@ def main():
 def recompute_abi_hash(ghc, abi_out):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
     hi_file = abi_out.with_suffix("")
+    worker_args = ["--worker-id=ABCDE"]
 
-    cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file]
+    cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file] + worker_args
 
     hash = subprocess.check_output(cmd, text=True).split(maxsplit=1)[0]
 
