@@ -40,6 +40,9 @@ def main():
         "--worker-id", required=True, type=str, help="worker id",
     )
     parser.add_argument(
+        "--worker-close", required=False, type=bool, default=False, help="worker close",
+    )
+    parser.add_argument(
         "--ghc", required=True, type=str, help="Path to the Haskell compiler GHC."
     )
     parser.add_argument(
@@ -78,9 +81,8 @@ def main():
     )
 
     args, ghc_args = parser.parse_known_args()
-    worker_args = ["--worker-id={}".format(args.worker_id)]
+    worker_args = ["--worker-id={}".format(args.worker_id)] + ["--worker-close"] if args.worker_close else []
 
-    print("WOOROROR", file=sys.stderr)
     cmd = [args.ghc] + worker_args + ghc_args
 
     aux_paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()] + [str(os.path.dirname(binexepath)) for binexepath in args.bin_exe]
