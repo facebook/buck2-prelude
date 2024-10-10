@@ -24,11 +24,14 @@ def _deps_arg():
      from which this rules sources import modules or native linkable rules exporting symbols
      this rules sources call into.
 """),
+        "srcs_deps": attrs.dict(attrs.source(), attrs.list(attrs.source()), default = {}, doc = """
+    Allows to declare dependencies for sources manually, additionally to the dependencies automatically detected.
+        """),
     }
 
 def _compiler_flags_arg():
     return {
-        "compiler_flags": attrs.list(attrs.string(), default = [], doc = """
+        "compiler_flags": attrs.list(attrs.arg(), default = [], doc = """
     Flags to pass to the Haskell compiler when compiling this rule's sources.
 """),
     }
@@ -40,9 +43,46 @@ def _exported_linker_flags_arg():
 """),
     }
 
+def _scripts_arg():
+    return {
+        "_generate_target_metadata": attrs.dep(
+            providers = [RunInfo],
+            default = "prelude//haskell/tools:generate_target_metadata",
+        ),
+        "_ghc_wrapper": attrs.dep(
+            providers = [RunInfo],
+            default = "prelude//haskell/tools:ghc_wrapper",
+        ),
+    }
+
+def _external_tools_arg():
+    return {
+        "external_tools": attrs.list(attrs.dep(providers = [RunInfo]), default = [], doc = """
+    External executables called from Haskell compiler during preprocessing or compilation.
+"""),
+    }
+
+def _srcs_envs_arg():
+    return {
+        "srcs_envs": attrs.dict(attrs.source(), attrs.dict(attrs.string(), attrs.arg()), default = {}, doc = """
+    Individual run-time env for each source compilation.
+"""),
+    }
+
+def _use_argsfile_at_link_arg():
+    return {
+        "use_argsfile_at_link": attrs.bool(default = False, doc = """
+    Use response file at linking.
+"""),
+    }
+
 haskell_common = struct(
     srcs_arg = _srcs_arg,
     deps_arg = _deps_arg,
     compiler_flags_arg = _compiler_flags_arg,
     exported_linker_flags_arg = _exported_linker_flags_arg,
+    scripts_arg = _scripts_arg,
+    external_tools_arg = _external_tools_arg,
+    srcs_envs_arg = _srcs_envs_arg,
+    use_argsfile_at_link_arg = _use_argsfile_at_link_arg,
 )
