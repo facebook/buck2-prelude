@@ -81,7 +81,7 @@ def main():
     )
 
     args, ghc_args = parser.parse_known_args()
-    worker_args = ["--worker-id={}".format(args.worker_id)] + ["--worker-close"] if args.worker_close else []
+    worker_args = ["--worker-id={}".format(args.worker_id)] + (["--worker-close"] if args.worker_close else [])
 
     cmd = [args.ghc] + worker_args + ghc_args
 
