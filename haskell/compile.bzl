@@ -201,7 +201,8 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     md_args = cmd_args(arg.md_gen)
     md_args.add(packages_info.bin_paths)
     md_args.add("--ghc", arg.haskell_toolchain.compiler)
-    md_args.add("--worker-id", arg.worker_id)
+    if arg.haskell_toolchain.use_persistent_workers:
+        md_args.add("--worker-id", arg.worker_id)
     md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
     md_args.add(
         "--source-prefix",
@@ -448,8 +449,9 @@ def _common_compile_module_args(
 ) -> CommonCompileModuleArgs:
     command = cmd_args(ghc_wrapper)
     command.add("--ghc", haskell_toolchain.compiler)
-    worker_id = pkgname
-    command.add("--worker-id", worker_id)
+    if haskell_toolchain.use_persistent_workers:
+        worker_id = pkgname
+        command.add("--worker-id", worker_id)
     # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
     # be parsed when inside an argsfile.
     command.add(haskell_toolchain.compiler_flags)

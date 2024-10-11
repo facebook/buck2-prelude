@@ -37,7 +37,7 @@ def main():
         help="Path to a package db that is used during the module compilation",
     )
     parser.add_argument(
-        "--worker-id", required=True, type=str, help="worker id",
+        "--worker-id", required=False, type=str, help="worker id",
     )
     parser.add_argument(
         "--worker-close", required=False, type=bool, default=False, help="worker close",
@@ -81,8 +81,10 @@ def main():
     )
 
     args, ghc_args = parser.parse_known_args()
-    worker_args = ["--worker-id={}".format(args.worker_id)] + (["--worker-close"] if args.worker_close else [])
-
+    if args.worker_id:
+        worker_args = ["--worker-id={}".format(args.worker_id)] + (["--worker-close"] if args.worker_close else [])
+    else:
+        worker_args = []
     cmd = [args.ghc] + worker_args + ghc_args
 
     aux_paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()] + [str(os.path.dirname(binexepath)) for binexepath in args.bin_exe]
@@ -137,7 +139,10 @@ def main():
 def recompute_abi_hash(ghc, abi_out, worker_id):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
     hi_file = abi_out.with_suffix("")
-    worker_args = ["--worker-id={}".format(worker_id)]
+    if worker_id:
+        worker_args = ["--worker-id={}".format(worker_id)]
+    else:
+        worker_args = []
 
     cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file] + worker_args
 

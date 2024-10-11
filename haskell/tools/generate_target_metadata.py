@@ -37,7 +37,7 @@ def main():
         help="Write package metadata to this file in JSON format.")
     parser.add_argument(
         "--worker-id",
-        required=True,
+        required=False,
         type=str,
         help="Worker id")
     parser.add_argument(
@@ -196,7 +196,10 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths, worker_id):
         make_fname = os.path.join(dname, "depends.make")
         haskell_sources = list(filter(is_haskell_src, sources))
         haskell_boot_sources = list(filter (is_haskell_boot, sources))
-        worker_args = ["--worker-id={}".format(worker_id)]
+        if worker_id:
+            worker_args = ["--worker-id={}".format(worker_id)]
+        else:
+            worker_args = []
         args = [
             ghc, "-M", "-include-pkg-deps",
             # Note: `-outputdir '.'` removes the prefix of all targets:
