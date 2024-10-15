@@ -601,7 +601,7 @@ def _dynamic_link_shared_impl(actions, pkg_deps, lib, arg):
     link_cmd.add("-o", lib)
 
     if arg.haskell_toolchain.use_persistent_workers:
-        link_cmd.add("--worker-id={}".format(arg.worker_id))
+        link_cmd.add("--worker-target-id={}".format(arg.worker_target_id))
         link_cmd.add("--worker-close")
 
     actions.run(
@@ -697,7 +697,7 @@ def _build_haskell_lib(
                 objects = objects,
                 toolchain_libs = toolchain_libs,
                 use_argsfile_at_link = ctx.attrs.use_argsfile_at_link,
-                worker_id = pkgname,
+                worker_target_id = pkgname,
             ),
         ))
 

@@ -36,7 +36,7 @@ def main():
         type=argparse.FileType("w"),
         help="Write package metadata to this file in JSON format.")
     parser.add_argument(
-        "--worker-id",
+        "--worker-target-id",
         required=False,
         type=str,
         help="Worker id")
@@ -91,7 +91,7 @@ def json_default_handler(o):
 
 def obtain_target_metadata(args):
     paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
-    ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source, paths, args.worker_id)
+    ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source, paths, args.worker_target_id)
     th_modules = determine_th_modules(ghc_depends)
     module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
     module_graph = determine_module_graph(ghc_depends)
@@ -190,14 +190,14 @@ def determine_package_deps(ghc_depends):
     return package_deps
 
 
-def run_ghc_depends(ghc, ghc_args, sources, aux_paths, worker_id):
+def run_ghc_depends(ghc, ghc_args, sources, aux_paths, worker_target_id):
     with tempfile.TemporaryDirectory() as dname:
         json_fname = os.path.join(dname, "depends.json")
         make_fname = os.path.join(dname, "depends.make")
         haskell_sources = list(filter(is_haskell_src, sources))
         haskell_boot_sources = list(filter (is_haskell_boot, sources))
-        if worker_id:
-            worker_args = ["--worker-id={}".format(worker_id)]
+        if worker_target_id:
+            worker_args = ["--worker-target-id={}".format(worker_target_id)]
         else:
             worker_args = []
         args = [

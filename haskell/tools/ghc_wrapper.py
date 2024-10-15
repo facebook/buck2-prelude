@@ -37,7 +37,7 @@ def main():
         help="Path to a package db that is used during the module compilation",
     )
     parser.add_argument(
-        "--worker-id", required=False, type=str, help="worker id",
+        "--worker-target-id", required=False, type=str, help="worker target id",
     )
     parser.add_argument(
         "--worker-close", required=False, type=bool, default=False, help="worker close",
@@ -81,8 +81,8 @@ def main():
     )
 
     args, ghc_args = parser.parse_known_args()
-    if args.worker_id:
-        worker_args = ["--worker-id={}".format(args.worker_id)] + (["--worker-close"] if args.worker_close else [])
+    if args.worker_target_id:
+        worker_args = ["--worker-target-id={}".format(args.worker_target_id)] + (["--worker-close"] if args.worker_close else [])
     else:
         worker_args = []
     cmd = [args.ghc] + worker_args + ghc_args
@@ -108,7 +108,7 @@ def main():
     if returncode != 0:
         return returncode
 
-    recompute_abi_hash(args.ghc, args.abi_out, args.worker_id)
+    recompute_abi_hash(args.ghc, args.abi_out, args.worker_target_id)
 
     # write an empty dep file, to signal that all tagged files are unused
     try:
@@ -136,11 +136,11 @@ def main():
     return 0
 
 
-def recompute_abi_hash(ghc, abi_out, worker_id):
+def recompute_abi_hash(ghc, abi_out, worker_target_id):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
     hi_file = abi_out.with_suffix("")
-    if worker_id:
-        worker_args = ["--worker-id={}".format(worker_id)]
+    if worker_target_id:
+        worker_args = ["--worker-target-id={}".format(worker_target_id)]
     else:
         worker_args = []
 
