@@ -14,54 +14,160 @@ load(
 load(
     "@prelude//haskell:util.bzl",
     "attr_deps",
+    "attr_deps_haskell_link_infos",
+    "src_to_module_name",
 )
-load("@prelude//utils:argfile.bzl", "at_argfile")
+load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
+load("@prelude//:paths.bzl", "paths")
 
 HaskellHaddockInfo = provider(
     fields = {
-        "html": provider_field(typing.Any, default = None),
-        "interface": provider_field(typing.Any, default = None),
+        "html": provider_field(dict[str, typing.Any], default = {}),
+        "interfaces": provider_field(list[typing.Any], default = []),
     },
 )
 
-def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
-    iface = ctx.actions.declare_output("haddock-interface")
-    odir = ctx.actions.declare_output("haddock-html", dir = True)
+_HaddockInfo = record(
+    interface = Artifact,
+    haddock = Artifact,
+    html = Artifact,
+)
 
-    link_style = cxx_toolchain_link_style(ctx)
-    args = compile_args(
-        ctx,
-        link_style,
-        enable_profiling = False,
-        suffix = "-haddock",
-        pkgname = pkgname,
+def _haskell_interfaces_args(info: _HaddockInfo):
+    return cmd_args(info.interface, format="--one-shot-dep-hi={}")
+
+_HaddockInfoTSet = transitive_set(
+    args_projections = {
+        "interfaces": _haskell_interfaces_args
+    }
+)
+
+def _haddock_module_to_html(module_name: str) -> str:
+    return module_name.replace(".", "-") + ".html"
+
+def _haddock_dump_interface(
+    actions: AnalysisActions,
+    cmd: cmd_args,
+    module_name: str,
+    module_tsets: dict[str, _HaddockInfoTSet],
+    haddock_info: _HaddockInfo,
+    module_deps: list[CompiledModuleTSet],
+    graph: dict[str, list[str]],
+    outputs: dict[Artifact, Artifact]) -> _HaddockInfoTSet:
+
+    # Transitive module dependencies from other packages.
+    cross_package_modules = actions.tset(
+        CompiledModuleTSet,
+        children = module_deps,
+    )
+    cross_interfaces = cross_package_modules.project_as_args("interfaces")
+
+    # Transitive module dependencies from the same package.
+    this_package_modules = [
+        module_tsets[dep_name]
+        for dep_name in graph[module_name]
+    ]
+
+    expected_html = outputs[haddock_info.html]
+    module_html = _haddock_module_to_html(module_name)
+
+    if paths.basename(expected_html.short_path) != module_html:
+        html_output = actions.declare_output("haddock-html", module_html)
+        make_copy = True
+    else:
+        html_output = expected_html
+        make_copy = False
+
+    actions.run(
+        cmd.copy().add(
+            "--odir", cmd_args(html_output.as_output(), parent = 1),
+            "--dump-interface", outputs[haddock_info.haddock].as_output(),
+            "--html",
+            "--hoogle",
+            cmd_args(
+                haddock_info.interface,
+                format="--one-shot-hi={}"),
+            cmd_args(
+                [haddock_info.project_as_args("interfaces") for haddock_info in this_package_modules],
+            ),
+            cmd_args(
+                cross_interfaces, format="--one-shot-dep-hi={}"
+            )
+        ),
+        category = "haskell_haddock",
+        identifier = module_name,
+        no_outputs_cleanup = True,
+    )
+    if make_copy:
+        # XXX might as well use `symlink_file`` but that does not work with buck2 RE
+        # (see https://github.com/facebook/buck2/issues/222)
+        actions.copy_file(expected_html.as_output(), html_output)
+
+    return actions.tset(
+        _HaddockInfoTSet,
+        value = _HaddockInfo(interface = haddock_info.interface, haddock = outputs[haddock_info.haddock], html = outputs[haddock_info.html]),
+        children = this_package_modules,
     )
 
+def _dynamic_haddock_dump_interfaces_impl(actions, artifacts, dynamic_values, outputs, arg):
+    md = artifacts[arg.md_file].read_json()
+    module_map = md["module_mapping"]
+    graph = md["module_graph"]
+    package_deps = md["package_deps"]
+
+    dynamic_info_lib = {}
+
+    for lib in arg.direct_deps_link_info:
+        info = lib.info[arg.link_style]
+        direct = info.value
+        dynamic = direct.dynamic[False]
+        dynamic_info = dynamic_values[dynamic].providers[DynamicCompileResultInfo]
+
+        dynamic_info_lib[direct.name] = dynamic_info
+
+    haddock_infos = { module_map.get(k, k): v for k, v in arg.haddock_infos.items() }
+    module_tsets = {}
+
+    for module_name in post_order_traversal(graph):
+        module_deps = [
+            info.modules[mod]
+            for lib, info in dynamic_info_lib.items()
+            for mod in package_deps.get(module_name, {}).get(lib, [])
+        ]
+
+        module_tsets[module_name] = _haddock_dump_interface(
+            actions,
+            arg.dyn_cmd.copy(),
+            module_name = module_name,
+            module_tsets = module_tsets,
+            haddock_info = haddock_infos[module_name],
+            module_deps = module_deps,
+                graph = graph,
+            outputs = outputs,
+        )
+
+    return []
+
+_dynamic_haddock_dump_interfaces = dynamic_actions(impl = _dynamic_haddock_dump_interfaces_impl)
+
+def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileResultInfo, md_file: Artifact) -> HaskellHaddockInfo:
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    link_style = cxx_toolchain_link_style(ctx)
+
     cmd = cmd_args(haskell_toolchain.haddock)
-    cmd.add(cmd_args(args.args_for_cmd, format = "--optghc={}"))
+
     cmd.add(
         "--use-index",
         "doc-index.html",
         "--use-contents",
         "index.html",
-        "--html",
-        "--hoogle",
         "--no-tmp-comp-dir",
         "--no-warnings",
-        "--dump-interface",
-        iface.as_output(),
-        "--odir",
-        odir.as_output(),
         "--package-name",
         pkgname,
     )
-
-    for lib in attr_deps(ctx):
-        hi = lib.get(HaskellHaddockInfo)
-        if hi != None:
-            cmd.add("--read-interface", hi.interface)
 
     cmd.add(ctx.attrs.haddock_flags)
 
@@ -69,44 +175,43 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str) -> Provider:
     if source_entity:
         cmd.add("--source-entity", source_entity)
 
-    if args.args_for_file:
-        if haskell_toolchain.use_argsfile:
-            ghcargs = cmd_args(args.args_for_file, format = "--optghc={}")
-            cmd.add(at_argfile(
-                actions = ctx.actions,
-                name = "args.haskell_haddock_argsfile",
-                args = [ghcargs, args.srcs],
-                allow_args = True,
-            ))
-        else:
-            cmd.add(args.args_for_file)
+    haddock_infos = {
+        src_to_module_name(hi.short_path): _HaddockInfo(
+            interface = hi,
+            haddock = ctx.actions.declare_output("haddock-interface/{}.haddock".format(src_to_module_name(hi.short_path))),
+            html = ctx.actions.declare_output("haddock-html", _haddock_module_to_html(src_to_module_name(hi.short_path))),
+        )
+        for hi in compiled.hi
+        if not hi.extension.endswith("-boot")
+    }
 
-    # Buck2 requires that the output artifacts are always produced, but Haddock only
-    # creates them if it needs to, so we need a wrapper script to mkdir the outputs.
-    script = ctx.actions.declare_output("haddock-script")
-    script_args = cmd_args([
-        "mkdir",
-        "-p",
-        args.result.objects.as_output(),
-        args.result.hi.as_output(),
-        args.result.stubs.as_output(),
-        "&&",
-        cmd_args(cmd, quote = "shell"),
-    ], delimiter = " ")
-    ctx.actions.write(
-        script,
-        cmd_args("#!/bin/sh", script_args),
-        is_executable = True,
-        allow_args = True,
+    direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
+
+    ctx.actions.dynamic_output_new(_dynamic_haddock_dump_interfaces(
+        dynamic = [md_file],
+        dynamic_values = [
+            info.value.dynamic[False]
+            for lib in direct_deps_link_info
+            for info in [
+                #lib.prof_info[link_style]
+                #if enable_profiling else
+                lib.info[link_style],
+            ]
+        ],
+        outputs = [output.as_output() for info in haddock_infos.values() for output in [info.haddock, info.html]],
+        arg = struct(
+            direct_deps_link_info = direct_deps_link_info,
+            dyn_cmd = cmd.copy(),
+            haddock_infos = haddock_infos,
+            link_style = link_style,
+            md_file = md_file,
+        ),
+    ))
+
+    return HaskellHaddockInfo(
+        interfaces = [i.haddock for i in haddock_infos.values()],
+        html = {module: i.html for module, i in haddock_infos.items()},
     )
-
-    ctx.actions.run(
-        cmd_args(script, hidden = cmd),
-        category = "haskell_haddock",
-        no_outputs_cleanup = True,
-    )
-
-    return HaskellHaddockInfo(interface = iface, html = odir)
 
 def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]

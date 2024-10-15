@@ -11,3 +11,15 @@ prelude.python_bootstrap_binary(
     main = "script_template_processor.py",
     visibility = ["PUBLIC"],
 )
+
+prelude.python_bootstrap_binary(
+    name = "generate_target_metadata",
+    main = "generate_target_metadata.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
+    name = "ghc_wrapper",
+    main = "ghc_wrapper.py",
+    visibility = ["PUBLIC"],
+)
