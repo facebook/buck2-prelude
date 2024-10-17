@@ -108,7 +108,7 @@ def main():
     if returncode != 0:
         return returncode
 
-    recompute_abi_hash(args.ghc, args.abi_out, args.worker_target_id)
+    recompute_abi_hash(args.ghc, args.abi_out)
 
     # write an empty dep file, to signal that all tagged files are unused
     try:
@@ -136,13 +136,13 @@ def main():
     return 0
 
 
-def recompute_abi_hash(ghc, abi_out, worker_target_id):
+def recompute_abi_hash(ghc, abi_out): #  worker_target_id
     """Call ghc on the hi file and write the ABI hash to abi_out."""
     hi_file = abi_out.with_suffix("")
-    if worker_target_id:
-        worker_args = ["--worker-target-id={}".format(worker_target_id)]
-    else:
-        worker_args = []
+    #if worker_target_id:
+    worker_args = ["--worker-target-id=show-iface-abi-hash"] # format(worker_target_id)
+    #else:
+    #    worker_args = []
 
     cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file] + worker_args
 
