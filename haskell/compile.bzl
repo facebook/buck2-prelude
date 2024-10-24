@@ -50,6 +50,7 @@ load(
     "@prelude//linking:link_info.bzl",
     "LinkStyle",
 )
+load("@prelude//utils:argfile.bzl", "at_argfile")
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
@@ -100,7 +101,6 @@ CompileResultInfo = record(
 )
 
 PackagesInfo = record(
-    exposed_package_libs = cmd_args,
     exposed_package_args = cmd_args,
     packagedb_args = cmd_args,
     transitive_deps = field(HaskellLibraryInfoTSet),
@@ -228,11 +228,7 @@ def target_metadata(
     md_gen = ctx.attrs._generate_target_metadata[RunInfo]
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    toolchain_libs = [
-        dep[HaskellToolchainLibrary].name
-        for dep in ctx.attrs.deps
-        if HaskellToolchainLibrary in dep
-    ]
+    toolchain_libs = [dep.name for dep in attr_deps_haskell_toolchain_libraries(ctx)]
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
@@ -335,27 +331,37 @@ def get_packages_info2(
 
     # Collect library dependencies. Note that these don't need to be in a
     # particular order.
-    libs = actions.tset(HaskellLibraryInfoTSet, children = [
-        lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
-        for lib in direct_deps_link_info
-    ])
+    libs = actions.tset(
+        HaskellLibraryInfoTSet,
+        children = [
+            lib.prof_info[link_style] if enable_profiling else lib.info[link_style]
+            for lib in direct_deps_link_info
+        ],
+    )
 
     # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
 
-    hidden_args = [l for lib in libs.traverse() for l in lib.libs]
-
-    exposed_package_libs = cmd_args()
-    exposed_package_args = cmd_args([package_flag, "base"], hidden = hidden_args)
+    exposed_package_args = cmd_args([package_flag, "base"])
 
     if for_deps:
-        package_db_projection = "deps_package_db"
+        get_db = lambda l: l.deps_db
     elif use_empty_lib:
-        package_db_projection = "empty_package_db"
+        get_db = lambda l: l.empty_db
     else:
-        package_db_projection = "package_db"
+        get_db = lambda l: l.db
 
-    packagedb_args = cmd_args(libs.project_as_args(package_db_projection))
+    packagedb_args = cmd_args()
+    packagedb_set = {}
+
+    for lib in libs.traverse():
+        packagedb_set[get_db(lib)] = None
+        hidden_args = cmd_args(hidden = [
+            lib.import_dirs.values(),
+            lib.stub_dirs,
+            lib.libs,
+        ])
+        exposed_package_args.add(hidden_args)
 
     if resolved:
         pkg_deps = resolved[haskell_toolchain.packages.dynamic]
@@ -376,6 +382,10 @@ def get_packages_info2(
         children = [package_db[name] for name in toolchain_libs if name in package_db]
     )
 
+    # These we need to add for all the packages/dependencies, i.e.
+    # direct and transitive (e.g. `fbcode-common-hs-util-hs-array`)
+    packagedb_args.add(packagedb_set.keys())
+
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
     direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
@@ -390,7 +400,6 @@ def get_packages_info2(
         exposed_package_args.add(package_flag, pkg_name)
 
     return PackagesInfo(
-        exposed_package_libs = exposed_package_libs,
         exposed_package_args = exposed_package_args,
         packagedb_args = packagedb_args,
         transitive_deps = libs,
@@ -421,8 +430,6 @@ def _common_compile_module_args(
     direct_deps_info: list[HaskellLibraryInfoTSet],
     pkgname: str | None = None,
 ) -> CommonCompileModuleArgs:
-    #haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
     command = cmd_args(ghc_wrapper)
     command.add("--ghc", haskell_toolchain.compiler)
 
@@ -654,12 +661,12 @@ def _compile_module(
                 format="--extra-env-value={}",
             ))
     if haskell_toolchain.use_argsfile:
-        argsfile = actions.declare_output(
-            "haskell_compile_" + artifact_suffix + ".argsfile",
-        )
-        actions.write(argsfile.as_output(), compile_args_for_file, allow_args = True)
-        compile_cmd_args.append(cmd_args(argsfile, format = "@{}"))
-        compile_cmd_hidden.append(compile_args_for_file)
+        compile_cmd_args.append(at_argfile(
+            actions = actions,
+            name = "haskell_compile_" + artifact_suffix + ".argsfile",
+            args = compile_args_for_file,
+            allow_args = True,
+        ))
     else:
         compile_cmd_args.append(compile_args_for_file)
 

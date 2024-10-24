@@ -43,6 +43,7 @@ load(
 )
 load(
     "@prelude//linking:linkable_graph.bzl",
+    "LinkableGraph",
     "LinkableRootInfo",
     "create_linkable_graph",
     "get_deps_for_link",
@@ -183,7 +184,11 @@ def _build_haskell_omnibus_so(ctx: AnalysisContext) -> HaskellOmnibusData:
         for nlabel, n in graph_nodes.items()
     }
 
-    all_direct_deps = [dep.label for dep in all_deps]
+    all_direct_deps = []
+    for dep in all_deps:
+        graph = dep.get(LinkableGraph)
+        if graph:
+            all_direct_deps.append(graph.label)
     dep_graph[ctx.label] = all_direct_deps
 
     # Need to exclude all transitive deps of excluded deps
@@ -327,6 +332,11 @@ def _build_haskell_omnibus_so(ctx: AnalysisContext) -> HaskellOmnibusData:
         so_symlinks_root = so_symlinks_root,
     )
 
+def _get_default_output(dependency: Dependency | None) -> Artifact | None:
+    if dependency == None:
+        return None
+    return dependency.get(DefaultInfo).default_outputs[0]
+
 # Use the script_template_processor.py script to generate a script from a
 # script template.
 def _replace_macros_in_script_template(
@@ -346,16 +356,16 @@ def _replace_macros_in_script_template(
         # Optional string args
         srcs: [str, None] = None,
         output_name: [str, None] = None,
-        ghci_iserv_path: [str, None] = None,
+        ghci_iserv_path: [Artifact, None] = None,
         preload_libs: [str, None] = None) -> Artifact:
     toolchain_paths = {
         BINUTILS_PATH: haskell_toolchain.ghci_binutils_path,
-        GHCI_LIB_PATH: haskell_toolchain.ghci_lib_path,
+        GHCI_LIB_PATH: _get_default_output(haskell_toolchain.ghci_lib_path),
         CC_PATH: haskell_toolchain.ghci_cc_path,
         CPP_PATH: haskell_toolchain.ghci_cpp_path,
         CXX_PATH: haskell_toolchain.ghci_cxx_path,
-        GHCI_PACKAGER: haskell_toolchain.ghci_packager,
-        GHCI_GHC_PATH: haskell_toolchain.ghci_ghc_path,
+        GHCI_PACKAGER: _get_default_output(haskell_toolchain.ghci_packager),
+        GHCI_GHC_PATH: _get_default_output(haskell_toolchain.ghci_ghc_path),
     }
 
     if ghci_bin != None:
@@ -370,7 +380,7 @@ def _replace_macros_in_script_template(
     replace_cmd.add(cmd_args(script_template, format = "--script_template={}"))
     for name, path in toolchain_paths.items():
         if path:
-            replace_cmd.add(cmd_args("--{}={}".format(name, path)))
+            replace_cmd.add(cmd_args(path, format = "--{}={{}}".format(name)))
 
     replace_cmd.add(cmd_args(
         final_script.as_output(),
@@ -467,7 +477,7 @@ def _write_iserv_script(
         script_template = ghci_iserv_template,
         output_name = iserv_script_name,
         haskell_toolchain = haskell_toolchain,
-        ghci_iserv_path = ghci_iserv_path,
+        ghci_iserv_path = _get_default_output(ghci_iserv_path),
         preload_libs = preload_libs,
     )
     return iserv_script
@@ -642,11 +652,11 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
     package_symlinks_root = ctx.label.name + ".packages"
 
     packagedb_args = cmd_args(delimiter = " ")
-    prebuilt_packagedb_args = cmd_args(delimiter = " ")
+    prebuilt_packagedb_args_set = {}
 
     for lib in packages_info.transitive_deps.traverse():
         if lib.is_prebuilt:
-            prebuilt_packagedb_args.add(lib.db)
+            prebuilt_packagedb_args_set[lib.db] = None
         else:
             lib_symlinks_root = paths.join(
                 package_symlinks_root,
@@ -677,6 +687,7 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
                     "packagedb",
                 ),
             )
+    prebuilt_packagedb_args = cmd_args(prebuilt_packagedb_args_set.keys(), delimiter = " ")
 
     script_templates = []
     for script_template in ctx.attrs.extra_script_templates:

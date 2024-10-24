@@ -21,6 +21,7 @@ load(
 load(
     "@prelude//cxx:cxx_toolchain_types.bzl",
     "CxxToolchainInfo",
+    "LinkerType",
     "PicBehavior",
 )
 load("@prelude//cxx:groups.bzl", "get_dedupped_roots_from_groups")
@@ -87,6 +88,7 @@ load(
     "attr_deps_haskell_link_infos_sans_template_deps",
     "attr_deps_haskell_lib_infos",
     "attr_deps_haskell_link_infos",
+    "attr_deps_haskell_toolchain_libraries",
     "attr_deps_merged_link_infos",
     "attr_deps_profiling_link_infos",
     "attr_deps_shared_library_infos",
@@ -146,6 +148,7 @@ load(
     "@prelude//python:python.bzl",
     "PythonLibraryInfo",
 )
+load("@prelude//utils:argfile.bzl", "at_argfile")
 load("@prelude//utils:set.bzl", "set")
 load("@prelude//utils:utils.bzl", "filter_and_map_idx", "flatten")
 
@@ -265,7 +268,7 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
         def archive_linkable(lib):
             return ArchiveLinkable(
                 archive = Archive(artifact = lib),
-                linker_type = "gnu",
+                linker_type = LinkerType("gnu"),
             )
 
         def shared_linkable(lib):
@@ -283,15 +286,17 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
         ]
 
         hlibinfos[link_style] = hlibinfo
-        hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = hlibinfo, children = [
-            lib.info[link_style]
-            for lib in haskell_infos
-        ])
+        hlinkinfos[link_style] = ctx.actions.tset(
+            HaskellLibraryInfoTSet,
+            value = hlibinfo,
+            children = [lib.info[link_style] for lib in haskell_infos],
+        )
         prof_hlibinfos[link_style] = prof_hlibinfo
-        prof_hlinkinfos[link_style] = ctx.actions.tset(HaskellLibraryInfoTSet, value = prof_hlibinfo, children = [
-            lib.prof_info[link_style]
-            for lib in haskell_infos
-        ])
+        prof_hlinkinfos[link_style] = ctx.actions.tset(
+            HaskellLibraryInfoTSet,
+            value = prof_hlibinfo,
+            children = [lib.prof_info[link_style] for lib in haskell_infos],
+        )
         link_infos[link_style] = LinkInfos(
             default = LinkInfo(
                 pre_flags = ctx.attrs.exported_linker_flags,
@@ -361,7 +366,7 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
     inherited_pp_info = cxx_inherited_preprocessor_infos(ctx.attrs.deps)
     own_pp_info = CPreprocessor(
-        relative_args = CPreprocessorArgs(args = flatten([["-isystem", d] for d in ctx.attrs.cxx_header_dirs])),
+        args = CPreprocessorArgs(args = flatten([["-isystem", d] for d in ctx.attrs.cxx_header_dirs])),
     )
 
     return [
@@ -531,10 +536,12 @@ HaskellLibBuildOutput = record(
     libs = list[Artifact],
 )
 
-def _get_haskell_shared_library_name_linker_flags(linker_type: str, soname: str) -> list[str]:
-    if linker_type == "gnu":
+def _get_haskell_shared_library_name_linker_flags(
+        linker_type: LinkerType,
+        soname: str) -> list[str]:
+    if linker_type == LinkerType("gnu"):
         return ["-Wl,-soname,{}".format(soname)]
-    elif linker_type == "darwin":
+    elif linker_type == LinkerType("darwin"):
         # Passing `-install_name @rpath/...` or
         # `-Xlinker -install_name -Xlinker @rpath/...` instead causes
         # ghc-9.6.3: panic! (the 'impossible' happened)
@@ -573,14 +580,13 @@ def _dynamic_link_shared_impl(actions, artifacts, dynamic_values, outputs, arg):
 
     link_args.add(cmd_args(unpack_link_args(arg.infos), prepend = "-optl"))
 
-
     if arg.use_argsfile_at_link:
-        argsfile = actions.declare_output(
-            "haskell_link_" + arg.artifact_suffix.replace("-", "_") + ".argsfile",
-        )
-        actions.write(argsfile.as_output(), link_args, allow_args = True)
-        link_cmd_args.append(cmd_args(argsfile, format = "@{}"))
-        link_cmd_hidden.append(link_args)
+        link_cmd_args.append(at_argfile(
+            actions = actions,
+            name = "haskell_link_" + arg.artifact_suffix.replace("-", "_") + ".argsfile",
+            args = link_args,
+            allow_args = True,
+        ))
     else:
         link_cmd_args.append(link_args)
 
@@ -638,8 +644,10 @@ def _build_haskell_lib(
 
     linfos = [x.prof_info if enable_profiling else x.info for x in hlis]
 
+    # only gather direct dependencies
     uniq_infos = [x[link_style].value for x in linfos]
-    toolchain_libs = [dep[HaskellToolchainLibrary].name for dep in ctx.attrs.deps if HaskellToolchainLibrary in dep]
+
+    toolchain_libs = [dep.name for dep in attr_deps_haskell_toolchain_libraries(ctx)] 
 
     if link_style == LinkStyle("shared"):
         lib = ctx.actions.declare_output(lib_short_path)
@@ -1088,7 +1096,9 @@ def _make_link_package(
     pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + "_link.conf", conf)
     db = ctx.actions.declare_output("db-" + artifact_suffix + "_link", dir = True)
 
-    db_deps = [x.db for x in hlis]
+    # While the list of hlis is unique, there may be multiple packages in the same db.
+    # Cutting down the GHC_PACKAGE_PATH significantly speeds up GHC.
+    db_deps = {x.db: None for x in hlis}.keys()
 
     # So that ghc-pkg can find the DBs for the dependencies. We might
     # be able to use flags for this instead, but this works.
@@ -1138,8 +1148,6 @@ def _dynamic_link_binary_impl(actions, artifacts, dynamic_values, outputs, arg):
     link_cmd.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
     link_cmd.add(arg.haskell_toolchain.linker_flags)
     link_cmd.add(arg.linker_flags)
-
-    link_cmd.add(cmd_args(hidden = packages_info.exposed_package_libs))
 
     link_cmd.add("-o", outputs[arg.output].as_output())
 
