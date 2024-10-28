@@ -202,7 +202,7 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     md_args.add(packages_info.bin_paths)
     md_args.add("--ghc", arg.haskell_toolchain.compiler)
     if arg.haskell_toolchain.use_persistent_workers:
-        md_args.add("--worker-target-id", arg.worker_target_id)
+        md_args.add("--worker-target-id", "haskell_metadata")
     md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
     md_args.add(
         "--source-prefix",
@@ -277,7 +277,6 @@ def target_metadata(
             strip_prefix = _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
             suffix = suffix,
             toolchain_libs = toolchain_libs,
-            worker_target_id = pkgname,
         ),
     ))
 
