@@ -83,8 +83,10 @@ def main():
     args, ghc_args = parser.parse_known_args()
     if args.worker_target_id:
         worker_args = ["--worker-target-id={}".format(args.worker_target_id)] + (["--worker-close"] if args.worker_close else [])
+        use_persistent_workers = True
     else:
         worker_args = []
+        use_persistent_workers = False
     cmd = [args.ghc] + worker_args + ghc_args
 
     aux_paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()] + [str(os.path.dirname(binexepath)) for binexepath in args.bin_exe]
@@ -108,7 +110,7 @@ def main():
     if returncode != 0:
         return returncode
 
-    recompute_abi_hash(args.ghc, args.abi_out)
+    recompute_abi_hash(args.ghc, args.abi_out, use_persistent_workers)
 
     # write an empty dep file, to signal that all tagged files are unused
     try:
@@ -136,13 +138,13 @@ def main():
     return 0
 
 
-def recompute_abi_hash(ghc, abi_out): #  worker_target_id
+def recompute_abi_hash(ghc, abi_out, use_persistent_workers):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
     hi_file = abi_out.with_suffix("")
-    #if worker_target_id:
-    worker_args = ["--worker-target-id=show-iface-abi-hash"] # format(worker_target_id)
-    #else:
-    #    worker_args = []
+    if use_persistent_workers:
+        worker_args = ["--worker-target-id=show-iface-abi-hash"]
+    else:
+        worker_args = []
 
     cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file] + worker_args
 
