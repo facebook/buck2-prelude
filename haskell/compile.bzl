@@ -446,9 +446,10 @@ def _common_compile_module_args(
     direct_deps_info: list[HaskellLibraryInfoTSet],
     pkgname: str | None = None,
 ) -> CommonCompileModuleArgs:
+
     command = cmd_args(ghc_wrapper)
     command.add("--ghc", haskell_toolchain.compiler)
-    if haskell_toolchain.use_persistent_workers:
+    if haskell_toolchain.use_persistent_workers and pkgname:
         worker_target_id = pkgname
         command.add("--worker-target-id", worker_target_id)
     # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
