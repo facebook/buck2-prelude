@@ -26,9 +26,9 @@ HaskellLibraryInfo = record(
     # package config database: e.g. platform009/build/ghc/lib/package.conf.d
     db = Artifact,
     # package config database, referring to the empty lib which is only used for compilation
-    empty_db = Artifact,
-    # pacakge config database, used for ghc -M
-    deps_db = Artifact,
+    empty_db = Artifact | None,
+    # package config database, used for ghc -M
+    deps_db = Artifact | None,
     # e.g. "base-4.13.0.0"
     id = str,
     # dynamic dependency information

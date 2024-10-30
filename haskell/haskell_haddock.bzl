@@ -54,7 +54,7 @@ def _haddock_dump_interface(
     haddock_info: _HaddockInfo,
     module_deps: list[CompiledModuleTSet],
     graph: dict[str, list[str]],
-    outputs: dict[Artifact, Artifact]) -> _HaddockInfoTSet:
+    outputs: dict[Artifact, OutputArtifact]) -> _HaddockInfoTSet:
 
     # Transitive module dependencies from other packages.
     cross_package_modules = actions.tset(
@@ -69,7 +69,7 @@ def _haddock_dump_interface(
         for dep_name in graph[module_name]
     ]
 
-    expected_html = outputs[haddock_info.html]
+    expected_html = haddock_info.html
     module_html = _haddock_module_to_html(module_name)
 
     if paths.basename(expected_html.short_path) != module_html:
@@ -82,7 +82,7 @@ def _haddock_dump_interface(
     actions.run(
         cmd.copy().add(
             "--odir", cmd_args(html_output.as_output(), parent = 1),
-            "--dump-interface", outputs[haddock_info.haddock].as_output(),
+            "--dump-interface", outputs[haddock_info.haddock],
             "--html",
             "--hoogle",
             cmd_args(
@@ -102,36 +102,26 @@ def _haddock_dump_interface(
     if make_copy:
         # XXX might as well use `symlink_file`` but that does not work with buck2 RE
         # (see https://github.com/facebook/buck2/issues/222)
-        actions.copy_file(expected_html.as_output(), html_output)
+        actions.copy_file(outputs[expected_html], html_output)
 
     return actions.tset(
         _HaddockInfoTSet,
-        value = _HaddockInfo(interface = haddock_info.interface, haddock = outputs[haddock_info.haddock], html = outputs[haddock_info.html]),
+        value = _HaddockInfo(interface = haddock_info.interface, haddock = haddock_info.haddock, html = haddock_info.html),
         children = this_package_modules,
     )
 
-def _dynamic_haddock_dump_interfaces_impl(actions, artifacts, dynamic_values, outputs, arg):
-    md = artifacts[arg.md_file].read_json()
+def _dynamic_haddock_dump_interfaces_impl(actions, md_file, dynamic_info_lib, outputs, arg):
+    md = md_file.read_json()
     module_map = md["module_mapping"]
     graph = md["module_graph"]
     package_deps = md["package_deps"]
-
-    dynamic_info_lib = {}
-
-    for lib in arg.direct_deps_link_info:
-        info = lib.info[arg.link_style]
-        direct = info.value
-        dynamic = direct.dynamic[False]
-        dynamic_info = dynamic_values[dynamic].providers[DynamicCompileResultInfo]
-
-        dynamic_info_lib[direct.name] = dynamic_info
 
     haddock_infos = { module_map.get(k, k): v for k, v in arg.haddock_infos.items() }
     module_tsets = {}
 
     for module_name in post_order_traversal(graph):
         module_deps = [
-            info.modules[mod]
+            info.providers[DynamicCompileResultInfo].modules[mod]
             for lib, info in dynamic_info_lib.items()
             for mod in package_deps.get(module_name, {}).get(lib, [])
         ]
@@ -149,7 +139,15 @@ def _dynamic_haddock_dump_interfaces_impl(actions, artifacts, dynamic_values, ou
 
     return []
 
-_dynamic_haddock_dump_interfaces = dynamic_actions(impl = _dynamic_haddock_dump_interfaces_impl)
+_dynamic_haddock_dump_interfaces = dynamic_actions(
+    impl = _dynamic_haddock_dump_interfaces_impl,
+    attrs = {
+        "md_file": dynattrs.artifact_value(),
+        "arg": dynattrs.value(typing.Any),
+        "dynamic_info_lib": dynattrs.dict(str, dynattrs.dynamic_value()),
+        "outputs": dynattrs.dict(Artifact, dynattrs.output()),
+    },
+)
 
 def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileResultInfo, md_file: Artifact) -> HaskellHaddockInfo:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -188,19 +186,18 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileRes
     direct_deps_link_info = attr_deps_haskell_link_infos(ctx)
 
     ctx.actions.dynamic_output_new(_dynamic_haddock_dump_interfaces(
-        dynamic = [md_file],
-        dynamic_values = [
-            info.value.dynamic[False]
+        md_file = md_file,
+        dynamic_info_lib = {
+            info.value.name: info.value.dynamic[False]
             for lib in direct_deps_link_info
             for info in [
                 #lib.prof_info[link_style]
                 #if enable_profiling else
                 lib.info[link_style],
             ]
-        ],
-        outputs = [output.as_output() for info in haddock_infos.values() for output in [info.haddock, info.html]],
+        },
+        outputs = {output: output.as_output() for info in haddock_infos.values() for output in [info.haddock, info.html]},
         arg = struct(
-            direct_deps_link_info = direct_deps_link_info,
             dyn_cmd = cmd.copy(),
             haddock_infos = haddock_infos,
             link_style = link_style,

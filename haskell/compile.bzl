@@ -170,7 +170,7 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
     return modules
 
-def _dynamic_target_metadata_impl(actions, artifacts, dynamic_values, outputs, arg):
+def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provider]:
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
 
@@ -185,7 +185,7 @@ def _dynamic_target_metadata_impl(actions, artifacts, dynamic_values, outputs, a
         enable_profiling = False,
         use_empty_lib = True,
         for_deps = True,
-        resolved = dynamic_values,
+        pkg_deps = pkg_deps,
     )
     package_flag = _package_flag(arg.haskell_toolchain)
     ghc_args = cmd_args()
@@ -210,13 +210,20 @@ def _dynamic_target_metadata_impl(actions, artifacts, dynamic_values, outputs, a
     md_args.add(
         arg.lib_package_name_and_prefix,
     )
-    md_args.add("--output", outputs[arg.md_file].as_output())
+    md_args.add("--output", output)
 
     actions.run(md_args, category = "haskell_metadata", identifier = arg.suffix if arg.suffix else None)
 
     return []
 
-_dynamic_target_metadata = dynamic_actions(impl = _dynamic_target_metadata_impl)
+_dynamic_target_metadata = dynamic_actions(
+    impl = _dynamic_target_metadata_impl,
+    attrs = {
+        "output": dynattrs.output(),
+        "arg": dynattrs.value(typing.Any),
+        "pkg_deps": dynattrs.option(dynattrs.dynamic_value()),
+    },
+)
 
 def target_metadata(
         ctx: AnalysisContext,
@@ -245,9 +252,8 @@ def target_metadata(
     # (module X.Y.Z must be defined in a file at X/Y/Z.hs)
 
     ctx.actions.dynamic_output_new(_dynamic_target_metadata(
-        dynamic = [],
-        dynamic_values = [haskell_toolchain.packages.dynamic] if haskell_toolchain.packages else [],
-        outputs = [md_file.as_output()],
+        pkg_deps = haskell_toolchain.packages.dynamic if haskell_toolchain.packages else None,
+        output = md_file.as_output(),
         arg = struct(
             compiler_flags = ctx.attrs.compiler_flags,
             deps = ctx.attrs.deps,
@@ -255,7 +261,6 @@ def target_metadata(
             haskell_direct_deps_lib_infos = haskell_direct_deps_lib_infos,
             haskell_toolchain = haskell_toolchain,
             lib_package_name_and_prefix =_attr_deps_haskell_lib_package_name_and_prefix(ctx),
-            md_file = md_file,
             md_gen = md_gen,
             sources = sources,
             strip_prefix = _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
@@ -313,7 +318,7 @@ def get_packages_info(
         specify_pkg_version = specify_pkg_version,
         enable_profiling = enable_profiling,
         use_empty_lib = use_empty_lib,
-        resolved = {},
+        pkg_deps = None,
     )
 
 def get_packages_info2(
@@ -326,7 +331,7 @@ def get_packages_info2(
     specify_pkg_version: bool,
     enable_profiling: bool,
     use_empty_lib: bool,
-    resolved: dict[DynamicValue, ResolvedDynamicValue],
+    pkg_deps: ResolvedDynamicValue | None,
     for_deps: bool = False) -> PackagesInfo:
 
     # Collect library dependencies. Note that these don't need to be in a
@@ -363,8 +368,7 @@ def get_packages_info2(
         ])
         exposed_package_args.add(hidden_args)
 
-    if resolved:
-        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
+    if pkg_deps:
         package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
     else:
         package_db = {}
@@ -418,7 +422,7 @@ def _common_compile_module_args(
     compiler_flags: list[ArgLike],
     ghc_wrapper: RunInfo,
     haskell_toolchain: HaskellToolchainInfo,
-    resolved: dict[DynamicValue, ResolvedDynamicValue],
+    pkg_deps: ResolvedDynamicValue | None,
     enable_haddock: bool,
     enable_profiling: bool,
     link_style: LinkStyle,
@@ -493,7 +497,6 @@ def _common_compile_module_args(
     toolchain_libs = direct_toolchain_libs + libs.reduce("packages")
 
     if haskell_toolchain.packages:
-        pkg_deps = resolved[haskell_toolchain.packages.dynamic]
         package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
     else:
         package_db = []
@@ -563,7 +566,7 @@ def _compile_module(
     md_file: Artifact,
     graph: dict[str, list[str]],
     package_deps: dict[str, list[str]],
-    outputs: dict[Artifact, Artifact],
+    outputs: dict[Artifact, OutputArtifact],
     artifact_suffix: str,
     direct_deps_by_name: dict[str, typing.Any],
     toolchain_deps_by_name: dict[str, None],
@@ -590,8 +593,8 @@ def _compile_module(
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
 
-    compile_args_for_file.add("-o", objects[0].as_output())
-    compile_args_for_file.add("-ohi", his[0].as_output())
+    compile_args_for_file.add("-o", objects[0])
+    compile_args_for_file.add("-ohi", his[0])
 
     # Set the output directories. We do not use the -outputdir flag, but set the directories individually.
     # Note, the -outputdir option is shorthand for the combination of -odir, -hidir, -hiedir, -stubdir and -dumpdir.
@@ -603,12 +606,12 @@ def _compile_module(
         )
     if module.stub_dir != None:
         stubs = outputs[module.stub_dir]
-        compile_args_for_file.add("-stubdir", stubs.as_output())
+        compile_args_for_file.add("-stubdir", stubs)
 
     if link_style in [LinkStyle("static_pic"), LinkStyle("static")]:
         compile_args_for_file.add("-dynamic-too")
-        compile_args_for_file.add("-dyno", objects[1].as_output())
-        compile_args_for_file.add("-dynohi", his[1].as_output())
+        compile_args_for_file.add("-dyno", objects[1])
+        compile_args_for_file.add("-dynohi", his[1])
 
     compile_args_for_file.add(module.source)
 
@@ -623,9 +626,9 @@ def _compile_module(
             toolchain_deps.append(dep_pkgname)
         elif dep_pkgname in direct_deps_by_name:
             library_deps.append(dep_pkgname)
-            exposed_package_dbs.append(direct_deps_by_name[dep_pkgname].package_db)
+            exposed_package_dbs.append(direct_deps_by_name[dep_pkgname][0])
             for dep_modname in dep_modules:
-                exposed_package_modules.append(direct_deps_by_name[dep_pkgname].modules[dep_modname])
+                exposed_package_modules.append(direct_deps_by_name[dep_pkgname][1].providers[DynamicCompileResultInfo].modules[dep_modname])
         else:
             fail("Unknown library dependency '{}'. Add the library to the `deps` attribute".format(dep_pkgname))
 
@@ -698,7 +701,7 @@ def _compile_module(
     tagged_dep_file = abi_tag.tag_artifacts(dep_file)
 
     compile_cmd.add("--buck2-dep", tagged_dep_file)
-    compile_cmd.add("--abi-out", outputs[module.hash].as_output())
+    compile_cmd.add("--abi-out", outputs[module.hash])
 
     actions.run(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
@@ -720,14 +723,7 @@ def _compile_module(
 
     return module_tset
 
-def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
-    direct_deps_by_name = {
-        info.value.name: struct(
-            package_db = info.value.empty_db,
-            modules = dynamic_values[info.value.dynamic[arg.enable_profiling]].providers[DynamicCompileResultInfo].modules,
-        )
-        for info in arg.direct_deps_info
-    }
+def _dynamic_do_compile_impl(actions, md_file, pkg_deps, arg, direct_deps_by_name, outputs):
     common_args = _common_compile_module_args(
         actions,
         compiler_flags = arg.compiler_flags,
@@ -737,7 +733,7 @@ def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
         haskell_toolchain = arg.haskell_toolchain,
         label = arg.label,
         main = arg.main,
-        resolved = dynamic_values,
+        pkg_deps = pkg_deps,
         sources = arg.sources,
         enable_haddock = arg.enable_haddock,
         enable_profiling = arg.enable_profiling,
@@ -746,7 +742,7 @@ def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
         pkgname = arg.pkgname,
     )
 
-    md = artifacts[arg.md_file].read_json()
+    md = md_file.read_json()
     th_modules = md["th_modules"]
     module_map = md["module_mapping"]
     graph = md["module_graph"]
@@ -785,7 +781,16 @@ def _dynamic_do_compile_impl(actions, artifacts, dynamic_values, outputs, arg):
 
 
 
-_dynamic_do_compile = dynamic_actions(impl = _dynamic_do_compile_impl)
+_dynamic_do_compile = dynamic_actions(
+    impl = _dynamic_do_compile_impl,
+    attrs = {
+        "md_file" : dynattrs.artifact_value(),
+        "arg" : dynattrs.value(typing.Any),
+        "pkg_deps": dynattrs.option(dynattrs.dynamic_value()),
+        "outputs": dynattrs.dict(Artifact, dynattrs.output()),
+        "direct_deps_by_name": dynattrs.dict(str, dynattrs.tuple(dynattrs.value(Artifact), dynattrs.dynamic_value())),
+    },
+)
 
 # Compile all the context's sources.
 def compile(
@@ -822,17 +827,13 @@ def compile(
     ]
 
     dyn_module_tsets = ctx.actions.dynamic_output_new(_dynamic_do_compile(
-        dynamic = [md_file],
-        dynamic_values = [
-            info.value.dynamic[enable_profiling]
-            for lib in attr_deps_haskell_link_infos(ctx)
-            for info in [
-                lib.prof_info[link_style]
-                if enable_profiling else
-                lib.info[link_style]
-            ]
-        ] + ([ haskell_toolchain.packages.dynamic ] if haskell_toolchain.packages else [ ]),
-        outputs = [o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes],
+        md_file = md_file,
+        pkg_deps = haskell_toolchain.packages.dynamic if haskell_toolchain.packages else None,
+        outputs = {o: o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes},
+        direct_deps_by_name = {
+            info.value.name: (info.value.empty_db, info.value.dynamic[enable_profiling])
+            for info in direct_deps_info
+        },
         arg = struct(
             artifact_suffix = artifact_suffix,
             compiler_flags = ctx.attrs.compiler_flags,
