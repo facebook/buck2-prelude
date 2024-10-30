@@ -190,7 +190,6 @@ def _dynamic_target_metadata_impl(actions, artifacts, dynamic_values, outputs, a
     package_flag = _package_flag(arg.haskell_toolchain)
     ghc_args = cmd_args()
     ghc_args.add("-hide-all-packages")
-    ghc_args.add(package_flag, "base")
 
     ghc_args.add(cmd_args(arg.toolchain_libs, prepend=package_flag))
     ghc_args.add(cmd_args(packages_info.exposed_package_args))
@@ -339,10 +338,10 @@ def get_packages_info2(
         ],
     )
 
-    # base is special and gets exposed by default
     package_flag = _package_flag(haskell_toolchain)
-
-    exposed_package_args = cmd_args([package_flag, "base"])
+    hidden_args = [l for lib in libs.traverse() for l in lib.libs]
+    exposed_package_libs = cmd_args()
+    exposed_package_args = cmd_args()
 
     if for_deps:
         get_db = lambda l: l.deps_db
