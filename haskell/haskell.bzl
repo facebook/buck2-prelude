@@ -992,6 +992,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
         cmd_args(
             haskell_toolchain.haddock,
             "--gen-index",
+            "--optghc=-package-env=-",
             "-o", cmd_args(styles[0].as_output(), parent=1),
             hidden=[file.as_output() for file in styles]
         ),

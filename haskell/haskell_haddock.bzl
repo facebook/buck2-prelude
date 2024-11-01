@@ -163,6 +163,7 @@ def haskell_haddock_lib(ctx: AnalysisContext, pkgname: str, compiled: CompileRes
         "index.html",
         "--no-tmp-comp-dir",
         "--no-warnings",
+        "--optghc=-package-env=-",
         "--package-name",
         pkgname,
     )
@@ -218,6 +219,7 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
     cmd = cmd_args(haskell_toolchain.haddock)
 
     cmd.add(
+        "--optghc=-package-env=-",
         "--gen-index",
         "--gen-contents",
         "-o",
