@@ -686,7 +686,7 @@ def _compile_module(
     compile_cmd.add(cmd_args(library_deps, prepend = "-package"))
     compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package"))
 
-    compile_cmd.add("-fbyte-code-and-object-code")
+    compile_cmd.add("-fwrite-if-simplified-core")
     if enable_th:
         compile_cmd.add("-fprefer-byte-code")
 
