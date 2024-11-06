@@ -189,6 +189,7 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     )
     package_flag = _package_flag(arg.haskell_toolchain)
     ghc_args = cmd_args()
+    ghc_args.add("-j")
     ghc_args.add("-hide-all-packages")
 
     ghc_args.add(cmd_args(arg.toolchain_libs, prepend=package_flag))
@@ -211,7 +212,12 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     )
     md_args.add("--output", output)
 
-    actions.run(md_args, category = "haskell_metadata", identifier = arg.suffix if arg.suffix else None)
+    actions.run(
+        md_args,
+        category = "haskell_metadata",
+        identifier = arg.suffix if arg.suffix else None,
+        weight = 8,
+    )
 
     return []
 
