@@ -70,3 +70,10 @@ HaskellPackageDbTSet = transitive_set(
 DynamicHaskellPackageDbInfo = provider(fields = {
     "packages": dict[str, HaskellPackageDbTSet],
 })
+
+NativeToolchainLibrary = provider(
+    fields = {
+        "name": provider_field(str),
+        "lib_path": provider_field(typing.Any, default = None),
+    },
+)
