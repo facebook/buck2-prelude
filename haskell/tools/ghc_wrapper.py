@@ -37,6 +37,12 @@ def main():
         help="Path to a package db that is used during the module compilation",
     )
     parser.add_argument(
+        "--worker-target-id", required=False, type=str, help="worker target id",
+    )
+    parser.add_argument(
+        "--worker-close", required=False, type=bool, default=False, help="worker close",
+    )
+    parser.add_argument(
         "--ghc", required=True, type=str, help="Path to the Haskell compiler GHC."
     )
     parser.add_argument(
@@ -75,8 +81,13 @@ def main():
     )
 
     args, ghc_args = parser.parse_known_args()
-
-    cmd = [args.ghc] + ghc_args
+    if args.worker_target_id:
+        worker_args = ["--worker-target-id={}".format(args.worker_target_id)] + (["--worker-close"] if args.worker_close else [])
+        use_persistent_workers = True
+    else:
+        worker_args = []
+        use_persistent_workers = False
+    cmd = [args.ghc] + worker_args + ghc_args
 
     aux_paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()] + [str(os.path.dirname(binexepath)) for binexepath in args.bin_exe]
     env = os.environ.copy()
@@ -99,7 +110,7 @@ def main():
     if returncode != 0:
         return returncode
 
-    recompute_abi_hash(args.ghc, args.abi_out)
+    recompute_abi_hash(args.ghc, args.abi_out, use_persistent_workers)
 
     # write an empty dep file, to signal that all tagged files are unused
     try:
@@ -127,11 +138,15 @@ def main():
     return 0
 
 
-def recompute_abi_hash(ghc, abi_out):
+def recompute_abi_hash(ghc, abi_out, use_persistent_workers):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
     hi_file = abi_out.with_suffix("")
+    if use_persistent_workers:
+        worker_args = ["--worker-target-id=show-iface-abi-hash"]
+    else:
+        worker_args = []
 
-    cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file]
+    cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file] + worker_args
 
     hash = subprocess.check_output(cmd, text=True).split(maxsplit=1)[0]
 
