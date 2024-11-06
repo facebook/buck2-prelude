@@ -713,7 +713,9 @@ def _compile_module(
         dep_files = {
             "abi": abi_tag,
             "packagedb": packagedb_tag,
-        }
+        },
+        # explicit turn this on for local_only actions to upload their results.
+        allow_cache_upload = True,
     )
 
     module_tset = actions.tset(

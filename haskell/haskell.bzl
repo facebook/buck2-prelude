@@ -603,6 +603,8 @@ def _dynamic_link_shared_impl(actions, pkg_deps, lib, arg):
     actions.run(
         link_cmd,
         category = "haskell_link" + arg.artifact_suffix.replace("-", "_"),
+        # explicit turn this on for local_only actions to upload their results.
+        allow_cache_upload = True,
     )
 
     return []
@@ -661,7 +663,7 @@ def _build_haskell_lib(
     # only gather direct dependencies
     uniq_infos = [x[link_style].value for x in linfos]
 
-    toolchain_libs = [dep.name for dep in attr_deps_haskell_toolchain_libraries(ctx)] 
+    toolchain_libs = [dep.name for dep in attr_deps_haskell_toolchain_libraries(ctx)]
 
     if link_style == LinkStyle("shared"):
         lib = ctx.actions.declare_output(lib_short_path)
@@ -1171,7 +1173,12 @@ def _dynamic_link_binary_impl(actions, pkg_deps, output, arg):
 
     link_cmd.add("-o", output)
 
-    actions.run(link_cmd, category = "haskell_link")
+    actions.run(
+        link_cmd,
+        category = "haskell_link",
+        # explicit turn this on for local_only actions to upload their results.
+        allow_cache_upload = True,
+    )
 
     return []
 
