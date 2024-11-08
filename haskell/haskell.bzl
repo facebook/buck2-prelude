@@ -406,7 +406,7 @@ GHC_PKG=$1
 DB=$2
 PKGCONF=$3
 "$GHC_PKG" init "$DB"
-"$GHC_PKG" register --package-conf "$DB" --no-expand-pkgroot "$PKGCONF" --force
+"$GHC_PKG" register --package-conf "$DB" --no-expand-pkgroot "$PKGCONF" --force -v0
 """
 
 # Create a package
