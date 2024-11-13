@@ -243,7 +243,7 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
             cmd_args(cmd, delimiter = " ", quote = "shell"),
             [
                 cmd_args(
-                    ["cp", "-f", "--reflink=auto", html, out.as_output()],
+                    ["cp", "-f", html, out.as_output()],
                     delimiter = " ",
                 ) for html in dep_htmls
             ],
