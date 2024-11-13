@@ -236,14 +236,13 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
 
     cmd.add(ctx.attrs.haddock_flags)
 
-    script = ctx.actions.declare_output("haddock-script")
     script_args = cmd_args([
         "#!/bin/sh",
         cmd_args(
             cmd_args(cmd, delimiter = " ", quote = "shell"),
             [
                 cmd_args(
-                    ["cp", "-f", html, out.as_output()],
+                    ["cp", "-f", html, cmd_args(out, ignore_artifacts = True)],
                     delimiter = " ",
                 ) for html in dep_htmls
             ],
@@ -251,15 +250,15 @@ def haskell_haddock_impl(ctx: AnalysisContext) -> list[Provider]:
         )
     ])
 
-    ctx.actions.write(
-        script,
+    script = ctx.actions.write(
+        "haddock-script",
         script_args,
         is_executable = True,
-        allow_args = True,
+        with_inputs = True,
     )
 
     ctx.actions.run(
-        cmd_args(script, hidden = script_args),
+        cmd_args(script, hidden=out.as_output()),
         category = "haskell_haddock",
         no_outputs_cleanup = True,
     )
