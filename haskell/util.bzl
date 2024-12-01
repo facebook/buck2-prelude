@@ -11,6 +11,10 @@ load(
     "CxxPlatformInfo",
 )
 load(
+    "@prelude//haskell:toolchain.bzl",
+    "HaskellToolchainLibrary",
+)
+load(
     "@prelude//haskell:library_info.bzl",
     "HaskellLibraryInfo",
     "HaskellLibraryProvider",
@@ -41,6 +45,11 @@ HASKELL_EXTENSIONS = [
     ".y",
 ]
 
+HASKELL_BOOT_EXTENSIONS = [
+    ".hs-boot",
+    ".lhs-boot",
+]
+
 # We take a named_set for srcs, which is sometimes a list, sometimes a dict.
 # In future we should only accept a list, but for now, cope with both.
 def srcs_to_pairs(srcs) -> list[(str, Artifact)]:
@@ -52,6 +61,10 @@ def srcs_to_pairs(srcs) -> list[(str, Artifact)]:
 def is_haskell_src(x: str) -> bool:
     _, ext = paths.split_extension(x)
     return ext in HASKELL_EXTENSIONS
+
+def is_haskell_boot(x: str) -> bool:
+    _, ext = paths.split_extension(x)
+    return ext in HASKELL_BOOT_EXTENSIONS
 
 def src_to_module_name(x: str) -> str:
     base, _ext = paths.split_extension(x)
@@ -72,6 +85,15 @@ def attr_deps_haskell_link_infos(ctx: AnalysisContext) -> list[HaskellLinkInfo]:
             for d in attr_deps(ctx) + ctx.attrs.template_deps
         ],
     ))
+
+def attr_deps_haskell_toolchain_libraries(ctx: AnalysisContext) -> list[HaskellToolchainLibrary]:
+    return filter(
+        None,
+        [
+            d.get(HaskellToolchainLibrary)
+            for d in attr_deps(ctx) + ctx.attrs.template_deps
+        ],
+    )
 
 # DONT CALL THIS FUNCTION, you want attr_deps_haskell_link_infos instead
 def attr_deps_haskell_link_infos_sans_template_deps(ctx: AnalysisContext) -> list[HaskellLinkInfo]:
@@ -149,3 +171,34 @@ def get_artifact_suffix(link_style: LinkStyle, enable_profiling: bool, suffix: s
     if enable_profiling:
         artifact_suffix += "-prof"
     return artifact_suffix + suffix
+
+def _source_prefix(source: Artifact, module_name: str) -> str:
+    """Determine the directory prefix of the given artifact, considering that ghc has determined `module_name` for that file."""
+    source_path = paths.replace_extension(source.short_path, "")
+
+    module_name_for_file = src_to_module_name(source_path)
+
+    # assert that source_path (without extension) and its module name have the same length
+    if len(source_path) != len(module_name_for_file):
+        fail("{} should have the same length as {}".format(source_path, module_name_for_file))
+
+    if module_name != module_name_for_file and module_name_for_file.endswith("." + module_name):
+        # N.B. the prefix could have some '.' characters in it, use the source_path to determine the prefix
+        return source_path[0:-len(module_name) - 1]
+
+    return ""
+
+
+def get_source_prefixes(srcs: list[Artifact], module_map: dict[str, str]) -> list[str]:
+    """Determine source prefixes for the given haskell files and a mapping from source file module name to module name."""
+    source_prefixes = {}
+    for path, src in srcs_to_pairs(srcs):
+        if not is_haskell_src(path):
+            continue
+
+        name = src_to_module_name(path)
+        real_name = module_map.get(name)
+        prefix = _source_prefix(src, real_name) if real_name else ""
+        source_prefixes[prefix] = None
+
+    return source_prefixes.keys()

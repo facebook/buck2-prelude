@@ -7,7 +7,8 @@
 
 load("@prelude//haskell:library_info.bzl", "HaskellLibraryProvider")
 load("@prelude//haskell:link_info.bzl", "HaskellLinkInfo")
-load("@prelude//haskell:toolchain.bzl", "HaskellToolchainInfo")
+load("@prelude//haskell:toolchain.bzl", "HaskellToolchainInfo", "HaskellToolchainLibrary")
+load("@prelude//haskell:util.bzl", "is_haskell_src", "srcs_to_pairs")
 load("@prelude//linking:link_info.bzl", "LinkStyle")
 load("@prelude//paths.bzl", "paths")
 
@@ -150,12 +151,19 @@ def _solution_for_haskell_lib(ctx, target, exclude):
     hli = ctx.analysis(target).providers().get(HaskellLibraryProvider)
 
     haskellLibs = {}
+    toolchain_libs = []
+
     for dep in resolved_attrs.deps + resolved_attrs.template_deps:
         if exclude.get(dep.label) == None:
             providers = ctx.analysis(dep.label).providers()
             lb = providers.get(HaskellLinkInfo)
             if lb != None:
                 haskellLibs[dep.label] = lb
+                continue
+
+            lb = providers.get(HaskellToolchainLibrary)
+            if lb != None:
+                toolchain_libs.append(lb.name)
 
     sources = []
     for item in ctx.output.ensure_multiple(resolved_attrs.srcs.values()):
@@ -173,11 +181,6 @@ def _solution_for_haskell_lib(ctx, target, exclude):
     haskell_toolchain = ctx.analysis(resolved_attrs._haskell_toolchain.label)
     toolchain = haskell_toolchain.providers().get(HaskellToolchainInfo)
 
-    binutils_path = paths.join(root, toolchain.ghci_binutils_path)
-    cc_path = paths.join(root, toolchain.ghci_cc_path)
-    cxx_path = paths.join(root, toolchain.ghci_cxx_path)
-    cpp_path = paths.join(root, toolchain.ghci_cpp_path)
-
     flags = [
         "-this-unit-id",
         "fbcode_fake_unit_id",
@@ -187,13 +190,31 @@ def _solution_for_haskell_lib(ctx, target, exclude):
         "-no-global-package-db",
         "-no-user-package-db",
         "-hide-all-packages",
-        "-pgma%s" % cc_path,
-        "-pgml%s" % cxx_path,
-        "-pgmc%s" % cc_path,
-        "-pgmP%s" % cpp_path,
-        "-opta-B%s" % binutils_path,
-        "-optc-B%s" % binutils_path,
+        "-i",
     ]
+
+    if toolchain.ghci_binutils_path:
+        binutils_path = paths.join(root, toolchain.ghci_binutils_path)
+        flags.extend([
+            "-opta-B%s" % binutils_path,
+            "-optc-B%s" % binutils_path,
+        ])
+
+    if toolchain.ghci_cc_path:
+        cc_path = paths.join(root, toolchain.ghci_cc_path)
+        flags.extend([
+            "-pgma%s" % cc_path,
+            "-pgmc%s" % cc_path,
+        ])
+
+    if toolchain.ghci_cxx_path:
+        cxx_path = paths.join(root, toolchain.ghci_cxx_path)
+        flags.append("-pgml%s" % cxx_path)
+
+    if toolchain.ghci_cpp_path:
+        cpp_path = paths.join(root, toolchain.ghci_cpp_path)
+        flags.append("-pgmP%s" % cpp_path)
+
     flags.extend(resolved_attrs.compiler_flags)
 
     return {
@@ -201,6 +222,7 @@ def _solution_for_haskell_lib(ctx, target, exclude):
         "flags": flags,
         "generated_dependencies": externalSourcesForTarget(ctx, target),
         "haskell_deps": haskellLibs,
+        "toolchain_libs": toolchain_libs,
         "import_dirs": import_dirs.keys(),
         "sources": sources,
         "targets": targetsForTarget(ctx, target),
@@ -277,6 +299,9 @@ def _assembleSolution(ctx, linkStyle, result):
         ctx.output.ensure_multiple(hli.libs)
         ctx.output.ensure_multiple(hli.import_dirs.values())
         package_dbs[hli.db] = ()
+    for lib in result["toolchain_libs"]:
+        flags.append("-package")
+        flags.append(lib)
     for pkgdb in ctx.output.ensure_multiple(package_dbs.keys()):
         flags.append("-package-db")
         flags.append(pkgdb.abs_path())

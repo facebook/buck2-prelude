@@ -58,6 +58,10 @@ load(
 )
 load("@prelude//linking:types.bzl", "Linkage")
 load(
+    "@prelude//cxx:linker.bzl",
+    "get_rpath_origin",
+)
+load(
     "@prelude//utils:graph_utils.bzl",
     "depth_first_traversal",
     "depth_first_traversal_by",
@@ -304,7 +308,7 @@ def _build_haskell_omnibus_so(ctx: AnalysisContext) -> HaskellOmnibusData:
     soname = "libghci_dependencies.so"
     extra_ldflags = [
         "-rpath",
-        "$ORIGIN/{}".format(so_symlinks_root_path),
+        "{}/{}".format(get_rpath_origin(linker_info.type), so_symlinks_root_path)
     ]
     link_result = cxx_link_shared_library(
         ctx,
@@ -631,6 +635,7 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
         link_style,
         specify_pkg_version = True,
         enable_profiling = enable_profiling,
+        use_empty_lib = False,
     )
 
     # Create package db symlinks
@@ -655,7 +660,8 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
 
             for prof, import_dir in lib.import_dirs.items():
                 artifact_suffix = get_artifact_suffix(link_style, prof)
-                lib_symlinks["hi-" + artifact_suffix] = import_dir
+                for imp in import_dir:
+                    lib_symlinks["mod-" + artifact_suffix + "/" + imp.short_path] = imp
 
             for o in lib.libs:
                 lib_symlinks[o.short_path] = o
@@ -724,7 +730,9 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
         "__{}__".format(ctx.label.name),
         output_artifacts,
     )
-    run = cmd_args(final_ghci_script, hidden = outputs)
+    ghci_bin_dep = ctx.attrs.ghci_bin_dep.get(RunInfo)
+    hidden_dep = [ghci_bin_dep] if ghci_bin_dep else []
+    run = cmd_args(final_ghci_script, hidden=hidden_dep + outputs)
 
     return [
         DefaultInfo(default_outputs = [root_output_dir]),
