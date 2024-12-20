@@ -83,6 +83,13 @@ def _extra_libraries_arg():
 """),
     }
 
+def _module_prefix_arg():
+    return {
+        "module_prefix": attrs.option(attrs.string(), default = None, doc = """
+    Module prefix if needed
+"""),
+    }
+
 haskell_common = struct(
     srcs_arg = _srcs_arg,
     deps_arg = _deps_arg,
@@ -93,4 +100,5 @@ haskell_common = struct(
     srcs_envs_arg = _srcs_envs_arg,
     use_argsfile_at_link_arg = _use_argsfile_at_link_arg,
     extra_libraries_arg = _extra_libraries_arg,
+    module_prefix_arg = _module_prefix_arg,
 )
