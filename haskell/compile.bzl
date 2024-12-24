@@ -720,6 +720,7 @@ def _compile_module(
         compile_cmd.add("-l{}".format(l.name))
 
     compile_cmd.add("-fwrite-if-simplified-core")
+    compile_cmd.add("-fpackage-db-byte-code")
     if enable_th:
         compile_cmd.add("-fprefer-byte-code")
 
