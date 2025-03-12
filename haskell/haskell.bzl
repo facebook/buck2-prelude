@@ -1403,6 +1403,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         link.add(cmd_args(hidden = linkable_artifacts))
     else:
         link.add(cmd_args(unpack_link_args(infos), prepend = "-optl"))
+        link.add("-dynamic")
 
     haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
