@@ -696,6 +696,7 @@ def _compile_module(
     compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package"))
 
     compile_cmd.add("-fwrite-if-simplified-core")
+    compile_cmd.add("-fpackage-db-byte-code")
     if enable_th:
         compile_cmd.add("-fprefer-byte-code")
 
