@@ -31,6 +31,7 @@ load(
     "HaskellToolchainLibrary",
     "DynamicHaskellPackageDbInfo",
     "HaskellPackageDbTSet",
+    "NativeToolchainLibrary",
 )
 load(
     "@prelude//haskell:util.bzl",
@@ -435,6 +436,7 @@ def _common_compile_module_args(
     label: Label,
     deps: list[Dependency],
     external_tool_paths: list[RunInfo],
+    extra_libraries: list[Dependency],
     sources: list[Artifact],
     direct_deps_info: list[HaskellLibraryInfoTSet],
     pkgname: str | None = None,
@@ -578,6 +580,7 @@ def _compile_module(
     aux_deps: None | list[Artifact],
     src_envs: None | dict[str, ArgLike],
     source_prefixes: list[str],
+    extra_libraries: list[Dependency],
 ) -> CompiledModuleTSet:
     # These compiler arguments can be passed in a response file.
     compile_args_for_file = cmd_args(common_args.args_for_file, hidden = aux_deps or [])
@@ -695,6 +698,16 @@ def _compile_module(
     compile_cmd.add(cmd_args(library_deps, prepend = "-package"))
     compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package"))
 
+    # extra-libraries
+    extra_libs = [
+        lib[NativeToolchainLibrary]
+        for lib in extra_libraries
+        if NativeToolchainLibrary in lib
+    ]
+    for l in extra_libs:
+        compile_cmd.add(l.lib_path)
+        compile_cmd.add("-l{}".format(l.name))
+
     compile_cmd.add("-fwrite-if-simplified-core")
     compile_cmd.add("-fpackage-db-byte-code")
     if enable_th:
@@ -737,6 +750,7 @@ def _dynamic_do_compile_impl(actions, md_file, pkg_deps, arg, direct_deps_by_nam
         compiler_flags = arg.compiler_flags,
         deps = arg.deps,
         external_tool_paths = arg.external_tool_paths,
+        extra_libraries = arg.extra_libraries,
         ghc_wrapper = arg.ghc_wrapper,
         haskell_toolchain = arg.haskell_toolchain,
         label = arg.label,
@@ -783,6 +797,7 @@ def _dynamic_do_compile_impl(actions, md_file, pkg_deps, arg, direct_deps_by_nam
             direct_deps_by_name = direct_deps_by_name,
             toolchain_deps_by_name = arg.toolchain_deps_by_name,
             source_prefixes = source_prefixes,
+            extra_libraries = arg.extra_libraries,
         )
 
     return [DynamicCompileResultInfo(modules = module_tsets)]
@@ -862,6 +877,7 @@ def compile(
             sources_deps = ctx.attrs.srcs_deps,
             srcs_envs = ctx.attrs.srcs_envs,
             toolchain_deps_by_name = toolchain_deps_by_name,
+            extra_libraries = ctx.attrs.extra_libraries,
         ),
     ))
 
