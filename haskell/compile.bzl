@@ -216,12 +216,53 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     )
     md_args.add("--output", output)
 
-    actions.run(
-        md_args,
-        category = "haskell_metadata",
-        identifier = arg.suffix if arg.suffix else None,
-        weight = 8,
-    )
+    haskell_toolchain = arg.haskell_toolchain
+    if arg.allow_worker and haskell_toolchain.use_worker:
+        bp_args = cmd_args()
+        bp_args.add("--ghc", arg.haskell_toolchain.compiler)
+        bp_args.add("--ghc-dir", haskell_toolchain.ghc_dir)
+        if arg.pkgname != None:
+            bp_args.add("--worker-target-id", arg.pkgname)
+
+        build_plan = actions.declare_output(arg.pkgname + ".depends.json")
+        makefile = actions.declare_output(arg.pkgname + ".depends.make")
+
+        bp_args.add("-j")
+        bp_args.add("-hide-all-packages")
+        bp_args.add("-include-pkg-deps")
+        bp_args.add(packages_info.bin_paths)
+        bp_args.add(cmd_args(arg.toolchain_libs, prepend=package_flag))
+        bp_args.add(cmd_args(packages_info.exposed_package_args))
+        bp_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
+        bp_args.add(arg.compiler_flags)
+        bp_args.add("-M")
+        bp_args.add("-dep-json", build_plan.as_output())
+        bp_args.add("-dep-makefile", makefile.as_output())
+        bp_args.add("-outputdir", ".")
+        bp_args.add("-this-unit-id", arg.pkgname)
+        bp_args.add(cmd_args(arg.sources))
+
+        actions.run(
+            bp_args,
+            category = "haskell_buildplan",
+            identifier = arg.suffix if arg.suffix else None,
+            weight = 8,
+            exe = WorkerRunInfo(worker = arg.worker),
+        )
+        md_args.add("--build-plan", build_plan)
+        actions.run(
+            md_args,
+            category = "haskell_metadata",
+            identifier = arg.suffix if arg.suffix else None,
+            weight = 8,
+        )
+    else:
+        actions.run(
+            md_args,
+            category = "haskell_metadata",
+            identifier = arg.suffix if arg.suffix else None,
+            weight = 8,
+        )
 
     return []
 
@@ -239,6 +280,7 @@ def target_metadata(
         *,
         sources: list[Artifact],
         suffix: str = "",
+        worker: WorkerInfo | None,
     ) -> Artifact:
     md_file = ctx.actions.declare_output(ctx.label.name + suffix + ".md.json")
     md_gen = ctx.attrs._generate_target_metadata[RunInfo]
@@ -278,6 +320,9 @@ def target_metadata(
             strip_prefix = _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
             suffix = suffix,
             toolchain_libs = toolchain_libs,
+            worker = worker,
+            allow_worker = ctx.attrs.allow_worker,
+            pkgname = pkgname,
         ),
     ))
 

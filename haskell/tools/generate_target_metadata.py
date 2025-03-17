@@ -76,6 +76,11 @@ def main():
         default=[],
         help="Add given path to PATH.",
     )
+    parser.add_argument(
+        "--build-plan",
+        type=str,
+        help="Previously obtained build plan",
+    )
     args = parser.parse_args()
 
     result = obtain_target_metadata(args)
@@ -91,7 +96,10 @@ def json_default_handler(o):
 
 def obtain_target_metadata(args):
     paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
-    ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source, paths, args.worker_target_id)
+    if args.build_plan == None:
+        ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source, paths, args.worker_target_id)
+    else:
+        ghc_depends = load_toolchain_packages(args.build_plan)
     th_modules = determine_th_modules(ghc_depends)
     module_mapping = determine_module_mapping(ghc_depends, args.source_prefix)
     module_graph = determine_module_graph(ghc_depends)
