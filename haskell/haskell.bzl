@@ -846,6 +846,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
         ctx,
         sources = ctx.attrs.srcs,
     )
+    sub_targets["metadata"] = [DefaultInfo(default_output = md_file)]
 
     # The non-profiling library is also needed to build the package with
     # profiling enabled, so we need to keep track of it for each link style.
@@ -1441,7 +1442,9 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     else:
         run = cmd_args(output)
 
-    sub_targets = {}
+    sub_targets = {
+        "metadata": [DefaultInfo(default_output = md_file)],
+    }
     sub_targets.update(_haskell_module_sub_targets(
         compiled = compiled,
         link_style = link_style,
