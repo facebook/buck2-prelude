@@ -124,7 +124,7 @@ def _strip_prefix(prefix, s):
     return stripped if stripped != None else s
 
 
-def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_style: LinkStyle, enable_profiling: bool, suffix: str) -> dict[str, _Module]:
+def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_style: LinkStyle, enable_profiling: bool, suffix: str, module_prefix: str | None) -> dict[str, _Module]:
     modules = {}
 
     osuf, hisuf = output_extensions(link_style, enable_profiling)
@@ -137,7 +137,10 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
             continue
 
         module_name = src_to_module_name(src.short_path) + bootsuf
-        interface_path = paths.replace_extension(src.short_path, "." + hisuf + bootsuf)
+        if module_prefix:
+            interface_path = paths.replace_extension(module_prefix.replace(".", "/") + "/" + src.short_path, "." + hisuf + bootsuf)
+        else:
+            interface_path = paths.replace_extension(src.short_path, "." + hisuf + bootsuf)
         interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
         interfaces = [interface]
         object_path = paths.replace_extension(src.short_path, "." + osuf + bootsuf)
@@ -825,7 +828,7 @@ def compile(
         pkgname: str | None = None) -> CompileResultInfo:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
-    modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix)
+    modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix, module_prefix = ctx.attrs.module_prefix)
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
