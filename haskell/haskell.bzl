@@ -1501,6 +1501,8 @@ def _persistent_worker(ctx: AnalysisContext) -> WorkerInfo | None:
         # TODO: This is the final intended design, so we will remove this feature flag
         # from ghc-persistent-worker soon.
         cmd.add("--single")
+        if haskell_toolchain.worker_make:
+            cmd.add("--make")
         return WorkerInfo(cmd)
     else:
         return None
