@@ -1496,13 +1496,14 @@ def _persistent_worker(ctx: AnalysisContext) -> WorkerInfo | None:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     worker = haskell_toolchain.worker
     if worker:
-        cmd = cmd_args(worker)
-        # only a single worker process.
-        # TODO: This is the final intended design, so we will remove this feature flag
-        # from ghc-persistent-worker soon.
-        cmd.add("--single")
+        cmd = cmd_args(worker, "--exe", worker)
         if haskell_toolchain.worker_make:
-            cmd.add("--make")
+            # For now,the make worker works well only with `--spawn`.
+            cmd.add("--make", "--spawn")
+        elif haskell_toolchain.worker_single:
+            cmd.add("--single")
+        elif haskell_toolchain.worker_spawn:
+            cmd.add("--spawn")
         return WorkerInfo(cmd)
     else:
         return None

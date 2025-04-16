@@ -43,6 +43,8 @@ HaskellToolchainInfo = provider(
         "use_persistent_workers": provider_field(typing.Any, default = None),
         "use_worker": provider_field(bool, default = False),
         "worker": provider_field(typing.Any, default = None),
+        "worker_single": provider_field(typing.Any, default = False),
+        "worker_spawn": provider_field(typing.Any, default = False),
         "worker_make": provider_field(bool, default = False),
         "ghc_dir": provider_field(typing.Any, default = None),
     },
