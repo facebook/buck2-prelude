@@ -1491,6 +1491,11 @@ def _persistent_worker(ctx: AnalysisContext) -> WorkerInfo | None:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     worker = haskell_toolchain.worker
     if worker:
-        return WorkerInfo(worker)
+        cmd = cmd_args(worker)
+        # only a single worker process.
+        # TODO: This is the final intended design, so we will remove this feature flag
+        # from ghc-persistent-worker soon.
+        cmd.add("--single")
+        return WorkerInfo(cmd)
     else:
         return None
