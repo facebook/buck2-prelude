@@ -105,7 +105,6 @@ PackagesInfo = record(
     exposed_package_args = cmd_args,
     packagedb_args = cmd_args,
     transitive_deps = field(HaskellLibraryInfoTSet),
-    bin_paths = cmd_args,
 )
 
 _Module = record(
@@ -202,7 +201,11 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     ghc_args.add(arg.compiler_flags)
 
     md_args = cmd_args(arg.md_gen)
-    md_args.add(packages_info.bin_paths)
+    md_args.add(cmd_args(
+        arg.external_tool_paths,
+        format="--bin-exe={}",
+    ))
+
     md_args.add("--ghc", arg.haskell_toolchain.compiler)
     md_args.add(cmd_args(ghc_args, format="--ghc-arg={}"))
     md_args.add(
@@ -229,7 +232,10 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
         bp_args.add("-j")
         bp_args.add("-hide-all-packages")
         bp_args.add("-include-pkg-deps")
-        bp_args.add(packages_info.bin_paths)
+        bp_args.add(cmd_args(
+            arg.external_tool_paths,
+            format="--bin-exe={}",
+        ))
         bp_args.add(cmd_args(arg.toolchain_libs, prepend=package_flag))
         bp_args.add(cmd_args(packages_info.exposed_package_args))
         bp_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
@@ -322,6 +328,7 @@ def target_metadata(
             lib_package_name_and_prefix =_attr_deps_haskell_lib_package_name_and_prefix(ctx),
             md_gen = md_gen,
             sources = sources,
+            external_tool_paths = [tool[RunInfo] for tool in ctx.attrs.external_tools],
             strip_prefix = _strip_prefix(str(ctx.label.cell_root), str(ctx.label.path)),
             suffix = suffix,
             toolchain_libs = toolchain_libs,
@@ -455,9 +462,6 @@ def get_packages_info2(
 
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
-    direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
-    bin_paths = cmd_args(direct_package_paths, prepend="--bin-path", format="{}/bin")
-
     # Expose only the packages we depend on directly
     for lib in haskell_direct_deps_lib_infos:
         pkg_name = lib.name
@@ -470,7 +474,7 @@ def get_packages_info2(
         exposed_package_args = exposed_package_args,
         packagedb_args = packagedb_args,
         transitive_deps = libs,
-        bin_paths = bin_paths,
+        #bin_paths = bin_paths,
     )
 
 CommonCompileModuleArgs = record(
@@ -582,13 +586,6 @@ def _common_compile_module_args(
         HaskellPackageDbTSet,
         children = [package_db[name] for name in toolchain_libs if name in package_db]
     )
-
-    direct_package_paths = [package_db[name].value.path for name in direct_toolchain_libs if name in package_db]
-    args_for_file.add(cmd_args(
-        direct_package_paths,
-        prepend="--bin-path",
-        format="{}/bin",
-    ))
 
     args_for_file.add(cmd_args(
         external_tool_paths,

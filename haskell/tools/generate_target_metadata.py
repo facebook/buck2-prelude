@@ -77,6 +77,13 @@ def main():
         help="Add given path to PATH.",
     )
     parser.add_argument(
+        "--bin-exe",
+        type=Path,
+        action="append",
+        default=[],
+        help="Add given exe (more specific than bin-path)",
+    )
+    parser.add_argument(
         "--build-plan",
         type=str,
         help="Previously obtained build plan",
@@ -95,9 +102,9 @@ def json_default_handler(o):
 
 
 def obtain_target_metadata(args):
-    paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()]
+    aux_paths = [str(binpath) for binpath in args.bin_path if binpath.is_dir()] + [str(binexepath.parent) for binexepath in args.bin_exe]
     if args.build_plan == None:
-        ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source, paths, args.worker_target_id)
+        ghc_depends = run_ghc_depends(args.ghc, args.ghc_arg, args.source, aux_paths, args.worker_target_id)
     else:
         ghc_depends = load_toolchain_packages(args.build_plan)
     th_modules = determine_th_modules(ghc_depends)
