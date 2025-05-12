@@ -1498,12 +1498,9 @@ def _persistent_worker(ctx: AnalysisContext) -> WorkerInfo | None:
     if worker:
         cmd = cmd_args(worker, "--exe", worker)
         if haskell_toolchain.worker_make:
-            # For now,the make worker works well only with `--spawn`.
-            cmd.add("--make", "--spawn")
+            cmd.add("--make")
         elif haskell_toolchain.worker_single:
             cmd.add("--single")
-        elif haskell_toolchain.worker_spawn:
-            cmd.add("--spawn")
         return WorkerInfo(cmd)
     else:
         return None
