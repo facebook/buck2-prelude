@@ -1495,8 +1495,9 @@ def _haskell_module_sub_targets(*, compiled, link_style, enable_profiling):
 def _persistent_worker(ctx: AnalysisContext) -> WorkerInfo | None:
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
     worker = haskell_toolchain.worker
+    worker_proxy = haskell_toolchain.worker_proxy
     if worker:
-        cmd = cmd_args(worker, "--exe", worker)
+        cmd = cmd_args(worker_proxy, "--exe", worker)
         if haskell_toolchain.worker_make:
             cmd.add("--make")
         elif haskell_toolchain.worker_single:
