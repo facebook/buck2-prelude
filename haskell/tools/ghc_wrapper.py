@@ -82,8 +82,34 @@ def main():
         default=[],
         help="Extra environment variable value",
     )
+    parser.add_argument(
+        "--close-input",
+        required=False,
+        help="for close mode.",
+    )
+    parser.add_argument(
+        "--close-output",
+        required=False,
+        help="for close mode.",
+    )
 
     args, ghc_args = parser.parse_known_args()
+
+    if args.worker_close:
+        print("worker-close is called", file=sys.stderr)
+        print("close_input = {}".format(args.close_input))
+        print("close_output = {}".format(args.close_output))
+        # write an empty close_output file
+        try:
+            with open(args.close_output, "w") as f:
+                f.write("\n")
+
+        except Exception as e:
+            # remove incomplete file
+            os.remove(args.close_output)
+            raise e
+        return 0
+
     if args.worker_target_id:
         worker_args = ["--worker-target-id={}".format(args.worker_target_id)] + (["--worker-close"] if args.worker_close else [])
         use_persistent_workers = True

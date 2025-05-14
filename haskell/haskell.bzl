@@ -323,6 +323,7 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
     haskell_link_infos = HaskellLinkInfo(
         info = hlinkinfos,
         prof_info = prof_hlinkinfos,
+        extra = {},
     )
     haskell_lib_provider = HaskellLibraryProvider(
         lib = hlibinfos,
@@ -542,6 +543,7 @@ HaskellLibBuildOutput = record(
     link_infos = LinkInfos,
     compiled = CompileResultInfo,
     libs = list[Artifact],
+    extra = list[Artifact],
 )
 
 def _get_haskell_shared_library_name_linker_flags(
@@ -698,8 +700,30 @@ def _build_haskell_lib(
             ),
         ))
 
+        dummy = ctx.actions.declare_output("{}.metadata".format(lib_short_path))
+
+        worker_close_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
+        worker_close_cmd.add("--worker-close", "True")
+        worker_close_cmd.add("--worker-target-id", pkgname)
+        worker_close_cmd.add("--close-input", lib)
+        for hli in hlis:
+          for e in hli.extra[link_style]:
+            worker_close_cmd.add("--close-input", e)
+
+        worker_close_cmd.add("--close-output", dummy.as_output())
+        worker_close_cmd.add("--buck2-dep", "dummy")
+        worker_close_cmd.add("--buck2-packagedb-dep", "dummy")
+        worker_close_cmd.add("--abi-out", "dummy")
+        worker_close_cmd.add("--ghc", haskell_toolchain.compiler)
+
+        worker = _persistent_worker(ctx)
+
+        worker_args = dict() if worker == None else dict(exe = WorkerRunInfo(worker = worker))
+        ctx.actions.run(worker_close_cmd, category="worker_close", **worker_args)
+
         solibs[libfile] = LinkedObject(output = lib, unstripped_output = lib)
         libs = [lib]
+        extra = [dummy]
         link_infos = LinkInfos(
             default = LinkInfo(linkables = [SharedLibLinkable(lib = lib)]),
         )
@@ -721,6 +745,7 @@ def _build_haskell_lib(
                 ],
             ),
         )
+        extra = []
 
     if enable_profiling and link_style != LinkStyle("shared"):
         if not non_profiling_hlib:
@@ -812,6 +837,7 @@ def _build_haskell_lib(
         link_infos = link_infos,
         compiled = compiled,
         libs = libs,
+        extra = extra,
     )
 
 def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
@@ -834,6 +860,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     prof_hlink_infos = {}
     indexing_tsets = {}
     sub_targets = {}
+    extra = {}
 
     libprefix = repr(ctx.label.path).replace("//", "_").replace("/", "_")
 
@@ -881,6 +908,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
             solibs.update(hlib_build_out.solibs)
             compiled = hlib_build_out.compiled
             libs = hlib_build_out.libs
+            extra[link_style] = hlib_build_out.extra
 
             if enable_profiling:
                 prof_hlib_infos[link_style] = hlib
@@ -971,7 +999,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
         deps = ctx.attrs.deps,
     )
 
-    default_output = hlib_infos[actual_link_style].libs
+    default_output = hlib_infos[actual_link_style].libs + extra[actual_link_style]
 
     inherited_pp_info = cxx_inherited_preprocessor_infos(attr_deps(ctx))
 
@@ -1032,6 +1060,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
         HaskellLinkInfo(
             info = hlink_infos,
             prof_info = prof_hlink_infos,
+            extra = extra,
         ),
         merged_link_info,
         HaskellProfLinkInfo(

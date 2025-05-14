@@ -24,6 +24,7 @@ HaskellLinkInfo = provider(
     fields = {
         "info": provider_field(dict[LinkStyle, HaskellLibraryInfoTSet]),
         "prof_info": provider_field(dict[LinkStyle, HaskellLibraryInfoTSet]),
+        "extra": provider_field(dict[LinkStyle, list[Artifact]]),
     },
 )
 
