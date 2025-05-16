@@ -622,6 +622,7 @@ _dynamic_link_shared = dynamic_actions(
 
 def _build_haskell_lib(
         ctx,
+        worker,
         libname: str,
         pkgname: str,
         hlis: list[HaskellLinkInfo],  # haskell link infos from all deps
@@ -646,7 +647,7 @@ def _build_haskell_lib(
         enable_haddock = enable_haddock,
         md_file = md_file,
         pkgname = pkgname,
-        worker = _persistent_worker(ctx),
+        worker = worker,
     )
     solibs = {}
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
@@ -715,8 +716,6 @@ def _build_haskell_lib(
         worker_close_cmd.add("--buck2-packagedb-dep", "dummy")
         worker_close_cmd.add("--abi-out", "dummy")
         worker_close_cmd.add("--ghc", haskell_toolchain.compiler)
-
-        worker = _persistent_worker(ctx)
 
         worker_args = dict() if worker == None else dict(exe = WorkerRunInfo(worker = worker))
         ctx.actions.run(worker_close_cmd, category="worker_close", **worker_args)
@@ -871,10 +870,12 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
         libname = libprefix + "_" + ctx.label.name
     pkgname = libname.replace("_", "-")
 
+    worker = _persistent_worker(ctx)
+
     md_file = target_metadata(
         ctx,
         sources = ctx.attrs.srcs,
-        worker = _persistent_worker(ctx),
+        worker = worker,
     )
     sub_targets["metadata"] = [DefaultInfo(default_output = md_file)]
 
@@ -890,6 +891,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
             hlib_build_out = _build_haskell_lib(
                 ctx,
+                worker,
                 libname,
                 pkgname,
                 hlis = hlis,
