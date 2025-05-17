@@ -876,7 +876,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
         libname = libprefix + "_" + ctx.label.name
     pkgname = libname.replace("_", "-")
 
-    worker = _persistent_worker(ctx)
+    worker = ctx.attrs._worker[WorkerInfo]
 
     md_file = target_metadata(
         ctx,
@@ -1250,7 +1250,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     md_file = target_metadata(
         ctx,
         sources = ctx.attrs.srcs,
-        worker = _persistent_worker(ctx),
+        worker = ctx.attrs._worker[WorkerInfo],
     )
 
     # Provisional hack to have a worker ID
@@ -1263,7 +1263,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         enable_profiling = enable_profiling,
         enable_haddock = False,
         md_file = md_file,
-        worker = _persistent_worker(ctx),
+        worker = ctx.attrs._worker[WorkerInfo],
         pkgname = pkgname,
     )
 
@@ -1529,17 +1529,3 @@ def _haskell_module_sub_targets(*, compiled, link_style, enable_profiling):
             if o.extension[1:] == osuf
         })],
     }
-
-def _persistent_worker(ctx: AnalysisContext) -> WorkerInfo | None:
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-    worker = haskell_toolchain.worker
-    worker_proxy = haskell_toolchain.worker_proxy
-    if worker:
-        cmd = cmd_args(worker_proxy, "--exe", worker)
-        if haskell_toolchain.worker_make:
-            cmd.add("--make")
-        elif haskell_toolchain.worker_single:
-            cmd.add("--single")
-        return WorkerInfo(cmd)
-    else:
-        return None
