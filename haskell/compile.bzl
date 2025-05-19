@@ -55,6 +55,7 @@ load("@prelude//utils:argfile.bzl", "argfile", "at_argfile")
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//utils:graph_utils.bzl", "post_order_traversal")
 load("@prelude//utils:strings.bzl", "strip_prefix")
+load("@prelude//haskell:util.bzl", "to_hash")
 
 CompiledModuleInfo = provider(fields = {
     "abi": provider_field(Artifact),
@@ -488,7 +489,7 @@ def add_worker_args(
     pkgname: str | None,
 ) -> None:
     if pkgname != None:
-        command.add("--worker-target-id", pkgname)
+        command.add("--worker-target-id", to_hash(pkgname))
 
 def _common_compile_module_args(
     actions: AnalysisActions,

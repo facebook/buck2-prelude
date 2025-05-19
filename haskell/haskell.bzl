@@ -96,6 +96,7 @@ load(
     "output_extensions",
     "src_to_module_name",
     "get_source_prefixes",
+    "to_hash",
 )
 load(
     "@prelude//linking:link_groups.bzl",
@@ -709,7 +710,7 @@ def _build_haskell_lib(
 
             worker_close_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
             worker_close_cmd.add("--worker-close", "True")
-            worker_close_cmd.add("--worker-target-id", pkgname)
+            worker_close_cmd.add("--worker-target-id", to_hash(pkgname))
             worker_close_cmd.add("--close-input", lib)
             for hli in hlis:
               for e in hli.extra[link_style]:

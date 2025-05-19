@@ -50,6 +50,17 @@ HASKELL_BOOT_EXTENSIONS = [
     ".lhs-boot",
 ]
 
+# String to hexadecimal hash (only abs value).
+# This is to shorten worker-target-id, which can be used in unix socket path.
+def to_hash(pkgname) -> str:
+    n = hash(pkgname)
+    if n > 0:
+      n2 = n
+    else:
+      n2 = -n
+    s = "00000000%x" % n2
+    return s[-8:]
+
 # We take a named_set for srcs, which is sometimes a list, sometimes a dict.
 # In future we should only accept a list, but for now, cope with both.
 def srcs_to_pairs(srcs) -> list[(str, Artifact)]:
