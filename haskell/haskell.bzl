@@ -527,6 +527,8 @@ def _make_package(
             category = "haskell_package_" + artifact_suffix.replace("-", "_"),
             identifier = "empty" if use_empty_lib else "final",
             env = {"GHC_PACKAGE_PATH": ghc_package_path} if db_deps else {},
+            # explicit turn this on for local_only actions to upload their results.
+            allow_cache_upload = True,
         )
 
     ctx.actions.dynamic_output(
