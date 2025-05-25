@@ -650,6 +650,7 @@ def _compile_module(
     source_prefixes: list[str],
     extra_libraries: list[Dependency],
     worker: None | WorkerInfo,
+    allow_worker: bool,
 ) -> CompiledModuleTSet:
     # These compiler arguments can be passed in a response file.
     compile_args_for_file = cmd_args(common_args.args_for_file, hidden = aux_deps or [])
@@ -791,7 +792,12 @@ def _compile_module(
     compile_cmd.add("--buck2-dep", tagged_dep_file)
     compile_cmd.add("--abi-out", outputs[module.hash])
 
-    worker_args = dict() if worker == None else dict(exe = WorkerRunInfo(worker = worker))
+    if worker == None:
+        worker_args = dict()
+    elif allow_worker and haskell_toolchain.use_worker:
+        worker_args = dict(exe = WorkerRunInfo(worker = worker))
+    else:
+        worker_args = dict()
 
     actions.run(
         compile_cmd, category = "haskell_compile_" + artifact_suffix.replace("-", "_"), identifier = module_name,
@@ -872,6 +878,7 @@ def _dynamic_do_compile_impl(actions, md_file, pkg_deps, arg, direct_deps_by_nam
             source_prefixes = source_prefixes,
             extra_libraries = arg.extra_libraries,
             worker = arg.worker,
+            allow_worker = arg.allow_worker,
         )
 
     return [DynamicCompileResultInfo(modules = module_tsets)]

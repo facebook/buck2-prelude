@@ -623,6 +623,7 @@ _dynamic_link_shared = dynamic_actions(
 def _build_haskell_lib(
         ctx,
         worker,
+        allow_worker,
         libname: str,
         pkgname: str,
         hlis: list[HaskellLinkInfo],  # haskell link infos from all deps
@@ -701,28 +702,33 @@ def _build_haskell_lib(
             ),
         ))
 
-        dummy = ctx.actions.declare_output("{}.metadata".format(lib_short_path))
 
-        worker_close_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
-        worker_close_cmd.add("--worker-close", "True")
-        worker_close_cmd.add("--worker-target-id", pkgname)
-        worker_close_cmd.add("--close-input", lib)
-        for hli in hlis:
-          for e in hli.extra[link_style]:
-            worker_close_cmd.add("--close-input", e)
+        if worker != None and allow_worker and haskell_toolchain.use_worker:
 
-        worker_close_cmd.add("--close-output", dummy.as_output())
-        worker_close_cmd.add("--buck2-dep", "dummy")
-        worker_close_cmd.add("--buck2-packagedb-dep", "dummy")
-        worker_close_cmd.add("--abi-out", "dummy")
-        worker_close_cmd.add("--ghc", haskell_toolchain.compiler)
+            dummy = ctx.actions.declare_output("{}.metadata".format(lib_short_path))
 
-        worker_args = dict() if worker == None else dict(exe = WorkerRunInfo(worker = worker))
-        ctx.actions.run(worker_close_cmd, category="worker_close", **worker_args)
+            worker_close_cmd = cmd_args(ctx.attrs._ghc_wrapper[RunInfo])
+            worker_close_cmd.add("--worker-close", "True")
+            worker_close_cmd.add("--worker-target-id", pkgname)
+            worker_close_cmd.add("--close-input", lib)
+            for hli in hlis:
+              for e in hli.extra[link_style]:
+                worker_close_cmd.add("--close-input", e)
+
+            worker_close_cmd.add("--close-output", dummy.as_output())
+            worker_close_cmd.add("--buck2-dep", "dummy")
+            worker_close_cmd.add("--buck2-packagedb-dep", "dummy")
+            worker_close_cmd.add("--abi-out", "dummy")
+            worker_close_cmd.add("--ghc", haskell_toolchain.compiler)
+
+            worker_args = dict(exe = WorkerRunInfo(worker = worker))
+            ctx.actions.run(worker_close_cmd, category="worker_close", **worker_args)
+            extra = [dummy]
+        else:
+            extra = []
 
         solibs[libfile] = LinkedObject(output = lib, unstripped_output = lib)
         libs = [lib]
-        extra = [dummy]
         link_infos = LinkInfos(
             default = LinkInfo(linkables = [SharedLibLinkable(lib = lib)]),
         )
@@ -892,6 +898,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
             hlib_build_out = _build_haskell_lib(
                 ctx,
                 worker,
+                ctx.attrs.allow_worker,
                 libname,
                 pkgname,
                 hlis = hlis,
