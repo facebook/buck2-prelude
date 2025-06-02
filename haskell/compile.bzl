@@ -221,7 +221,7 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     md_args.add("--output", output)
 
     haskell_toolchain = arg.haskell_toolchain
-    if arg.allow_worker and haskell_toolchain.use_worker and arg.haskell_toolchain.worker_make:
+    if arg.allow_worker and haskell_toolchain.use_worker and haskell_toolchain.worker_make:
         bp_args = cmd_args()
         bp_args.add("--ghc", arg.haskell_toolchain.compiler)
         bp_args.add("--ghc-dir", haskell_toolchain.ghc_dir)
@@ -610,10 +610,11 @@ def _common_compile_module_args(
         "env",
     ]))
     package_env = cmd_args(delimiter = "\n")
-    package_env.add(cmd_args(
-        packagedb_args,
-        format = "package-db {}",
-    ).relative_to(package_env_file, parent = 1))
+    if not (allow_worker and haskell_toolchain.use_worker and haskell_toolchain.worker_make):
+        package_env.add(cmd_args(
+            packagedb_args,
+            format = "package-db {}",
+        ).relative_to(package_env_file, parent = 1))
     actions.write(
         package_env_file,
         package_env,
