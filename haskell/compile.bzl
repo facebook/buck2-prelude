@@ -225,7 +225,7 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
         bp_args = cmd_args()
         bp_args.add("--ghc", arg.haskell_toolchain.compiler)
         bp_args.add("--ghc-dir", haskell_toolchain.ghc_dir)
-        add_worker_args(bp_args, arg.pkgname)
+        add_worker_args(haskell_toolchain, bp_args, arg.pkgname)
 
         build_plan = actions.declare_output(arg.pkgname + ".depends.json")
         makefile = actions.declare_output(arg.pkgname + ".depends.make")
@@ -489,11 +489,12 @@ CommonCompileModuleArgs = record(
 )
 
 def add_worker_args(
+    haskell_toolchain: HaskellToolchainInfo,
     command: cmd_args,
     pkgname: str | None,
 ) -> None:
     if pkgname != None:
-        command.add("--worker-target-id", to_hash(pkgname))
+        command.add("--worker-target-id", "singleton" if haskell_toolchain.worker_make else to_hash(pkgname))
 
 def _common_compile_module_args(
     actions: AnalysisActions,
@@ -521,7 +522,7 @@ def _common_compile_module_args(
     command.add("--ghc-dir", haskell_toolchain.ghc_dir)
 
     if allow_worker and haskell_toolchain.use_worker:
-        add_worker_args(command, pkgname)
+        add_worker_args(haskell_toolchain, command, pkgname)
 
     # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
     # be parsed when inside an argsfile.
