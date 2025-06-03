@@ -706,7 +706,7 @@ def _build_haskell_lib(
         ))
 
 
-        if worker != None and allow_worker and haskell_toolchain.use_worker:
+        if worker != None and allow_worker and haskell_toolchain.use_worker and not haskell_toolchain.worker_make:
 
             dummy = ctx.actions.declare_output("{}.metadata".format(lib_short_path))
 
