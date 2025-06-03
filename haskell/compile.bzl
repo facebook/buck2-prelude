@@ -436,12 +436,13 @@ def get_packages_info2(
 
     for lib in libs.traverse():
         packagedb_set[get_db(lib)] = None
-        hidden_args = cmd_args(hidden = [
-            lib.import_dirs.values(),
-            lib.stub_dirs,
-            lib.libs,
-        ])
-        exposed_package_args.add(hidden_args)
+        if not for_deps:
+            hidden_args = cmd_args(hidden = [
+                lib.import_dirs.values(),
+                lib.stub_dirs,
+                lib.libs,
+            ])
+            exposed_package_args.add(hidden_args)
 
     if pkg_deps:
         package_db = pkg_deps.providers[DynamicHaskellPackageDbInfo].packages
