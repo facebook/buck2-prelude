@@ -882,7 +882,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
             libname = libprefix + "_" + ctx.label.name
         pkgname = libname.replace("_", "-")
 
-    worker = ctx.attrs._worker[WorkerInfo]
+    worker = ctx.attrs._worker[WorkerInfo] if ctx.attrs._worker else None
 
     md_file = target_metadata(
         ctx,
@@ -1253,10 +1253,12 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     if enable_profiling and link_style == LinkStyle("shared"):
         link_style = LinkStyle("static")
 
+    worker = ctx.attrs._worker[WorkerInfo] if ctx.attrs._worker else None
+
     md_file = target_metadata(
         ctx,
         sources = ctx.attrs.srcs,
-        worker = ctx.attrs._worker[WorkerInfo],
+        worker = worker,
     )
 
     # Provisional hack to have a worker ID
@@ -1269,7 +1271,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         enable_profiling = enable_profiling,
         enable_haddock = False,
         md_file = md_file,
-        worker = ctx.attrs._worker[WorkerInfo],
+        worker = worker,
         pkgname = pkgname,
     )
 
