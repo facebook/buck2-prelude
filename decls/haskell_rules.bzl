@@ -193,6 +193,7 @@ haskell_library = prelude_rule(
             "linker_flags": attrs.list(attrs.arg(), default = []),
             "platform": attrs.option(attrs.string(), default = None),
             "platform_linker_flags": attrs.list(attrs.tuple(attrs.regex(), attrs.list(attrs.arg())), default = []),
+            "use_same_package_name": attrs.bool(default = False),
             "allow_worker": attrs.bool(default = True),
         }
     ),
