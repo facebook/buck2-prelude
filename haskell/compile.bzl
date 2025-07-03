@@ -201,7 +201,7 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     ghc_args.add(cmd_args(packages_info.packagedb_args, prepend = "-package-db"))
     ghc_args.add(arg.compiler_flags)
 
-    md_args = cmd_args(arg.md_gen)
+    md_args = cmd_args()
     md_args.add(cmd_args(
         arg.external_tool_paths,
         format="--bin-exe={}",
@@ -255,21 +255,24 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
             exe = WorkerRunInfo(worker = arg.worker),
         )
         md_args.add("--build-plan", build_plan)
-        actions.run(
-            md_args,
-            category = "haskell_metadata",
-            identifier = arg.suffix if arg.suffix else None,
-            # explicit turn this on for local_only actions to upload their results.
-            allow_cache_upload = True,
-        )
-    else:
-        actions.run(
-            md_args,
-            category = "haskell_metadata",
-            identifier = arg.suffix if arg.suffix else None,
-            # explicit turn this on for local_only actions to upload their results.
-            allow_cache_upload = True,
-        )
+
+    md_args_output = actions.declare_output("dynamic_target_metadata_args")
+    actions.write(
+        md_args_output.as_output(),
+        md_args,
+        allow_args = True,
+    )
+
+    md_args_outer = cmd_args(arg.md_gen)
+    md_args_outer.add(cmd_args(md_args_output, format="@{}", hidden = md_args))
+
+    actions.run(
+        md_args_outer,
+        category = "haskell_metadata",
+        identifier = arg.suffix if arg.suffix else None,
+        # explicit turn this on for local_only actions to upload their results.
+        allow_cache_upload = True,
+    )
 
     return []
 
