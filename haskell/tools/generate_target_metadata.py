@@ -215,8 +215,9 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths, worker_target_id):
             worker_args = ["--worker-target-id={}".format(worker_target_id)]
         else:
             worker_args = []
+
         args = [
-            ghc, "-M", "-include-pkg-deps",
+            "-M", "-include-pkg-deps",
             # Note: `-outputdir '.'` removes the prefix of all targets:
             #       backend/src/Foo/Util.<ext> => Foo/Util.<ext>
             "-outputdir", ".",
@@ -224,14 +225,22 @@ def run_ghc_depends(ghc, ghc_args, sources, aux_paths, worker_target_id):
             "-dep-makefile", make_fname,
         ] + worker_args + ghc_args + haskell_sources + haskell_boot_sources
 
+        args_fname = os.path.join(dname, "ghc-args")
+        with open(args_fname, "w", encoding="utf-8") as args_file:
+            for arg in args:
+                args_file.write(arg)
+                args_file.write("\n")
+
+        args_outer = [ghc, "@" + args_fname]
+
         env = os.environ.copy()
         path = env.get("PATH", "")
         env["PATH"] = os.pathsep.join([path] + aux_paths)
 
-        res = subprocess.run(args, env=env, capture_output=True)
+        res = subprocess.run(args_outer, env=env, capture_output=True)
         if res.returncode != 0:
             # Write the GHC command on failure.
-            print(shlex.join(args), file=sys.stderr)
+            print(shlex.join(args_outer), file=sys.stderr)
 
         # Always forward stdout/stderr.
         # Note, Buck2 swallows stdout on successful builds.
