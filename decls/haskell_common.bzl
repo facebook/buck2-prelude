@@ -91,6 +91,13 @@ def _extra_libraries_arg():
 """),
     }
 
+def _incremental_arg():
+    return {
+        "incremental": attrs.bool(default = True, doc = """
+    Use module-level incremental build
+"""),
+    }
+
 haskell_common = struct(
     srcs_arg = _srcs_arg,
     deps_arg = _deps_arg,
@@ -102,4 +109,5 @@ haskell_common = struct(
     use_argsfile_at_link_arg = _use_argsfile_at_link_arg,
     module_prefix_arg = _module_prefix_arg,
     extra_libraries_arg = _extra_libraries_arg,
+    incremental_arg = _incremental_arg,
 )

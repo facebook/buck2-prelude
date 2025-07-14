@@ -54,6 +54,7 @@ haskell_binary = prelude_rule(
         haskell_common.deps_arg() |
         haskell_common.scripts_arg() |
         haskell_common.module_prefix_arg() |
+        haskell_common.incremental_arg() |
         buck.platform_deps_arg() |
         {
             "contacts": attrs.list(attrs.string(), default = []),
@@ -178,6 +179,7 @@ haskell_library = prelude_rule(
         haskell_common.deps_arg() |
         haskell_common.scripts_arg() |
         haskell_common.module_prefix_arg() |
+        haskell_common.incremental_arg() |
         buck.platform_deps_arg() |
         native_common.link_whole(link_whole_type = attrs.bool(default = False)) |
         native_common.preferred_linkage(preferred_linkage_type = attrs.enum(Linkage.values())) |
