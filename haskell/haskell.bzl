@@ -56,6 +56,7 @@ load(
     "CompileResultInfo",
     "compile",
     "get_packages_info",
+    "make_package_env",
     "target_metadata",
 )
 load(
@@ -645,6 +646,7 @@ def _build_haskell_lib(
         enable_profiling: bool,
         enable_haddock: bool,
         md_file: Artifact,
+        package_env_file: Artifact | None,
         # The non-profiling artifacts are also needed to build the package for
         # profiling, so it should be passed when `enable_profiling` is True.
         non_profiling_hlib: [HaskellLibBuildOutput, None] = None) -> HaskellLibBuildOutput:
@@ -903,6 +905,21 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
     )
     sub_targets["metadata"] = [DefaultInfo(default_output = md_file)]
 
+
+    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
+
+    # TODO(wavewave): Create package_env_file in compile.
+    packagedb_args = []
+    package_env_file = make_package_env(
+        ctx.actions,
+        haskell_toolchain,
+        ctx.label,
+        LinkStyle("shared"),
+        False,
+        False,
+        packagedb_args,
+    )
+
     # The non-profiling library is also needed to build the package with
     # profiling enabled, so we need to keep track of it for each link style.
     non_profiling_hlib = {}
@@ -926,6 +943,7 @@ def haskell_library_impl(ctx: AnalysisContext) -> list[Provider]:
                 # enable haddock only for the first non-profiling hlib
                 enable_haddock = not enable_profiling and not non_profiling_hlib,
                 md_file = md_file,
+                package_env_file = package_env_file,
                 non_profiling_hlib = non_profiling_hlib.get(link_style),
             )
             if not enable_profiling:

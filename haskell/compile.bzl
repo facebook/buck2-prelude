@@ -897,6 +897,7 @@ def compile_args(
         sources,
         link_style: LinkStyle,
         enable_profiling: bool,
+        package_env_args: cmd_args,
         pkgname = None,
         suffix: str = "") -> CompileArgsInfo:
 
@@ -913,7 +914,8 @@ def compile_args(
 
     compile_args = cmd_args()
     compile_args.add("-no-link", "-i")
-    compile_args.add("-package-env=-")
+
+    compile_args.add(package_env_args)
 
     if enable_profiling:
         compile_args.add("-prof")
@@ -1006,6 +1008,7 @@ def _compile_non_incr(
 
     compile_cmd = cmd_args(haskell_toolchain.compiler, hidden = outputs.values())
 
+
     args = compile_args(
         actions,
         haskell_toolchain = haskell_toolchain,
@@ -1016,6 +1019,7 @@ def _compile_non_incr(
         sources = arg.sources,
         link_style = link_style,
         enable_profiling = enable_profiling,
+        package_env_args = common_args.package_env_args,
         pkgname = arg.pkgname,
     )
 
