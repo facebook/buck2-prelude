@@ -482,6 +482,38 @@ def add_worker_args(
     if pkgname != None:
         command.add("--worker-target-id", "singleton" if haskell_toolchain.worker_make else to_hash(pkgname))
 
+
+def make_package_env(
+    actions,
+    haskell_toolchain,
+    label,
+    link_style,
+    enable_profiling,
+    allow_worker,
+    packagedb_args,
+) -> Artifact:
+    # TODO[AH] Avoid duplicates and share identical env files.
+    #   The set of package-dbs can be known at the package level, not just the
+    #   module level. So, we could generate this file outside of the
+    #   dynamic_output action.
+    package_env_file = actions.declare_output(".".join([
+        label.name,
+        "package-db",
+        output_extensions(link_style, enable_profiling)[1],
+        "env",
+    ]))
+    package_env = cmd_args(delimiter = "\n")
+    if not (allow_worker and haskell_toolchain.use_worker and haskell_toolchain.worker_make):
+        package_env.add(cmd_args(
+            packagedb_args,
+            format = "package-db {}",
+        ).relative_to(package_env_file, parent = 1))
+    actions.write(
+        package_env_file,
+        package_env,
+    )
+    return package_env_file
+
 def _common_compile_module_args(
     actions: AnalysisActions,
     *,
@@ -587,25 +619,14 @@ def _common_compile_module_args(
     packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
-    # TODO[AH] Avoid duplicates and share identical env files.
-    #   The set of package-dbs can be known at the package level, not just the
-    #   module level. So, we could generate this file outside of the
-    #   dynamic_output action.
-    package_env_file = actions.declare_output(".".join([
-        label.name,
-        "package-db",
-        output_extensions(link_style, enable_profiling)[1],
-        "env",
-    ]))
-    package_env = cmd_args(delimiter = "\n")
-    if not (allow_worker and haskell_toolchain.use_worker and haskell_toolchain.worker_make):
-        package_env.add(cmd_args(
-            packagedb_args,
-            format = "package-db {}",
-        ).relative_to(package_env_file, parent = 1))
-    actions.write(
-        package_env_file,
-        package_env,
+    package_env_file = make_package_env(
+        actions,
+        haskell_toolchain,
+        label,
+        link_style,
+        enable_profiling,
+        allow_worker,
+        packagedb_args
     )
     package_env_args = cmd_args(
         package_env_file,
