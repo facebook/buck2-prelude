@@ -662,6 +662,7 @@ def _build_haskell_lib(
         md_file = md_file,
         pkgname = pkgname,
         worker = worker,
+        incremental = ctx.attrs.incremental,
     )
     solibs = {}
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
@@ -1289,6 +1290,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     compiled = compile(
         ctx,
         link_style,
+        incremental = ctx.attrs.incremental,
         enable_profiling = enable_profiling,
         enable_haddock = False,
         md_file = md_file,

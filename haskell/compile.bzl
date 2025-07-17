@@ -102,6 +102,12 @@ CompileResultInfo = record(
     module_tsets = field(DynamicValue),
 )
 
+CompileArgsInfo = record(
+    srcs = field(cmd_args),
+    args_for_cmd = field(cmd_args),
+    args_for_file = field(cmd_args),
+)
+
 PackagesInfo = record(
     exposed_package_args = cmd_args,
     packagedb_args = cmd_args,
@@ -111,7 +117,7 @@ PackagesInfo = record(
 _Module = record(
     source = field(Artifact),
     interfaces = field(list[Artifact]),
-    hash = field(Artifact),
+    hash = field(Artifact | None),
     objects = field(list[Artifact]),
     stub_dir = field(Artifact | None),
     prefix_dir = field(str),
@@ -146,7 +152,10 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
         object_path = paths.replace_extension(src.short_path, "." + osuf + bootsuf)
         object = ctx.actions.declare_output("mod-" + suffix, object_path)
         objects = [object]
-        hash = ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash")
+        if ctx.attrs.incremental:
+            hash = ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash")
+        else:
+            hash = None
 
         if link_style in [LinkStyle("static"), LinkStyle("static_pic")]:
             dyn_osuf, dyn_hisuf = output_extensions(LinkStyle("shared"), enable_profiling)
@@ -157,8 +166,11 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
             object = ctx.actions.declare_output("mod-" + suffix, object_path)
             objects.append(object)
 
-        if bootsuf == "":
-            stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
+        if ctx.attrs.incremental:
+            if bootsuf == "":
+                stub_dir = ctx.actions.declare_output("stub-" + suffix + "-" + module_name, dir=True)
+            else:
+                stub_dir = None
         else:
             stub_dir = None
 
@@ -845,7 +857,177 @@ def _compile_incr(
             allow_worker = arg.allow_worker,
         )
 
-def _dynamic_do_compile_impl(actions, md_file, pkg_deps, arg, direct_deps_by_name, outputs):
+
+def _dynamic_get_module_tsets_impl(actions) -> list[Provider]:
+    return []
+
+_dynamic_get_module_tsets = dynamic_actions(
+    impl = _dynamic_get_module_tsets_impl,
+    attrs = {},
+)
+
+def compile_args(
+        actions,
+        haskell_toolchain,
+        md_file,
+        compiler_flags,
+        main,
+        deps,
+        sources,
+        link_style: LinkStyle,
+        enable_profiling: bool,
+        pkgname = None,
+        suffix: str = "") -> CompileArgsInfo:
+
+    # for now
+    direct_deps_link_info = []
+    haskell_direct_deps_lib_infos = []
+
+    compile_cmd = cmd_args()
+    compile_cmd.add(haskell_toolchain.compiler_flags)
+
+    # Some rules pass in RTS (e.g. `+RTS ... -RTS`) options for GHC, which can't
+    # be parsed when inside an argsfile.
+    compile_cmd.add(compiler_flags)
+
+    compile_args = cmd_args()
+    compile_args.add("-no-link", "-i")
+    compile_args.add("-package-env=-")
+
+    if enable_profiling:
+        compile_args.add("-prof")
+
+    if link_style == LinkStyle("shared"):
+        compile_args.add("-dynamic", "-fPIC")
+    elif link_style == LinkStyle("static_pic"):
+        compile_args.add("-fPIC", "-fexternal-dynamic-refs")
+
+    osuf, hisuf = output_extensions(link_style, enable_profiling)
+    compile_args.add("-osuf", osuf, "-hisuf", hisuf)
+
+    if main != None:
+        compile_args.add(["-main-is", main])
+
+    artifact_suffix = get_artifact_suffix(link_style, enable_profiling, suffix)
+
+    for dir in ["o", "hi", "hie"]:
+        compile_args.add(
+           "-{}dir".format(dir), cmd_args([cmd_args(md_file, ignore_artifacts=True, parent=1), "mod-" + artifact_suffix], delimiter="/"),
+        )
+
+    # Add -package-db and -package/-expose-package flags for each Haskell
+    # library dependency.
+    packages_info = get_packages_info(
+        actions,
+        deps,
+        direct_deps_link_info,
+        haskell_toolchain,
+        haskell_direct_deps_lib_infos,
+        LinkStyle("shared"),
+        specify_pkg_version = False,
+        enable_profiling = enable_profiling,
+        use_empty_lib = False,
+        for_deps = False,
+        pkg_deps = None,
+    )
+
+    compile_args.add(packages_info.exposed_package_args)
+    compile_args.add(packages_info.packagedb_args)
+
+    # Add args from preprocess-able inputs.
+    inherited_pre = cxx_inherited_preprocessor_infos(deps)
+    pre = cxx_merge_cpreprocessors_actions(actions, [], inherited_pre)
+    pre_args = pre.set.project_as_args("args")
+    compile_args.add(cmd_args(pre_args, format = "-optP={}"))
+
+    if pkgname:
+        compile_args.add(["-this-unit-id", pkgname])
+
+    arg_srcs = []
+    hidden_srcs = []
+    for (path, src) in srcs_to_pairs(sources):
+        # hs-boot files aren't expected to be an argument to compiler but does need
+        # to be included in the directory of the associated src file
+        if is_haskell_src(path):
+            arg_srcs.append(src)
+        else:
+            hidden_srcs.append(src)
+    srcs = cmd_args(
+        arg_srcs,
+        hidden = hidden_srcs,
+    )
+
+    producing_indices = "-fwrite-ide-info" in compiler_flags
+
+    return CompileArgsInfo(
+        srcs = srcs,
+        args_for_cmd = compile_cmd,
+        args_for_file = compile_args,
+    )
+
+# Compile in one step all the context's sources
+def _compile_non_incr(
+    actions,
+    module_tsets,
+    arg,
+    common_args,
+    graph,
+    mapped_modules,
+    th_modules,
+    package_deps,
+    direct_deps_by_name,
+    source_prefixes,
+    outputs,
+) -> None:
+    haskell_toolchain = arg.haskell_toolchain
+    link_style = arg.link_style
+    enable_profiling = arg.enable_profiling
+
+    compile_cmd = cmd_args(haskell_toolchain.compiler, hidden = outputs.values())
+
+    args = compile_args(
+        actions,
+        haskell_toolchain = haskell_toolchain,
+        md_file = arg.md_file,
+        compiler_flags = arg.compiler_flags,
+        main = arg.main,
+        deps = arg.deps,
+        sources = arg.sources,
+        link_style = link_style,
+        enable_profiling = enable_profiling,
+        pkgname = arg.pkgname,
+    )
+
+    compile_cmd.add(args.args_for_cmd)
+
+    artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
+
+    if args.args_for_file:
+        if haskell_toolchain.use_argsfile:
+            compile_cmd.add(at_argfile(
+                actions = actions,
+                name = artifact_suffix + ".haskell_compile_argsfile",
+                args = [args.args_for_file, args.srcs],
+                allow_args = True,
+            ))
+        else:
+            compile_cmd.add(args.args_for_file)
+            compile_cmd.add(args.srcs)
+
+    artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
+    actions.run(
+        compile_cmd,
+        category = "haskell_compile_" + artifact_suffix.replace("-", "_"),
+        # We can't use no_outputs_cleanup because GHC's recompilation checking
+        # is based on file timestamps, and Buck doesn't maintain timestamps when
+        # artifacts may come from RE.
+        # TODO: enable this for GHC 9.4 which tracks file changes using hashes
+        # not timestamps.
+        # no_outputs_cleanup = True,
+    )
+
+
+def _dynamic_do_compile_impl(actions, incremental, md_file, pkg_deps, arg, direct_deps_by_name, outputs):
     common_args = _common_compile_module_args(
         actions,
         compiler_flags = arg.compiler_flags,
@@ -876,24 +1058,41 @@ def _dynamic_do_compile_impl(actions, md_file, pkg_deps, arg, direct_deps_by_nam
     module_tsets = {}
     source_prefixes = get_source_prefixes(arg.sources, module_map)
 
-    _compile_incr(
-        actions,
-        module_tsets,
-        arg,
-        common_args,
-        graph,
-        mapped_modules,
-        th_modules,
-        package_deps,
-        direct_deps_by_name,
-        source_prefixes,
-        outputs,
-    )
+    if incremental:
+        _compile_incr(
+            actions,
+            module_tsets,
+            arg,
+            common_args,
+            graph,
+            mapped_modules,
+            th_modules,
+            package_deps,
+            direct_deps_by_name,
+            source_prefixes,
+            outputs,
+        )
+    else:
+        _compile_non_incr(
+            actions,
+            module_tsets,
+            arg,
+            common_args,
+            graph,
+            mapped_modules,
+            th_modules,
+            package_deps,
+            direct_deps_by_name,
+            source_prefixes,
+            outputs,
+        )
+
     return [DynamicCompileResultInfo(modules = module_tsets)]
 
 _dynamic_do_compile = dynamic_actions(
     impl = _dynamic_do_compile_impl,
     attrs = {
+        "incremental": dynattrs.value(bool),
         "md_file" : dynattrs.artifact_value(),
         "arg" : dynattrs.value(typing.Any),
         "pkg_deps": dynattrs.option(dynattrs.dynamic_value()),
@@ -910,6 +1109,7 @@ def compile(
         enable_haddock: bool,
         md_file: Artifact,
         worker: WorkerInfo | None = None,
+        incremental: bool = False,
         pkgname: str | None = None) -> CompileResultInfo:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
@@ -924,7 +1124,11 @@ def compile(
         for module in modules.values()
         if module.stub_dir != None
     ]
-    abi_hashes = [module.hash for module in modules.values()]
+    abi_hashes = [
+        module.hash
+        for module in modules.values()
+        if module.stub_dir != None
+    ]
 
     # Collect library dependencies. Note that these don't need to be in a
     # particular order.
@@ -938,6 +1142,7 @@ def compile(
     ]
 
     dyn_module_tsets = ctx.actions.dynamic_output_new(_dynamic_do_compile(
+        incremental = incremental,
         md_file = md_file,
         pkg_deps = haskell_toolchain.packages.dynamic if haskell_toolchain.packages else None,
         outputs = {o: o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes},
