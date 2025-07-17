@@ -178,7 +178,7 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
 
-    packages_info = get_packages_info2(
+    packages_info = get_packages_info(
         actions,
         arg.deps,
         arg.direct_deps_link_info,
@@ -370,33 +370,6 @@ def _package_flag(toolchain: HaskellToolchainInfo) -> str:
         return "-package"
 
 def get_packages_info(
-        ctx: AnalysisContext,
-        link_style: LinkStyle,
-        specify_pkg_version: bool,
-        enable_profiling: bool,
-        use_empty_lib: bool) -> PackagesInfo:
-    haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
-
-    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
-        ctx,
-        link_style,
-        enable_profiling,
-    )
-
-    return get_packages_info2(
-        actions = ctx.actions,
-        deps = [],
-        direct_deps_link_info = attr_deps_haskell_link_infos(ctx),
-        haskell_toolchain = haskell_toolchain,
-        haskell_direct_deps_lib_infos = haskell_direct_deps_lib_infos,
-        link_style = link_style,
-        specify_pkg_version = specify_pkg_version,
-        enable_profiling = enable_profiling,
-        use_empty_lib = use_empty_lib,
-        pkg_deps = None,
-    )
-
-def get_packages_info2(
     actions: AnalysisActions,
     deps: list[Dependency],
     direct_deps_link_info: list[HaskellLinkInfo],

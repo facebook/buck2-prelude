@@ -55,7 +55,7 @@ load(
     "@prelude//haskell:compile.bzl",
     "CompileResultInfo",
     "compile",
-    "get_packages_info2",
+    "get_packages_info",
     "target_metadata",
 )
 load(
@@ -1210,7 +1210,7 @@ def _dynamic_link_binary_impl(actions, pkg_deps, output, arg):
 
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
-    packages_info = get_packages_info2(
+    packages_info = get_packages_info(
         actions,
         deps = arg.deps,
         direct_deps_link_info = arg.direct_deps_link_info,

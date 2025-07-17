@@ -30,7 +30,13 @@ load(
     "@prelude//haskell:toolchain.bzl",
     "HaskellToolchainInfo",
 )
-load("@prelude//haskell:util.bzl", "attr_deps", "get_artifact_suffix")
+load(
+    "@prelude//haskell:util.bzl",
+    "attr_deps",
+    "attr_deps_haskell_lib_infos",
+    "attr_deps_haskell_link_infos",
+    "get_artifact_suffix",
+)
 load("@prelude//linking:execution_preference.bzl", "LinkExecutionPreference")
 load(
     "@prelude//linking:link_info.bzl",
@@ -638,12 +644,23 @@ def haskell_ghci_impl(ctx: AnalysisContext) -> list[Provider]:
     link_style = LinkStyle("shared")
     #link_style = LinkStyle("static_pic")
 
-    packages_info = get_packages_info(
+    haskell_direct_deps_lib_infos = attr_deps_haskell_lib_infos(
         ctx,
         link_style,
+        enable_profiling,
+    )
+
+    packages_info = get_packages_info(
+        actions = ctx.actions,
+        deps = [],
+        direct_deps_link_info = attr_deps_haskell_link_infos(ctx),
+        haskell_toolchain = haskell_toolchain,
+        haskell_direct_deps_lib_infos = haskell_direct_deps_lib_infos,
+        link_style = link_style,
         specify_pkg_version = True,
         enable_profiling = enable_profiling,
         use_empty_lib = False,
+        pkg_deps = None,
     )
 
     # Create package db symlinks
