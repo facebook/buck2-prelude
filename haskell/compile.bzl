@@ -830,6 +830,48 @@ def _compile_module(
 
     return module_tset
 
+# Compile incrementally and fill module_tsets accordingly.
+def _compile_incr(
+    actions,
+    module_tsets,
+    arg,
+    common_args,
+    graph,
+    mapped_modules,
+    th_modules,
+    package_deps,
+    direct_deps_by_name,
+    source_prefixes,
+    outputs,
+) -> None:
+    for module_name in post_order_traversal(graph):
+        module = mapped_modules[module_name]
+        module_tsets[module_name] = _compile_module(
+            actions,
+            aux_deps = arg.sources_deps.get(module.source),
+            src_envs = arg.srcs_envs.get(module.source),
+            common_args = common_args,
+            link_style = arg.link_style,
+            enable_profiling = arg.enable_profiling,
+            enable_th = module_name in th_modules,
+            haskell_toolchain = arg.haskell_toolchain,
+            label = arg.label,
+            module_name = module_name,
+            module = module,
+            module_tsets = module_tsets,
+            graph = graph,
+            package_deps = package_deps.get(module_name, {}),
+            outputs = outputs,
+            md_file = arg.md_file,
+            artifact_suffix = arg.artifact_suffix,
+            direct_deps_by_name = direct_deps_by_name,
+            toolchain_deps_by_name = arg.toolchain_deps_by_name,
+            source_prefixes = source_prefixes,
+            extra_libraries = arg.extra_libraries,
+            worker = arg.worker,
+            allow_worker = arg.allow_worker,
+        )
+
 def _dynamic_do_compile_impl(actions, md_file, pkg_deps, arg, direct_deps_by_name, outputs):
     common_args = _common_compile_module_args(
         actions,
@@ -861,37 +903,20 @@ def _dynamic_do_compile_impl(actions, md_file, pkg_deps, arg, direct_deps_by_nam
     module_tsets = {}
     source_prefixes = get_source_prefixes(arg.sources, module_map)
 
-    for module_name in post_order_traversal(graph):
-        module = mapped_modules[module_name]
-        module_tsets[module_name] = _compile_module(
-            actions,
-            aux_deps = arg.sources_deps.get(module.source),
-            src_envs = arg.srcs_envs.get(module.source),
-            common_args = common_args,
-            link_style = arg.link_style,
-            enable_profiling = arg.enable_profiling,
-            enable_th = module_name in th_modules,
-            haskell_toolchain = arg.haskell_toolchain,
-            label = arg.label,
-            module_name = module_name,
-            module = module,
-            module_tsets = module_tsets,
-            graph = graph,
-            package_deps = package_deps.get(module_name, {}),
-            outputs = outputs,
-            md_file = arg.md_file,
-            artifact_suffix = arg.artifact_suffix,
-            direct_deps_by_name = direct_deps_by_name,
-            toolchain_deps_by_name = arg.toolchain_deps_by_name,
-            source_prefixes = source_prefixes,
-            extra_libraries = arg.extra_libraries,
-            worker = arg.worker,
-            allow_worker = arg.allow_worker,
-        )
-
+    _compile_incr(
+        actions,
+        module_tsets,
+        arg,
+        common_args,
+        graph,
+        mapped_modules,
+        th_modules,
+        package_deps,
+        direct_deps_by_name,
+        source_prefixes,
+        outputs,
+    )
     return [DynamicCompileResultInfo(modules = module_tsets)]
-
-
 
 _dynamic_do_compile = dynamic_actions(
     impl = _dynamic_do_compile_impl,
