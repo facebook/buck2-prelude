@@ -58,14 +58,17 @@ load("@prelude//utils:strings.bzl", "strip_prefix")
 load("@prelude//haskell:util.bzl", "to_hash")
 
 CompiledModuleInfo = provider(fields = {
-    "abi": provider_field(Artifact),
+    "abi": provider_field(Artifact | None),
     "interfaces": provider_field(list[Artifact]),
     # TODO[AH] track this module's package-name/id & package-db instead.
     "db_deps": provider_field(list[Artifact]),
 })
 
 def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
-    return cmd_args(mod.abi)
+    if mod.abi:
+        return cmd_args(mod.abi)
+    else:
+        return cmd_args()
 
 def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.interfaces)
@@ -891,7 +894,6 @@ def _compile_incr(
             allow_worker = arg.allow_worker,
         )
 
-
 def _dynamic_get_module_tsets_impl(actions) -> list[Provider]:
     return []
 
@@ -1003,6 +1005,21 @@ def compile_args(
         args_for_file = compile_args,
     )
 
+def _make_module_tset_non_incr(
+    actions,
+) -> CompiledModuleTSet:
+    module_tset = actions.tset(
+        CompiledModuleTSet,
+        value = CompiledModuleInfo(
+            abi = None,
+            interfaces = [],
+            db_deps = [],
+        ),
+        children = [],
+    )
+
+    return module_tset
+
 # Compile in one step all the context's sources
 def _compile_non_incr(
     actions,
@@ -1055,6 +1072,11 @@ def _compile_non_incr(
             compile_cmd.add(args.srcs)
 
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
+
+    for module_name in post_order_traversal(graph):
+        module = mapped_modules[module_name]
+        module_tsets[module_name] = _make_module_tset_non_incr(actions)
+
     actions.run(
         compile_cmd,
         category = "haskell_compile_" + artifact_suffix.replace("-", "_"),
