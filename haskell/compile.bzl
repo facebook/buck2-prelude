@@ -472,6 +472,7 @@ CommonCompileModuleArgs = record(
     command = field(cmd_args),
     args_for_file = field(cmd_args),
     package_env_args = field(cmd_args),
+    target_deps_args = field(cmd_args),
 )
 
 def add_worker_args(
@@ -532,6 +533,8 @@ def _common_compile_module_args(
     sources: list[Artifact],
     direct_deps_info: list[HaskellLibraryInfoTSet],
     allow_worker: bool,
+    toolchain_deps_by_name,
+    direct_deps_by_name,
     pkgname: str | None = None,
 ) -> CommonCompileModuleArgs:
 
@@ -634,10 +637,20 @@ def _common_compile_module_args(
         hidden = packagedb_args,
     )
 
+    # target-level dependencies. needed for non-incremental build.
+    target_deps_args = cmd_args()
+
+    for pkg in toolchain_deps_by_name.keys():
+        target_deps_args.add(cmd_args(pkg, prepend = "-package"))
+
+    for pkg in direct_deps_by_name.keys():
+        target_deps_args.add(cmd_args(pkg, prepend = "-package"))
+
     return CommonCompileModuleArgs(
         command = command,
         args_for_file = args_for_file,
         package_env_args = package_env_args,
+        target_deps_args = target_deps_args,
     )
 
 def _compile_module(
@@ -898,6 +911,7 @@ def compile_args(
         link_style: LinkStyle,
         enable_profiling: bool,
         package_env_args: cmd_args,
+        target_deps_args: cmd_args,
         pkgname = None,
         suffix: str = "") -> CompileArgsInfo:
 
@@ -916,6 +930,7 @@ def compile_args(
     compile_args.add("-no-link", "-i")
 
     compile_args.add(package_env_args)
+    compile_args.add(target_deps_args)
 
     if enable_profiling:
         compile_args.add("-prof")
@@ -1008,7 +1023,6 @@ def _compile_non_incr(
 
     compile_cmd = cmd_args(haskell_toolchain.compiler, hidden = outputs.values())
 
-
     args = compile_args(
         actions,
         haskell_toolchain = haskell_toolchain,
@@ -1020,6 +1034,7 @@ def _compile_non_incr(
         link_style = link_style,
         enable_profiling = enable_profiling,
         package_env_args = common_args.package_env_args,
+        target_deps_args = common_args.target_deps_args,
         pkgname = arg.pkgname,
     )
 
@@ -1070,6 +1085,8 @@ def _dynamic_do_compile_impl(actions, incremental, md_file, pkg_deps, arg, direc
         link_style = arg.link_style,
         direct_deps_info = arg.direct_deps_info,
         allow_worker = arg.allow_worker,
+        toolchain_deps_by_name = arg.toolchain_deps_by_name,
+        direct_deps_by_name = direct_deps_by_name,
         pkgname = arg.pkgname,
     )
 
