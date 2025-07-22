@@ -147,12 +147,20 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
         module_name = src_to_module_name(src.short_path) + bootsuf
         if module_prefix:
-            interface_path = paths.replace_extension(module_prefix.replace(".", "/") + "/" + src.short_path, "." + hisuf + bootsuf)
+            short_path_stripped = module_prefix.replace(".", "/") + "/" + src.short_path
+            interface_path = paths.replace_extension(short_path_stripped, "." + hisuf + bootsuf)
         else:
-            interface_path = paths.replace_extension(src.short_path, "." + hisuf + bootsuf)
+            s = src.short_path
+            for prefix in ctx.attrs.strip_prefix:
+                s1 = strip_prefix(prefix, src.short_path)
+                if s1 != None:
+                   s = s1
+                   break
+            short_path_stripped = _strip_prefix("/", s)
+            interface_path = paths.replace_extension(short_path_stripped, "." + hisuf + bootsuf)
         interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
         interfaces = [interface]
-        object_path = paths.replace_extension(src.short_path, "." + osuf + bootsuf)
+        object_path = paths.replace_extension(short_path_stripped, "." + osuf + bootsuf)
         object = ctx.actions.declare_output("mod-" + suffix, object_path)
         objects = [object]
         if ctx.attrs.incremental:
@@ -795,17 +803,14 @@ def _compile_module(
 
     compile_cmd = cmd_args(compile_cmd_args, hidden = compile_cmd_hidden)
 
-    # add each module dir prefix to search path
-    for prefix in source_prefixes:
-        compile_cmd.add(
-            cmd_args(
-                cmd_args(md_file, format = "-i{}", ignore_artifacts=True, parent=1),
-                "/",
-                paths.join(module.prefix_dir, prefix),
-                delimiter=""
-            )
+    compile_cmd.add(
+        cmd_args(
+            cmd_args(md_file, format = "-i{}", ignore_artifacts=True, parent=1),
+            "/",
+            module.prefix_dir,
+            delimiter=""
         )
-
+    )
 
     compile_cmd.add(cmd_args(library_deps, prepend = "-package"))
     compile_cmd.add(cmd_args(toolchain_deps, prepend = "-package"))
