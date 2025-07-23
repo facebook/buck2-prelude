@@ -955,6 +955,10 @@ def compile_args(
     if enable_profiling:
         compile_args.add("-prof")
 
+    compile_args.add("-fbyte-code-and-object-code")
+    compile_args.add("-fprefer-byte-code")
+    compile_args.add("-j")
+
     if link_style == LinkStyle("shared"):
         compile_args.add("-dynamic", "-fPIC")
     elif link_style == LinkStyle("static_pic"):
