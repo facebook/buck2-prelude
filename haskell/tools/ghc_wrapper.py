@@ -21,12 +21,12 @@ def main():
     )
     parser.add_argument(
         "--buck2-dep",
-        required=True,
+        required=False,
         help="Path to the dep file.",
     )
     parser.add_argument(
         "--buck2-packagedb-dep",
-        required=True,
+        required=False,
         help="Path to the dep file.",
     )
     parser.add_argument(
@@ -50,7 +50,7 @@ def main():
     )
     parser.add_argument(
         "--abi-out",
-        required=True,
+        required=False, # True,
         type=Path,
         help="Output path of the abi file to create.",
     )
@@ -141,45 +141,48 @@ def main():
 
     recompute_abi_hash(args.ghc, args.abi_out, use_persistent_workers)
 
-    # write an empty dep file, to signal that all tagged files are unused
-    try:
-        with open(args.buck2_dep, "w") as f:
-            f.write("\n")
-
-    except Exception as e:
-        # remove incomplete dep file
-        os.remove(args.buck2_dep)
-        raise e
-
-    # write an empty dep file, to signal that all tagged files are unused
-    try:
-        with open(args.buck2_packagedb_dep, "w") as f:
-            for db in args.buck2_package_db:
-                f.write(db + "\n")
-            if not args.buck2_package_db:
+    if args.buck2_dep:
+        # write an empty dep file, to signal that all tagged files are unused
+        try:
+            with open(args.buck2_dep, "w") as f:
                 f.write("\n")
 
-    except Exception as e:
-        # remove incomplete dep file
-        os.remove(args.buck2_packagedb_dep)
-        raise e
+        except Exception as e:
+            # remove incomplete dep file
+            os.remove(args.buck2_dep)
+            raise e
+
+    if args.buck2_packagedb_dep:
+        # write an empty dep file, to signal that all tagged files are unused
+        try:
+            with open(args.buck2_packagedb_dep, "w") as f:
+                for db in args.buck2_package_db:
+                    f.write(db + "\n")
+                if not args.buck2_package_db:
+                    f.write("\n")
+
+        except Exception as e:
+            # remove incomplete dep file
+            os.remove(args.buck2_packagedb_dep)
+            raise e
 
     return 0
 
 
 def recompute_abi_hash(ghc, abi_out, use_persistent_workers):
     """Call ghc on the hi file and write the ABI hash to abi_out."""
-    hi_file = abi_out.with_suffix("")
-    if use_persistent_workers:
-        worker_args = ["--worker-target-id=show-iface-abi-hash"]
-    else:
-        worker_args = []
+    if abi_out:
+        hi_file = abi_out.with_suffix("")
+        if use_persistent_workers:
+            worker_args = ["--worker-target-id=show-iface-abi-hash"]
+        else:
+            worker_args = []
 
-    cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file] + worker_args
+        cmd = [ghc, "-v0", "-package-env=-", "--show-iface-abi-hash", hi_file] + worker_args
 
-    hash = subprocess.check_output(cmd, text=True).split(maxsplit=1)[0]
+        hash = subprocess.check_output(cmd, text=True).split(maxsplit=1)[0]
 
-    abi_out.write_text(hash)
+        abi_out.write_text(hash)
 
 
 if __name__ == "__main__":
