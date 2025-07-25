@@ -193,6 +193,13 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
     # Add -package-db and -package/-expose-package flags for each Haskell
     # library dependency.
 
+    if arg.incremental:
+        use_empty_lib = True
+        for_deps = True
+    else:
+        use_empty_lib = False
+        for_deps = False
+
     packages_info = get_packages_info(
         actions,
         arg.deps,
@@ -202,8 +209,8 @@ def _dynamic_target_metadata_impl(actions, output, arg, pkg_deps) -> list[Provid
         LinkStyle("shared"),
         specify_pkg_version = False,
         enable_profiling = False,
-        use_empty_lib = True,
-        for_deps = True,
+        use_empty_lib = use_empty_lib,
+        for_deps = for_deps,
         pkg_deps = pkg_deps,
     )
     package_flag = _package_flag(arg.haskell_toolchain)
@@ -356,6 +363,7 @@ def target_metadata(
             allow_worker = ctx.attrs.allow_worker,
             pkgname = pkgname,
             label = ctx.label,
+            incremental = ctx.attrs.incremental,
         ),
     ))
 
@@ -522,6 +530,7 @@ def _common_compile_module_args(
     actions: AnalysisActions,
     *,
     compiler_flags: list[ArgLike],
+    incremental: bool,
     ghc_wrapper: RunInfo,
     haskell_toolchain: HaskellToolchainInfo,
     pkg_deps: ResolvedDynamicValue | None,
@@ -622,7 +631,10 @@ def _common_compile_module_args(
         format="--bin-exe={}",
     ))
 
-    packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
+    if incremental:
+        packagedb_args = cmd_args(libs.project_as_args("empty_package_db"))
+    else:
+        packagedb_args = cmd_args(libs.project_as_args("package_db"))
     packagedb_args.add(package_db_tset.project_as_args("package_db"))
 
     package_env_file = make_package_env(
@@ -1093,6 +1105,7 @@ def _dynamic_do_compile_impl(actions, incremental, md_file, pkg_deps, arg, direc
     common_args = _common_compile_module_args(
         actions,
         compiler_flags = arg.compiler_flags,
+        incremental = incremental,
         deps = arg.deps,
         external_tool_paths = arg.external_tool_paths,
         extra_libraries = arg.extra_libraries,
