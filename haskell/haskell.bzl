@@ -81,6 +81,7 @@ load(
     "HaskellToolchainLibrary",
     "HaskellPackageDbTSet",
     "DynamicHaskellPackageDbInfo",
+    "NativeToolchainLibrary",
 )
 load(
     "@prelude//haskell:util.bzl",
@@ -591,6 +592,15 @@ def _dynamic_link_shared_impl(actions, pkg_deps, lib, arg):
     link_args.add(arg.objects)
 
     link_args.add(cmd_args(unpack_link_args(arg.infos), prepend = "-optl"))
+    # extra-libraries
+    extra_libs = [
+        lib[NativeToolchainLibrary]
+        for lib in arg.extra_libraries
+        if NativeToolchainLibrary in lib
+    ]
+    for l in extra_libs:
+        link_args.add(cmd_args(l.lib_path))
+        link_args.add(cmd_args("-l{}".format(l.name)))
 
     if arg.use_argsfile_at_link:
         link_cmd_args.append(at_argfile(
@@ -702,6 +712,7 @@ def _build_haskell_lib(
                 toolchain_libs = toolchain_libs,
                 use_argsfile_at_link = ctx.attrs.use_argsfile_at_link,
                 worker_target_id = pkgname,
+                extra_libraries = ctx.attrs.extra_libraries,
             ),
         ))
 
@@ -1219,6 +1230,16 @@ def _dynamic_link_binary_impl(actions, pkg_deps, output, arg):
     link_cmd.add(arg.haskell_toolchain.linker_flags)
     link_cmd.add(arg.linker_flags)
 
+    # extra-libraries
+    extra_libs = [
+        lib[NativeToolchainLibrary]
+        for lib in arg.extra_libraries
+        if NativeToolchainLibrary in lib
+    ]
+    for l in extra_libs:
+        link_cmd.add(l.lib_path)
+        link_cmd.add("-l{}".format(l.name))
+
     link_cmd.add("-o", output)
 
     actions.run(
@@ -1484,6 +1505,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
             link_style = link_style,
             linker_flags = ctx.attrs.linker_flags,
             toolchain_libs = toolchain_libs,
+            extra_libraries = ctx.attrs.extra_libraries,
         ),
     ))
 
