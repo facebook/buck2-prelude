@@ -186,10 +186,10 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
 
         if link_style in [LinkStyle("static"), LinkStyle("static_pic")]:
             dyn_osuf, dyn_hisuf = output_extensions(LinkStyle("shared"), enable_profiling)
-            interface_path = paths.replace_extension(src.short_path, "." + dyn_hisuf + bootsuf)
+            interface_path = paths.replace_extension(short_path_stripped, "." + dyn_hisuf + bootsuf)
             interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
             interfaces.append(interface)
-            object_path = paths.replace_extension(src.short_path, "." + dyn_osuf + bootsuf)
+            object_path = paths.replace_extension(short_path_stripped, "." + dyn_osuf + bootsuf)
             object = ctx.actions.declare_output("mod-" + suffix, object_path)
             objects.append(object)
 
