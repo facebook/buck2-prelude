@@ -251,6 +251,7 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
             objects = {},
             dependencies = [],
             import_dirs = {},
+            hie_files = {},
             stub_dirs = [],
             id = ctx.attrs.id,
             dynamic = None,
@@ -267,6 +268,7 @@ def haskell_prebuilt_library_impl(ctx: AnalysisContext) -> list[Provider]:
             objects = {},
             dependencies = [],
             import_dirs = {},
+            hie_files = {},
             stub_dirs = [],
             id = ctx.attrs.id,
             dynamic = None,
@@ -673,6 +675,7 @@ def _build_haskell_lib(
         pkgname = pkgname,
         worker = worker,
         incremental = ctx.attrs.incremental,
+        is_haskell_binary = False,
     )
     solibs = {}
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
@@ -793,6 +796,10 @@ def _build_haskell_lib(
             True: compiled.objects,
             False: non_profiling_hlib.compiled.objects,
         }
+        hie_artifacts = {
+            True: compiled.hie,
+            False: non_profiling_hlib.compiled.hie,
+        }
         all_libs = libs + non_profiling_hlib.libs
         stub_dirs = [compiled.stubs] + [non_profiling_hlib.compiled.stubs]
     else:
@@ -804,6 +811,9 @@ def _build_haskell_lib(
         }
         object_artifacts = {
             False: compiled.objects,
+        }
+        hie_artifacts = {
+            False: compiled.hie,
         }
         all_libs = libs
         stub_dirs = [compiled.stubs]
@@ -853,6 +863,7 @@ def _build_haskell_lib(
         dynamic = dynamic,  # TODO(ah) refine with dynamic projections
         import_dirs = import_artifacts,
         objects = object_artifacts,
+        hie_files = hie_artifacts,
         stub_dirs = stub_dirs,
         libs = all_libs,
         version = "1.0.0",
@@ -1322,6 +1333,7 @@ def haskell_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         md_file = md_file,
         worker = worker,
         pkgname = pkgname,
+        is_haskell_binary = True,
     )
 
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
@@ -1585,5 +1597,10 @@ def _haskell_module_sub_targets(*, compiled, link_style, enable_profiling):
             src_to_module_name(o.short_path): [DefaultInfo(default_output = o)]
             for o in compiled.objects
             if o.extension[1:] == osuf
+        })],
+        "hie": [DefaultInfo(sub_targets = {
+            src_to_module_name(hie.short_path): [DefaultInfo(default_output = hie)]
+            for hie in compiled.hie
+            if hie.extension == ".hie"
         })],
     }

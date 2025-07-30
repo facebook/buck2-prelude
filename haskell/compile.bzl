@@ -60,6 +60,7 @@ load("@prelude//haskell:util.bzl", "to_hash")
 CompiledModuleInfo = provider(fields = {
     "abi": provider_field(Artifact | None),
     "interfaces": provider_field(list[Artifact]),
+    "hie_files": provider_field(list[Artifact]),
     # TODO[AH] track this module's package-name/id & package-db instead.
     "db_deps": provider_field(list[Artifact]),
 })
@@ -73,6 +74,9 @@ def _compiled_module_project_as_abi(mod: CompiledModuleInfo) -> cmd_args:
 def _compiled_module_project_as_interfaces(mod: CompiledModuleInfo) -> cmd_args:
     return cmd_args(mod.interfaces)
 
+def _compiled_module_project_as_hie_files(mod: CompiledModuleInfo) -> cmd_args:
+    return cmd_args(mod.hie_files)
+
 def _compiled_module_reduce_as_packagedb_deps(children: list[dict[Artifact, None]], mod: CompiledModuleInfo | None) -> dict[Artifact, None]:
     # TODO[AH] is there a better way to avoid duplicate package-dbs?
     #   Using a projection instead would produce duplicates.
@@ -85,6 +89,7 @@ CompiledModuleTSet = transitive_set(
     args_projections = {
         "abi": _compiled_module_project_as_abi,
         "interfaces": _compiled_module_project_as_interfaces,
+        "hie_files": _compiled_module_project_as_hie_files,
     },
     reductions = {
         "packagedb_deps": _compiled_module_reduce_as_packagedb_deps,
@@ -99,6 +104,7 @@ DynamicCompileResultInfo = provider(fields = {
 CompileResultInfo = record(
     objects = field(list[Artifact]),
     hi = field(list[Artifact]),
+    hie = field(list[Artifact]),
     stubs = field(Artifact),
     hashes = field(list[Artifact]),
     producing_indices = field(bool),
@@ -122,6 +128,7 @@ _Module = record(
     interfaces = field(list[Artifact]),
     hash = field(Artifact | None),
     objects = field(list[Artifact]),
+    hie_files = field(list[Artifact]),
     stub_dir = field(Artifact | None),
     prefix_dir = field(str),
 )
@@ -132,8 +139,7 @@ def _strip_prefix(prefix, s):
 
     return stripped if stripped != None else s
 
-
-def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_style: LinkStyle, enable_profiling: bool, suffix: str, module_prefix: str | None) -> dict[str, _Module]:
+def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_style: LinkStyle, enable_profiling: bool, suffix: str, module_prefix: str | None, is_haskell_binary: bool) -> dict[str, _Module]:
     modules = {}
 
     osuf, hisuf = output_extensions(link_style, enable_profiling)
@@ -160,9 +166,19 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
             interface_path = paths.replace_extension(short_path_stripped, "." + hisuf + bootsuf)
         interface = ctx.actions.declare_output("mod-" + suffix, interface_path)
         interfaces = [interface]
+
         object_path = paths.replace_extension(short_path_stripped, "." + osuf + bootsuf)
         object = ctx.actions.declare_output("mod-" + suffix, object_path)
         objects = [object]
+
+        # TODO(wavewave): when we extract module name directly, we don't have to discern this case.
+        if not is_haskell_binary:
+            hie_path = paths.replace_extension(short_path_stripped, ".hie")
+            hie_file = ctx.actions.declare_output("mod-" + suffix, hie_path)
+            hie_files = [hie_file]
+        else:
+            hie_files = []
+
         if ctx.attrs.incremental:
             hash = ctx.actions.declare_output("mod-" + suffix, interface_path + ".hash")
         else:
@@ -192,6 +208,7 @@ def _modules_by_name(ctx: AnalysisContext, *, sources: list[Artifact], link_styl
             interfaces = interfaces,
             hash = hash,
             objects = objects,
+            hie_files = hie_files,
             stub_dir = stub_dir,
             prefix_dir = prefix_dir)
 
@@ -591,6 +608,7 @@ def _common_compile_module_args(
 
     args_for_file.add("-no-link", "-i")
     args_for_file.add("-hide-all-packages")
+    args_for_file.add("-fwrite-ide-info")
 
     if enable_profiling:
         args_for_file.add("-prof")
@@ -701,6 +719,7 @@ def _compile_module(
     extra_libraries: list[Dependency],
     worker: None | WorkerInfo,
     allow_worker: bool,
+    is_haskell_binary: bool,
 ) -> CompiledModuleTSet:
     # These compiler arguments can be passed in a response file.
     compile_args_for_file = cmd_args(common_args.args_for_file, hidden = aux_deps or [])
@@ -720,9 +739,13 @@ def _compile_module(
 
     objects = [outputs[obj] for obj in module.objects]
     his = [outputs[hi] for hi in module.interfaces]
+    hies = [outputs[hie] for hie in module.hie_files]
 
     compile_args_for_file.add("-o", objects[0])
-    compile_args_for_file.add("-ohi", his[0])
+    if not hies:
+        compile_args_for_file.add(cmd_args("-ohi", his[0]))
+    else:
+        compile_args_for_file.add(cmd_args("-ohi", his[0], hidden = [hies[0]]))
 
     # Set the output directories. We do not use the -outputdir flag, but set the directories individually.
     # Note, the -outputdir option is shorthand for the combination of -odir, -hidir, -hiedir, -stubdir and -dumpdir.
@@ -862,6 +885,7 @@ def _compile_module(
         value = CompiledModuleInfo(
             abi = module.hash,
             interfaces = module.interfaces,
+            hie_files = module.hie_files,
             db_deps = exposed_package_dbs,
         ),
         children = [cross_package_modules] + this_package_modules,
@@ -909,6 +933,7 @@ def _compile_incr(
             extra_libraries = arg.extra_libraries,
             worker = arg.worker,
             allow_worker = arg.allow_worker,
+            is_haskell_binary = arg.is_haskell_binary,
         )
 
 def _dynamic_get_module_tsets_impl(actions) -> list[Provider]:
@@ -1041,6 +1066,7 @@ def _make_module_tset_non_incr(
         value = CompiledModuleInfo(
             abi = None,
             interfaces = [],
+            hie_files = [],
             db_deps = [],
         ),
         children = [],
@@ -1205,15 +1231,16 @@ def compile(
         md_file: Artifact,
         worker: WorkerInfo | None = None,
         incremental: bool = False,
+        is_haskell_binary: bool = False,
         pkgname: str | None = None) -> CompileResultInfo:
     artifact_suffix = get_artifact_suffix(link_style, enable_profiling)
 
-    modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix, module_prefix = ctx.attrs.module_prefix)
-
+    modules = _modules_by_name(ctx, sources = ctx.attrs.srcs, link_style = link_style, enable_profiling = enable_profiling, suffix = artifact_suffix, module_prefix = ctx.attrs.module_prefix, is_haskell_binary = is_haskell_binary)
     haskell_toolchain = ctx.attrs._haskell_toolchain[HaskellToolchainInfo]
 
     interfaces = [interface for module in modules.values() for interface in module.interfaces]
     objects = [object for module in modules.values() for object in module.objects]
+    hie_files = [hie_file for module in modules.values() for hie_file in module.hie_files]
     stub_dirs = [
         module.stub_dir
         for module in modules.values()
@@ -1240,7 +1267,7 @@ def compile(
         incremental = incremental,
         md_file = md_file,
         pkg_deps = haskell_toolchain.packages.dynamic if haskell_toolchain.packages else None,
-        outputs = {o: o.as_output() for o in interfaces + objects + stub_dirs + abi_hashes},
+        outputs = {o: o.as_output() for o in interfaces + objects + hie_files + stub_dirs + abi_hashes},
         direct_deps_by_name = {
             info.value.name: (info.value.empty_db, info.value.dynamic[enable_profiling])
             for info in direct_deps_info
@@ -1268,6 +1295,7 @@ def compile(
             extra_libraries = ctx.attrs.extra_libraries,
             worker = worker,
             allow_worker = ctx.attrs.allow_worker,
+            is_haskell_binary = is_haskell_binary,
         ),
     ))
 
@@ -1316,6 +1344,7 @@ def compile(
         hi = interfaces,
         hashes = abi_hashes,
         stubs = stubs_dir,
+        hie = hie_files,
         producing_indices = False,
         module_tsets = dyn_module_tsets,
     )
