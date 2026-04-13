@@ -377,12 +377,15 @@ def assemble_bundle(
     ]
 
     signing_context_output = ctx.actions.declare_output("provisioning-manifest.json", has_content_based_path = False)
+    signing_info_output = ctx.actions.declare_output("signing-info.json", has_content_based_path = False)
     ctx.actions.run(
         cmd_args(
             [
                 tools.signing_context,
                 "--output",
                 signing_context_output.as_output(),
+                "--signing-info-output",
+                signing_info_output.as_output(),
             ] + platform_args + codesign_args,
         ),
         category = "apple_provisioning_manifest",
@@ -413,6 +416,7 @@ def assemble_bundle(
     )
 
     subtargets["provisioning-manifest"] = [DefaultInfo(default_output = postprocessed_signing_context_tree)]
+    subtargets["signing-info"] = [DefaultInfo(default_output = signing_info_output)]
 
     return AppleBundleConstructionResult(
         sub_targets = subtargets,
