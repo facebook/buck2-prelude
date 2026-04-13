@@ -135,6 +135,11 @@ def add_args_for_signing_context(parser: argparse.ArgumentParser):
         required=False,
         help="Path to a log file. If present logging will be directed to this file in addition to stderr.",
     )
+    parser.add_argument(
+        "--verify-entitlements",
+        action="store_true",
+        help="Verify that the entitlements match the provisioning profile.",
+    )
 
 
 def signing_context_and_selected_identity_from_args(

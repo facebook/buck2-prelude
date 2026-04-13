@@ -193,11 +193,6 @@ def _args_parser() -> argparse.ArgumentParser:
         help="Create symlinks for versioned macOS bundle",
     )
     parser.add_argument(
-        "--verify-entitlements",
-        action="store_true",
-        help="Verify that the bundle's entitlements match the provisioning profile",
-    )
-    parser.add_argument(
         "--bundle-telemetry-logger",
         metavar="<path/to/logger>",
         type=Path,
