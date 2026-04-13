@@ -94,10 +94,23 @@ prelude.python_bootstrap_binary(
     visibility = ["PUBLIC"],
 )
 
+prelude.python_bootstrap_binary(
+    name = "combine_apk_with_relinked_libs",
+    main = "combine_apk_with_relinked_libs.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_library(
+    name = "combine_apk_with_relinked_libs_lib",
+    srcs = ["combine_apk_with_relinked_libs.py"],
+    visibility = ["PUBLIC"],
+)
+
 # Type checking target for Python tool scripts
 prelude.python_library(
     name = "scripts-typing",
     srcs = [
+        "combine_apk_with_relinked_libs.py",
         "combine_native_library_dirs.py",
         "consolidate_class_names.py",
         "create_jdk_system_image.py",

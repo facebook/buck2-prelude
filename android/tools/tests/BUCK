@@ -13,3 +13,11 @@ prelude.python_test(
         "prelude//android/tools:sort_pre_dexed_files_lib",
     ],
 )
+
+prelude.python_test(
+    name = "test_combine_apk_with_relinked_libs",
+    srcs = ["test_combine_apk_with_relinked_libs.py"],
+    deps = [
+        "prelude//android/tools:combine_apk_with_relinked_libs_lib",
+    ],
+)

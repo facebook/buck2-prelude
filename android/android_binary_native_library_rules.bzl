@@ -203,6 +203,7 @@ def get_android_binary_native_library_info(
 
     has_native_merging = native_library_merge_sequence or native_library_merge_map
     enable_relinker = getattr(ctx.attrs, "enable_relinker", False)
+    defer_relink = getattr(ctx.attrs, "defer_relink", False) and enable_relinker
 
     if has_native_merging or enable_relinker:
         native_merge_debug = ctx.actions.declare_output("native_merge_debug", dir = True, has_content_based_path = False)
@@ -216,6 +217,14 @@ def get_android_binary_native_library_info(
             linkables_debug = ctx.actions.write("linkables." + platform, list(graph_node_map.keys()))
             enhance_ctx.debug_output("linkables." + platform, linkables_debug)
             linkable_nodes_by_platform[platform] = graph_node_map
+
+    relinked_libs_output = None
+    relinked_libs_manifest = None
+    if defer_relink:
+        relinked_libs_output = ctx.actions.declare_output("relinked_libs", dir = True)
+        relinked_libs_manifest = ctx.actions.declare_output("relinked_libs_manifest.json")
+        dynamic_outputs.append(relinked_libs_output)
+        dynamic_outputs.append(relinked_libs_manifest)
 
     lib_outputs_by_platform = _declare_library_subtargets(ctx, dynamic_outputs, original_shared_libs_by_platform, native_library_merge_map, native_library_merge_sequence, enable_relinker)
 
@@ -381,10 +390,27 @@ def get_android_binary_native_library_info(
         else:
             final_shared_libs_by_platform = original_shared_libs_by_platform
 
-        if enable_relinker:
+        if enable_relinker and not defer_relink:
             unrelinked_shared_libs_by_platform = final_shared_libs_by_platform
             final_shared_libs_by_platform = relink_libraries(ctx, final_shared_libs_by_platform)
             _link_library_subtargets(ctx, outputs, lib_outputs_by_platform, original_shared_libs_by_platform, unrelinked_shared_libs_by_platform, merged_shared_lib_targets_by_platform, split_groups, native_merge_debug, unrelinked = True)
+
+        if defer_relink:
+            # Run relinking as separate actions that can execute in parallel with other build steps.
+            # The relinked libs are exposed as [relinked_libs] sub-target for the combine genrule.
+            # A JSON manifest listing the <abi>/<soname> entries is produced alongside so that
+            # the combine script knows exactly which libraries to replace without guessing.
+            relinked_libs_by_platform = relink_libraries(ctx, final_shared_libs_by_platform)
+            relinked_lib_files = {}
+            for platform, libs in relinked_libs_by_platform.items():
+                abi_directory = CPU_FILTER_TO_ABI_DIRECTORY[platform]
+                for soname, shlib in libs.items():
+                    relinked_lib_files["{}/{}".format(abi_directory, soname)] = shlib.stripped_lib or shlib.lib.output
+            ctx.actions.symlinked_dir(outputs[relinked_libs_output], relinked_lib_files)
+            ctx.actions.write_json(outputs[relinked_libs_manifest], sorted(relinked_lib_files.keys()))
+
+            # Bind unrelinked subtarget outputs (same as final since we skipped inline relinking)
+            _link_library_subtargets(ctx, outputs, lib_outputs_by_platform, original_shared_libs_by_platform, final_shared_libs_by_platform, merged_shared_lib_targets_by_platform, split_groups, native_merge_debug, unrelinked = True)
 
         if ctx.attrs._android_toolchain[AndroidToolchainInfo].cross_module_native_deps_check:
             # note: can only detect these if linkable_nodes_by_platform is created, ie. if using relinker or merging
@@ -496,6 +522,10 @@ def get_android_binary_native_library_info(
     enhance_ctx.debug_output("unstripped_native_libraries", unstripped_native_libraries, other_outputs = [unstripped_native_libraries_files])
     enhance_ctx.debug_output("unstripped_native_libraries_json", unstripped_native_libraries_json, other_outputs = [unstripped_native_libraries_files])
     enhance_ctx.debug_output("unstripped_native_libraries_files", unstripped_native_libraries_files)
+    if relinked_libs_output:
+        enhance_ctx.debug_output("relinked_libs", relinked_libs_output)
+    if relinked_libs_manifest:
+        enhance_ctx.debug_output("relinked_libs_manifest", relinked_libs_manifest)
 
     native_libs_for_primary_apk, exopackage_info = _get_exopackage_info(ctx, native_libs_always_in_primary_apk, native_libs, native_libs_metadata)
     return AndroidBinaryNativeLibsInfo(

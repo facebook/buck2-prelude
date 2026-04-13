@@ -104,6 +104,7 @@ ANDROID_BINARY_BUNDLE_COMMON_ATTRS = {
     "cpu_filters": attrs.list(attrs.enum(TargetCpuType), default = [], doc = """The CPU architecture filter applied to the final apk. Could be a subset of ARM, ARMV7, ARM64, X86, X86_64, MIPS. \
 Note: If you set this parameter, you must setup your NDK, otherwise Buck build will fail."""),
     "default_module_manifest_skeleton": attrs.option(attrs.one_of(attrs.transition_dep(cfg = cpu_transition), attrs.source()), default = None, doc = ""),
+    "defer_relink": attrs.bool(default = False),
     "deps": attrs.list(attrs.split_transition_dep(cfg = cpu_split_transition), default = [], doc = """List of build targets whose corresponding compiled Java code, Android resources, and native libraries will be included in the APK. \
 From the transitive closure of these dependencies, the outputs of rules of the following type will be included in the APK: \
 android_library(), android_resource(), cxx_library(), groovy_library(), java_library(), java_binary(), prebuilt_jar(), prebuilt_native_library()."""),
