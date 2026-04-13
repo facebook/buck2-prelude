@@ -654,19 +654,18 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
     val cleanDiagnosticReporter = DiagnosticReporterFactory.createPendingReporter(messageCollector)
     val compilerEnvironment = ModuleCompilerEnvironment(projectEnvironment, cleanDiagnosticReporter)
 
-    // Strip ALL annotations that have error expressions in their arguments.
-    // This is necessary because K2 FIR may fail to resolve const vals or other references
-    // from K1-generated stub JARs (source-only ABI), resulting in error expressions that
-    // cause FIR-to-IR conversion to crash. K1 Kosabi naturally omits unresolvable annotations,
-    // so we replicate that behavior. This is more robust than trying to replace error
-    // expressions with literals (FIR mutation is unreliable).
-    stripAnnotationsWithErrors(analysisResults)
-
-    // Fix property initializers containing error expressions.
-    // During FIR-to-IR conversion, constant evaluation of field initializers crashes
-    // when encountering error expressions. We need to clear these initializers at the
-    // FIR level before convertToIrAndActualizeForJvm is called.
-    fixFirErrorExpressionsInPropertyInitializers(analysisResults)
+    // Sanitize FIR tree in a single pass before FIR-to-IR conversion:
+    // 1. Strip ALL annotations that have error expressions in their arguments.
+    //    This is necessary because K2 FIR may fail to resolve const vals or other references
+    //    from stub jar, resulting in error expressions that
+    //    cause FIR-to-IR conversion to crash. K1 Kosabi naturally omits unresolvable annotations,
+    //    so we replicate that behavior. This is more robust than trying to replace error
+    //    expressions with literals (FIR mutation is unreliable).
+    // 2. Fix property initializers containing error expressions.
+    //    During FIR-to-IR conversion, constant evaluation of field initializers crashes
+    //    when encountering error expressions. We need to clear these initializers at the
+    //    FIR level before convertToIrAndActualizeForJvm is called.
+    sanitizeFirTree(analysisResults)
 
     val irInput =
         convertAnalyzedFirToIr(
@@ -840,28 +839,13 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
     moduleFile.writeBytes(baos.toByteArray())
   }
 
-  // Strip ALL annotations that have error expressions in their arguments.
-  // This is necessary because K2 FIR may fail to resolve const vals or other references
-  // from K1-generated stub JARs (source-only ABI), resulting in error expressions that
-  // cause FIR-to-IR conversion to crash. K1 Kosabi naturally omits unresolvable annotations,
-  // so we replicate that behavior by stripping any annotation with errors.
-  private fun stripAnnotationsWithErrors(analysisResults: FirResult) {
+  // Sanitize FIR tree in a single pass: strip annotations with errors and fix property
+  // initializers containing error expressions. This combines two operations that previously
+  // required separate FIR tree walks.
+  private fun sanitizeFirTree(analysisResults: FirResult) {
     for (output in analysisResults.outputs) {
       for (firFile in output.fir) {
-        firFile.accept(FirAnnotationStrippingVisitor())
-      }
-    }
-  }
-
-  // Fix property initializers containing error expressions.
-  // During FIR-to-IR conversion, constant evaluation fails when encountering error
-  // expressions in property initializers, causing the compiler to crash.
-  // For ABI generation, we only need property types, not the actual initializer values,
-  // so we can safely clear initializers that contain errors.
-  private fun fixFirErrorExpressionsInPropertyInitializers(analysisResults: FirResult) {
-    for (output in analysisResults.outputs) {
-      for (firFile in output.fir) {
-        firFile.accept(FirPropertyInitializerFixerVisitor())
+        firFile.accept(FirSanitizingVisitor())
       }
     }
   }
@@ -1774,13 +1758,26 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
     }
   }
 
-  // Visitor that clears property initializers containing error expressions
-  private inner class FirPropertyInitializerFixerVisitor : FirDefaultVisitorVoid() {
+  // Combined visitor that sanitizes FIR tree in a single pass:
+  // 1. Strips ALL annotations that have error expressions in their arguments.
+  //    This is more robust than trying to replace error expressions with literals,
+  //    because FIR mutation is unreliable. If an annotation can't be resolved, we remove it
+  //    entirely - for ABI generation, it's better to have no annotation than to crash.
+  //    This matches K1 kosabi behavior where unresolved annotations are naturally omitted.
+  // 2. Clears property initializers containing error expressions.
+  //    For ABI generation, we only need property types, not the actual initializer values,
+  //    so we can safely clear initializers that contain errors.
+  private inner class FirSanitizingVisitor : FirDefaultVisitorVoid() {
     override fun visitElement(element: FirElement) {
+      // Strip annotations from any annotated element
+      if (element is org.jetbrains.kotlin.fir.declarations.FirDeclaration) {
+        stripAnnotationsWithErrors(element)
+      }
       element.acceptChildren(this)
     }
 
     override fun visitProperty(property: org.jetbrains.kotlin.fir.declarations.FirProperty) {
+      // Check and clear error initializers
       val initializer = property.initializer
       if (initializer != null && hasErrorExpressionRecursive(initializer)) {
         // Clear the initializer using reflection
@@ -1792,23 +1789,8 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
           // If reflection fails, skip this property
         }
       }
-      // Continue visiting nested declarations
+      // Continue visiting - call super to strip annotations and visit children
       super.visitProperty(property)
-    }
-  }
-
-  // Visitor that strips ALL annotations that have error expressions in their arguments.
-  // This is more robust than trying to replace error expressions with literals,
-  // because FIR mutation is unreliable. If an annotation can't be resolved, we remove it
-  // entirely - for ABI generation, it's better to have no annotation than to crash.
-  // This matches K1 kosabi behavior where unresolved annotations are naturally omitted.
-  private class FirAnnotationStrippingVisitor : FirDefaultVisitorVoid() {
-    override fun visitElement(element: FirElement) {
-      // Strip annotations from any annotated element
-      if (element is org.jetbrains.kotlin.fir.declarations.FirDeclaration) {
-        stripAnnotationsWithErrors(element)
-      }
-      element.acceptChildren(this)
     }
 
     private fun findFieldInHierarchy(clazz: Class<*>, fieldName: String): java.lang.reflect.Field? {
