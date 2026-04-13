@@ -14,7 +14,6 @@ import com.facebook.buck.jvm.kotlin.compilerplugins.common.isStub
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.File
-import org.jetbrains.kotlin.GeneratedDeclarationKey
 import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.jvm.JvmIrDeserializerImpl
@@ -147,7 +146,6 @@ import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.ir.types.IrErrorType
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
-import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.makeNullable
 import org.jetbrains.kotlin.ir.util.isFileClass
@@ -170,8 +168,6 @@ import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.resolve.multiplatform.hmppModuleName
 import org.jetbrains.kotlin.resolve.multiplatform.isCommonSource
 import org.jetbrains.kotlin.types.ConstantValueKind
-
-data object JvmAbiGenPlugin : GeneratedDeclarationKey()
 
 @SuppressWarnings("PackageLocationMismatch")
 class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
@@ -2215,25 +2211,5 @@ class AbiGenState {
   val internalInterfaceMethods: MutableMap<ClassId, MutableList<InterfaceMethodInfo>> =
       mutableMapOf()
 }
-
-// Holds information about a method from an internal interface that needs to be
-// generated in a class that implements that interface
-data class InterfaceMethodInfo(
-    val name: Name,
-    val returnType: ConeKotlinType,
-    val valueParameters: List<Pair<Name, ConeKotlinType>>,
-)
-
-// Method signature for matching overloaded methods (name + parameter types)
-private data class MethodSignature(
-    val name: String,
-    val parameterTypes: List<String>,
-)
-
-private fun IrSimpleFunction.methodSignature() =
-    MethodSignature(
-        name.asString(),
-        valueParameters.map { it.type.classFqName?.asString() ?: it.type.toString() },
-    )
 
 val FirSession.jvmAbiGenService: JvmAbiGenService by FirSession.sessionComponentAccessor()
