@@ -66,11 +66,5 @@ AutodepsTool(
 
 - ❌ **Never skip `AutodepsTool`** after import changes
 - ❌ **Never run `validate_changes` before `AutodepsTool`**
-<gk project="devmate_resource_import_md">
 - ⚠️ **Never manually edit BUCK files for non-resource dependencies** - use `AutodepsTool` instead. Manual BUCK edits are ONLY allowed for adding resource (`R`) dependencies (see the `android_r_resource_lookup` skill for details).
-</gk>
-
-<gk project="devmate_resource_import_md" exclude="true">
-- ❌ **Never manually edit BUCK files** - use `AutodepsTool` instead
-</gk>
 - ❌ **Never set `remove_unused_deps=true`** - only add dependencies, never remove
