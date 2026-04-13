@@ -677,18 +677,10 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
             projectEnvironment.project,
         )
 
-    // Strip all @Throws annotations from FIR metadata sources.
-    // The IR still has @Throws annotations for bytecode generation (throws clause),
-    // but the FIR metadata sources (used for metadata serialization) have them removed.
-    // This prevents Safe Kotlin plugin from encountering @Throws during metadata reading.
-    stripThrowsFromFirMetadataSources(irInput.irModuleFragment)
-
-    // Strip ALL annotations with error expressions from FIR metadata sources.
-    // This is necessary because annotations can persist into IR through FirMetadataSource
-    // even after we've stripped them from FIR files. The IR constant evaluator will crash
-    // if it encounters error expressions during annotation evaluation.
-    stripAnnotationsWithErrorsFromFirMetadataSources(irInput.irModuleFragment)
-
+    // Sanitize FIR metadata sources in a single IR tree walk.
+    // This strips @Throws with error types, removes annotations with error expressions,
+    // and strips private supertypes from FIR metadata — all in one pass.
+    //
     // NOTE: We no longer strip INTERNAL supertypes from FIR metadata sources.
     // Internal classes and interfaces ARE kept in the source-only ABI JAR, so there's
     // no need to strip the implements clause. Stripping it breaks default parameter
@@ -696,13 +688,7 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
     // class type. Example: fragmentDrawerController.onDismiss() fails with "no value
     // passed for parameter" if the interface relationship is stripped.
     // See: T219106236 (Kosabi K2 Migration)
-    // stripInternalSupertypesFromFirMetadataSources(irInput.irModuleFragment)
-
-    // Strip PRIVATE supertypes from FIR metadata sources.
-    // Private classes ARE removed from the ABI JAR (by removeNonPublicApi()), so we must
-    // also strip their references from metadata. Otherwise downstream compilation fails
-    // with "cannot access supertype" errors.
-    stripPrivateSupertypesFromFirMetadataSources(irInput.irModuleFragment)
+    sanitizeFirMetadataSources(irInput.irModuleFragment)
 
     val result = generateCodeFromIr(irInput, compilerEnvironment)
 
@@ -854,7 +840,10 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
   // declarations.
   // We only remove @Throws with error types to avoid breaking Java interop, while keeping valid
   // @Throws annotations so Safe Kotlin plugin can enforce exception handling correctly.
-  private fun stripThrowsFromFirMetadataSources(moduleFragment: IrModuleFragment) {
+  // Sanitize FIR metadata sources in a single IR tree walk.
+  // This combines three operations: stripping @Throws with error types, stripping all annotations
+  // with error expressions, and stripping private supertypes from FIR metadata.
+  private fun sanitizeFirMetadataSources(moduleFragment: IrModuleFragment) {
     val THROWS_FQ_NAME = FqName("kotlin.jvm.Throws")
     val THROWS_KOTLIN_FQ_NAME = FqName("kotlin.Throws")
 
@@ -871,26 +860,32 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
           }
 
           override fun visitClass(declaration: IrClass) {
-            stripThrowsFromDeclaration(declaration)
+            // Strip @Throws with error types and annotations with errors
+            stripThrowsAndErrorAnnotationsFromDeclaration(declaration)
+            // Strip private supertypes (only applies to classes)
+            stripPrivateSupertypesFromDeclaration(declaration)
             super.visitClass(declaration)
           }
 
           override fun visitSimpleFunction(declaration: IrSimpleFunction) {
-            stripThrowsFromDeclaration(declaration)
+            stripThrowsAndErrorAnnotationsFromDeclaration(declaration)
             super.visitSimpleFunction(declaration)
           }
 
           override fun visitProperty(declaration: IrProperty) {
-            stripThrowsFromDeclaration(declaration)
+            stripThrowsAndErrorAnnotationsFromDeclaration(declaration)
             super.visitProperty(declaration)
           }
 
           override fun visitConstructor(declaration: IrConstructor) {
-            stripThrowsFromDeclaration(declaration)
+            stripThrowsAndErrorAnnotationsFromDeclaration(declaration)
             super.visitConstructor(declaration)
           }
 
-          private fun stripThrowsFromDeclaration(declaration: IrDeclarationBase) {
+          // Combined: strip @Throws with error types, then strip all annotations with errors
+          private fun stripThrowsAndErrorAnnotationsFromDeclaration(
+              declaration: IrDeclarationBase
+          ) {
             // Access metadata via IrMetadataSourceOwner interface
             val metadataSourceOwner = declaration as? IrMetadataSourceOwner ?: return
             val metadataSource = metadataSourceOwner.metadata ?: return
@@ -898,9 +893,12 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
             // Check if this is a FirMetadataSource
             val firMetadataSource = metadataSource as? FirMetadataSource ?: return
 
-            // Strip @Throws from the FIR declaration
+            // First strip @Throws with error types, then strip other annotations with errors
             stripThrowsFromFirDeclaration(firMetadataSource.fir)
+            stripAnnotationsWithErrorsFromFirDeclaration(firMetadataSource.fir)
           }
+
+          // --- @Throws stripping helpers ---
 
           private fun stripThrowsFromFirDeclaration(
               declaration: org.jetbrains.kotlin.fir.declarations.FirDeclaration?
@@ -998,57 +996,8 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
               else -> false
             }
           }
-        },
-        null,
-    )
-  }
 
-  // Strip ALL annotations with error expressions from FIR metadata sources attached to IR
-  // declarations. This is necessary because annotations persist into IR through FirMetadataSource,
-  // and the IR constant evaluator crashes when encountering error expressions during annotation
-  // evaluation. We strip any annotation that has error expressions in its arguments.
-  private fun stripAnnotationsWithErrorsFromFirMetadataSources(moduleFragment: IrModuleFragment) {
-    moduleFragment.accept(
-        object : IrElementVisitorVoid {
-          override fun visitElement(element: IrElement) {
-            element.acceptChildren(this, null)
-          }
-
-          override fun visitFile(file: IrFile) {
-            super.visitFile(file)
-          }
-
-          override fun visitClass(declaration: IrClass) {
-            stripAnnotationsWithErrorsFromDeclaration(declaration)
-            super.visitClass(declaration)
-          }
-
-          override fun visitSimpleFunction(declaration: IrSimpleFunction) {
-            stripAnnotationsWithErrorsFromDeclaration(declaration)
-            super.visitSimpleFunction(declaration)
-          }
-
-          override fun visitProperty(declaration: IrProperty) {
-            stripAnnotationsWithErrorsFromDeclaration(declaration)
-            super.visitProperty(declaration)
-          }
-
-          override fun visitConstructor(declaration: IrConstructor) {
-            stripAnnotationsWithErrorsFromDeclaration(declaration)
-            super.visitConstructor(declaration)
-          }
-
-          private fun stripAnnotationsWithErrorsFromDeclaration(declaration: IrDeclarationBase) {
-            // Access metadata via IrMetadataSourceOwner interface
-            val metadataSourceOwner = declaration as? IrMetadataSourceOwner ?: return
-            val metadataSource = metadataSourceOwner.metadata ?: return
-
-            // Check if this is a FirMetadataSource
-            val firMetadataSource = metadataSource as? FirMetadataSource ?: return
-
-            // Strip annotations with errors from the FIR declaration
-            stripAnnotationsWithErrorsFromFirDeclaration(firMetadataSource.fir)
-          }
+          // --- Annotation error stripping helpers ---
 
           private fun stripAnnotationsWithErrorsFromFirDeclaration(
               declaration: org.jetbrains.kotlin.fir.declarations.FirDeclaration?
@@ -1132,6 +1081,223 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
               }
               else -> false
             }
+          }
+
+          // --- Private supertype stripping helpers ---
+
+          private fun stripPrivateSupertypesFromDeclaration(declaration: IrClass) {
+            // Access metadata via IrMetadataSourceOwner interface
+            val metadataSourceOwner = declaration as? IrMetadataSourceOwner ?: return
+            val metadataSource = metadataSourceOwner.metadata ?: return
+
+            // Check if this is a FirMetadataSource
+            val firMetadataSource = metadataSource as? FirMetadataSource ?: return
+
+            // Get the FIR class declaration
+            val firClass = firMetadataSource.fir as? FirRegularClass ?: return
+
+            // Collect class IDs of private supertypes that will be stripped
+            val strippedSupertypeClassIds = mutableSetOf<ClassId>()
+
+            // Filter out private supertypes from the FIR class's superTypeRefs
+            try {
+              val superTypeRefsField = firClass.javaClass.getDeclaredField("superTypeRefs")
+              superTypeRefsField.isAccessible = true
+              val superTypeRefsValue = superTypeRefsField.get(firClass) ?: return
+
+              @Suppress("UNCHECKED_CAST")
+              val superTypeRefs: MutableList<org.jetbrains.kotlin.fir.types.FirTypeRef> =
+                  when (superTypeRefsValue) {
+                    is MutableList<*> ->
+                        superTypeRefsValue as MutableList<org.jetbrains.kotlin.fir.types.FirTypeRef>
+                    else -> {
+                      // Fallback: try to unwrap from MutableOrEmptyList if needed
+                      val listField =
+                          superTypeRefsValue.javaClass.declaredFields.find { it.name == "list" }
+                              ?: return
+                      listField.isAccessible = true
+                      listField.get(superTypeRefsValue)
+                          as? MutableList<org.jetbrains.kotlin.fir.types.FirTypeRef> ?: return
+                    }
+                  }
+
+              // Find supertypes that reference PRIVATE classes (not internal)
+              val toRemove = superTypeRefs.filter { typeRef ->
+                isPrivateSupertype(typeRef, firClass)
+              }
+
+              // Collect the ClassIds of stripped supertypes for fake override conversion
+              for (typeRef in toRemove) {
+                val classId = getPrivateClassIdFromTypeRef(typeRef)
+                if (classId != null) {
+                  strippedSupertypeClassIds.add(classId)
+                }
+              }
+
+              if (toRemove.isNotEmpty()) {
+                superTypeRefs.removeAll(toRemove)
+
+                // Convert fake override methods from stripped interfaces to real methods in FIR
+                convertFirFakeOverridesFromStrippedPrivateSupertypes(
+                    firClass,
+                    strippedSupertypeClassIds,
+                )
+              }
+            } catch (e: Exception) {
+              // Reflection failures are silently ignored
+            }
+          }
+
+          // Extract ClassId from a type reference
+          private fun getPrivateClassIdFromTypeRef(
+              typeRef: org.jetbrains.kotlin.fir.types.FirTypeRef
+          ): ClassId? {
+            val coneType =
+                (typeRef as? org.jetbrains.kotlin.fir.types.FirResolvedTypeRef)?.coneType
+                    ?: return null
+            return (coneType as? org.jetbrains.kotlin.fir.types.ConeClassLikeType)
+                ?.lookupTag
+                ?.classId
+          }
+
+          // Add method declarations from stripped private interfaces to the class.
+          @OptIn(SymbolInternals::class)
+          private fun convertFirFakeOverridesFromStrippedPrivateSupertypes(
+              firClass: FirRegularClass,
+              strippedSupertypeClassIds: Set<ClassId>,
+          ) {
+            if (strippedSupertypeClassIds.isEmpty()) return
+
+            val interfaceMethods =
+                collectMethodsFromPrivateInterfaces(
+                    firClass.moduleData.session,
+                    strippedSupertypeClassIds,
+                )
+
+            if (interfaceMethods.isEmpty()) return
+
+            val existingMethodNames =
+                firClass.declarations
+                    .filterIsInstance<FirSimpleFunction>()
+                    .map { it.name.asString() }
+                    .toSet()
+
+            for (interfaceMethod in interfaceMethods) {
+              val methodName = interfaceMethod.name.asString()
+              if (methodName in existingMethodNames) continue
+
+              val copiedMethod = copyPrivateInterfaceMethodToClass(interfaceMethod, firClass)
+              if (copiedMethod != null) {
+                (firClass.declarations as MutableList<FirDeclaration>).add(copiedMethod)
+                try {
+                  firClass.moduleData.session.providedDeclarationsForMetadataService
+                      .registerDeclaration(copiedMethod)
+                } catch (e: Exception) {
+                  // Registration failure is silently ignored
+                }
+              }
+            }
+          }
+
+          @OptIn(SymbolInternals::class)
+          private fun copyPrivateInterfaceMethodToClass(
+              interfaceMethod: FirSimpleFunction,
+              targetClass: FirRegularClass,
+          ): FirSimpleFunction? {
+            return try {
+              val targetClassId = targetClass.symbol.classId
+              val newCallableId =
+                  CallableId(
+                      targetClassId.packageFqName,
+                      targetClassId.relativeClassName,
+                      interfaceMethod.name,
+                  )
+              buildSimpleFunctionCopy(interfaceMethod) {
+                origin = FirDeclarationOrigin.Source
+                symbol = FirNamedFunctionSymbol(newCallableId)
+                dispatchReceiverType =
+                    targetClass.symbol.constructType(
+                        ConeTypeProjection.EMPTY_ARRAY,
+                        isMarkedNullable = false,
+                    )
+              }
+            } catch (e: Exception) {
+              null
+            }
+          }
+
+          @OptIn(SymbolInternals::class)
+          private fun collectMethodsFromPrivateInterfaces(
+              session: FirSession,
+              interfaceClassIds: Set<ClassId>,
+          ): List<FirSimpleFunction> {
+            val methods = mutableListOf<FirSimpleFunction>()
+            for (classId in interfaceClassIds) {
+              val classSymbol =
+                  session.symbolProvider.getClassLikeSymbolByClassId(classId) as? FirClassSymbol<*>
+                      ?: continue
+              val firClass = classSymbol.fir as? FirRegularClass ?: continue
+              if (firClass.classKind != ClassKind.INTERFACE) continue
+
+              for (decl in firClass.declarations) {
+                if (decl is FirSimpleFunction) {
+                  val visibility = decl.status.visibility
+                  if (visibility == Visibilities.Public || visibility == Visibilities.Protected) {
+                    methods.add(decl)
+                  }
+                }
+              }
+            }
+            return methods
+          }
+
+          // Check if a supertype is PRIVATE (not internal or public).
+          // This only returns true for Visibilities.Private or Visibilities.Local.
+          private fun isPrivateSupertype(
+              typeRef: org.jetbrains.kotlin.fir.types.FirTypeRef,
+              firClass: FirRegularClass,
+          ): Boolean {
+            try {
+              val coneType =
+                  (typeRef as? org.jetbrains.kotlin.fir.types.FirResolvedTypeRef)?.coneType
+                      ?: return false
+              val classId =
+                  (coneType as? org.jetbrains.kotlin.fir.types.ConeClassLikeType)
+                      ?.lookupTag
+                      ?.classId ?: return false
+
+              val session = firClass.moduleData.session
+              val classSymbol =
+                  session.symbolProvider.getClassLikeSymbolByClassId(classId) as? FirClassSymbol<*>
+                      ?: return false
+
+              // Check if the class itself is private
+              if (isClassPrivate(classSymbol)) {
+                return true
+              }
+
+              // Also check if any containing class is private
+              var outerClassId = classId.outerClassId
+              while (outerClassId != null) {
+                val outerSymbol =
+                    session.symbolProvider.getClassLikeSymbolByClassId(outerClassId)
+                        as? FirClassSymbol<*>
+                if (outerSymbol != null && isClassPrivate(outerSymbol)) {
+                  return true
+                }
+                outerClassId = outerClassId.outerClassId
+              }
+
+              return false
+            } catch (e: Exception) {
+              return false
+            }
+          }
+
+          // Check if a class has PRIVATE visibility (not internal)
+          private fun isClassPrivate(classSymbol: FirClassSymbol<*>): Boolean {
+            val visibility = classSymbol.resolvedStatus.visibility
+            return visibility == Visibilities.Private || visibility == Visibilities.Local
           }
         },
         null,
@@ -1424,243 +1590,6 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
             return visibility == Visibilities.Private ||
                 visibility == Visibilities.PrivateToThis ||
                 visibility == Visibilities.Local
-          }
-        },
-        null,
-    )
-  }
-
-  // Strip PRIVATE supertypes from FIR metadata sources attached to IR class declarations.
-  // Unlike stripInternalSupertypesFromFirMetadataSources (which is disabled because internal
-  // classes are kept in the ABI), private classes ARE removed from the ABI JAR by
-  // removeNonPublicApi().
-  // When a public class implements a private interface, the Kotlin metadata would still reference
-  // the private supertype (in the d2 array), causing "cannot access supertype" errors.
-  private fun stripPrivateSupertypesFromFirMetadataSources(moduleFragment: IrModuleFragment) {
-    moduleFragment.accept(
-        object : IrElementVisitorVoid {
-          override fun visitElement(element: IrElement) {
-            element.acceptChildren(this, null)
-          }
-
-          override fun visitClass(declaration: IrClass) {
-            stripPrivateSupertypesFromDeclaration(declaration)
-            super.visitClass(declaration)
-          }
-
-          private fun stripPrivateSupertypesFromDeclaration(declaration: IrClass) {
-            // Access metadata via IrMetadataSourceOwner interface
-            val metadataSourceOwner = declaration as? IrMetadataSourceOwner ?: return
-            val metadataSource = metadataSourceOwner.metadata ?: return
-
-            // Check if this is a FirMetadataSource
-            val firMetadataSource = metadataSource as? FirMetadataSource ?: return
-
-            // Get the FIR class declaration
-            val firClass = firMetadataSource.fir as? FirRegularClass ?: return
-
-            // Collect class IDs of private supertypes that will be stripped
-            val strippedSupertypeClassIds = mutableSetOf<ClassId>()
-
-            // Filter out private supertypes from the FIR class's superTypeRefs
-            try {
-              val superTypeRefsField = firClass.javaClass.getDeclaredField("superTypeRefs")
-              superTypeRefsField.isAccessible = true
-              val superTypeRefsValue = superTypeRefsField.get(firClass) ?: return
-
-              @Suppress("UNCHECKED_CAST")
-              val superTypeRefs: MutableList<org.jetbrains.kotlin.fir.types.FirTypeRef> =
-                  when (superTypeRefsValue) {
-                    is MutableList<*> ->
-                        superTypeRefsValue as MutableList<org.jetbrains.kotlin.fir.types.FirTypeRef>
-                    else -> {
-                      // Fallback: try to unwrap from MutableOrEmptyList if needed
-                      val listField =
-                          superTypeRefsValue.javaClass.declaredFields.find { it.name == "list" }
-                              ?: return
-                      listField.isAccessible = true
-                      listField.get(superTypeRefsValue)
-                          as? MutableList<org.jetbrains.kotlin.fir.types.FirTypeRef> ?: return
-                    }
-                  }
-
-              // Find supertypes that reference PRIVATE classes (not internal)
-              val toRemove = superTypeRefs.filter { typeRef ->
-                isPrivateSupertype(typeRef, firClass)
-              }
-
-              // Collect the ClassIds of stripped supertypes for fake override conversion
-              for (typeRef in toRemove) {
-                val classId = getPrivateClassIdFromTypeRef(typeRef)
-                if (classId != null) {
-                  strippedSupertypeClassIds.add(classId)
-                }
-              }
-
-              if (toRemove.isNotEmpty()) {
-                superTypeRefs.removeAll(toRemove)
-
-                // Convert fake override methods from stripped interfaces to real methods in FIR
-                convertFirFakeOverridesFromStrippedPrivateSupertypes(
-                    firClass,
-                    strippedSupertypeClassIds,
-                )
-              }
-            } catch (e: Exception) {
-              // Reflection failures are silently ignored
-            }
-          }
-
-          // Extract ClassId from a type reference
-          private fun getPrivateClassIdFromTypeRef(
-              typeRef: org.jetbrains.kotlin.fir.types.FirTypeRef
-          ): ClassId? {
-            val coneType =
-                (typeRef as? org.jetbrains.kotlin.fir.types.FirResolvedTypeRef)?.coneType
-                    ?: return null
-            return (coneType as? org.jetbrains.kotlin.fir.types.ConeClassLikeType)
-                ?.lookupTag
-                ?.classId
-          }
-
-          // Add method declarations from stripped private interfaces to the class.
-          @OptIn(SymbolInternals::class)
-          private fun convertFirFakeOverridesFromStrippedPrivateSupertypes(
-              firClass: FirRegularClass,
-              strippedSupertypeClassIds: Set<ClassId>,
-          ) {
-            if (strippedSupertypeClassIds.isEmpty()) return
-
-            val interfaceMethods =
-                collectMethodsFromPrivateInterfaces(
-                    firClass.moduleData.session,
-                    strippedSupertypeClassIds,
-                )
-
-            if (interfaceMethods.isEmpty()) return
-
-            val existingMethodNames =
-                firClass.declarations
-                    .filterIsInstance<FirSimpleFunction>()
-                    .map { it.name.asString() }
-                    .toSet()
-
-            for (interfaceMethod in interfaceMethods) {
-              val methodName = interfaceMethod.name.asString()
-              if (methodName in existingMethodNames) continue
-
-              val copiedMethod = copyPrivateInterfaceMethodToClass(interfaceMethod, firClass)
-              if (copiedMethod != null) {
-                (firClass.declarations as MutableList<FirDeclaration>).add(copiedMethod)
-                try {
-                  firClass.moduleData.session.providedDeclarationsForMetadataService
-                      .registerDeclaration(copiedMethod)
-                } catch (e: Exception) {
-                  // Registration failure is silently ignored
-                }
-              }
-            }
-          }
-
-          @OptIn(SymbolInternals::class)
-          private fun copyPrivateInterfaceMethodToClass(
-              interfaceMethod: FirSimpleFunction,
-              targetClass: FirRegularClass,
-          ): FirSimpleFunction? {
-            return try {
-              val targetClassId = targetClass.symbol.classId
-              val newCallableId =
-                  CallableId(
-                      targetClassId.packageFqName,
-                      targetClassId.relativeClassName,
-                      interfaceMethod.name,
-                  )
-              buildSimpleFunctionCopy(interfaceMethod) {
-                origin = FirDeclarationOrigin.Source
-                symbol = FirNamedFunctionSymbol(newCallableId)
-                dispatchReceiverType =
-                    targetClass.symbol.constructType(
-                        ConeTypeProjection.EMPTY_ARRAY,
-                        isMarkedNullable = false,
-                    )
-              }
-            } catch (e: Exception) {
-              null
-            }
-          }
-
-          @OptIn(SymbolInternals::class)
-          private fun collectMethodsFromPrivateInterfaces(
-              session: FirSession,
-              interfaceClassIds: Set<ClassId>,
-          ): List<FirSimpleFunction> {
-            val methods = mutableListOf<FirSimpleFunction>()
-            for (classId in interfaceClassIds) {
-              val classSymbol =
-                  session.symbolProvider.getClassLikeSymbolByClassId(classId) as? FirClassSymbol<*>
-                      ?: continue
-              val firClass = classSymbol.fir as? FirRegularClass ?: continue
-              if (firClass.classKind != ClassKind.INTERFACE) continue
-
-              for (decl in firClass.declarations) {
-                if (decl is FirSimpleFunction) {
-                  val visibility = decl.status.visibility
-                  if (visibility == Visibilities.Public || visibility == Visibilities.Protected) {
-                    methods.add(decl)
-                  }
-                }
-              }
-            }
-            return methods
-          }
-
-          // Check if a supertype is PRIVATE (not internal or public).
-          // This only returns true for Visibilities.Private or Visibilities.Local.
-          private fun isPrivateSupertype(
-              typeRef: org.jetbrains.kotlin.fir.types.FirTypeRef,
-              firClass: FirRegularClass,
-          ): Boolean {
-            try {
-              val coneType =
-                  (typeRef as? org.jetbrains.kotlin.fir.types.FirResolvedTypeRef)?.coneType
-                      ?: return false
-              val classId =
-                  (coneType as? org.jetbrains.kotlin.fir.types.ConeClassLikeType)
-                      ?.lookupTag
-                      ?.classId ?: return false
-
-              val session = firClass.moduleData.session
-              val classSymbol =
-                  session.symbolProvider.getClassLikeSymbolByClassId(classId) as? FirClassSymbol<*>
-                      ?: return false
-
-              // Check if the class itself is private
-              if (isClassPrivate(classSymbol)) {
-                return true
-              }
-
-              // Also check if any containing class is private
-              var outerClassId = classId.outerClassId
-              while (outerClassId != null) {
-                val outerSymbol =
-                    session.symbolProvider.getClassLikeSymbolByClassId(outerClassId)
-                        as? FirClassSymbol<*>
-                if (outerSymbol != null && isClassPrivate(outerSymbol)) {
-                  return true
-                }
-                outerClassId = outerClassId.outerClassId
-              }
-
-              return false
-            } catch (e: Exception) {
-              return false
-            }
-          }
-
-          // Check if a class has PRIVATE visibility (not internal)
-          private fun isClassPrivate(classSymbol: FirClassSymbol<*>): Boolean {
-            val visibility = classSymbol.resolvedStatus.visibility
-            return visibility == Visibilities.Private || visibility == Visibilities.Local
           }
         },
         null,
