@@ -8,6 +8,12 @@
  * above-listed licenses.
  */
 
+@file:Suppress("OPT_IN_USAGE_ERROR")
+@file:OptIn(
+    com.facebook.DeprecatedForRemovalCompilerApiCompat::class,
+    com.facebook.DirectDeclarationsAccessCompat::class,
+)
+
 package com.facebook
 
 import java.io.ByteArrayOutputStream
@@ -25,12 +31,6 @@ import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.cli.jvm.compiler.VfsBasedProjectEnvironment
 import org.jetbrains.kotlin.cli.jvm.compiler.createContextForIncrementalCompilation
 import org.jetbrains.kotlin.cli.jvm.compiler.createLibraryListForJvm
-import org.jetbrains.kotlin.cli.jvm.compiler.pipeline.ModuleCompilerEnvironment
-import org.jetbrains.kotlin.cli.jvm.compiler.pipeline.ModuleCompilerIrBackendInput
-import org.jetbrains.kotlin.cli.jvm.compiler.pipeline.ModuleCompilerOutput
-import org.jetbrains.kotlin.cli.jvm.compiler.pipeline.convertToIrAndActualizeForJvm
-import org.jetbrains.kotlin.cli.jvm.compiler.pipeline.createProjectEnvironment
-import org.jetbrains.kotlin.cli.jvm.compiler.pipeline.generateCodeFromIr
 import org.jetbrains.kotlin.cli.jvm.compiler.report
 import org.jetbrains.kotlin.com.intellij.openapi.diagnostic.Logger
 import org.jetbrains.kotlin.com.intellij.openapi.project.Project
@@ -42,7 +42,6 @@ import org.jetbrains.kotlin.com.intellij.psi.PsiManager
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.JVMConfigurationKeys
-import org.jetbrains.kotlin.config.JvmTarget
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -55,7 +54,6 @@ import org.jetbrains.kotlin.extensions.PreprocessedFileCreator
 import org.jetbrains.kotlin.fir.DependencyListForCliModule
 import org.jetbrains.kotlin.fir.FirElement
 import org.jetbrains.kotlin.fir.FirModuleData
-import org.jetbrains.kotlin.fir.FirModuleDataImpl
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.backend.jvm.JvmFir2IrExtensions
 import org.jetbrains.kotlin.fir.declarations.FirEnumEntry
@@ -85,7 +83,6 @@ import org.jetbrains.kotlin.fir.plugin.createTopLevelClass
 import org.jetbrains.kotlin.fir.resolve.providers.dependenciesSymbolProvider
 import org.jetbrains.kotlin.fir.resolve.providers.symbolProvider
 import org.jetbrains.kotlin.fir.session.FirJvmIncrementalCompilationSymbolProviders
-import org.jetbrains.kotlin.fir.session.FirJvmSessionFactory
 import org.jetbrains.kotlin.fir.session.FirSessionConfigurator
 import org.jetbrains.kotlin.fir.session.FirSharableJavaComponents
 import org.jetbrains.kotlin.fir.session.IncrementalCompilationContext
@@ -109,7 +106,6 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.util.isFileClass
 import org.jetbrains.kotlin.metadata.jvm.JvmModuleProtoBuf
-import org.jetbrains.kotlin.metadata.jvm.deserialization.JvmMetadataVersion
 import org.jetbrains.kotlin.modules.Module
 import org.jetbrains.kotlin.modules.TargetId
 import org.jetbrains.kotlin.name.CallableId
@@ -147,7 +143,7 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
     val disposable = Disposer.newDisposable("K2KosabiSession.project")
     try {
       val projectEnvironment =
-          createProjectEnvironment(
+          createProjectEnvironmentCompat(
               updatedConfiguration,
               disposable,
               EnvironmentConfigFiles.JVM_CONFIG_FILES,
@@ -534,22 +530,22 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
       configuration: CompilerConfiguration,
       targetId: TargetId,
       analysisResults: FirResult,
-      environment: ModuleCompilerEnvironment,
+      environment: ModuleCompilerEnvironmentCompat,
       sourceFiles: List<KtFile>,
       project: Project,
-  ): ModuleCompilerIrBackendInput {
+  ): ModuleCompilerIrBackendInputCompat {
     val extensions = JvmFir2IrExtensions(configuration, JvmIrDeserializerImpl())
     val allIrExtensions = listOf(pipeline.irSanitizer.createExtension(sourceFiles))
 
     val (moduleFragment, components, pluginContext, irActualizedResult, _, symbolTable) =
-        analysisResults.convertToIrAndActualizeForJvm(
+        analysisResults.convertToIrAndActualizeForJvmCompat(
             extensions,
             configuration,
             environment.diagnosticsReporter,
             allIrExtensions,
         )
 
-    return ModuleCompilerIrBackendInput(
+    return ModuleCompilerIrBackendInputCompat(
         targetId,
         configuration,
         extensions,
@@ -569,9 +565,10 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
       module: Module,
       analysisResults: FirResult,
       sourceFiles: List<KtFile>,
-  ): ModuleCompilerOutput {
+  ): ModuleCompilerOutputCompat {
     val cleanDiagnosticReporter = DiagnosticReporterFactory.createPendingReporter(messageCollector)
-    val compilerEnvironment = ModuleCompilerEnvironment(projectEnvironment, cleanDiagnosticReporter)
+    val compilerEnvironment =
+        ModuleCompilerEnvironmentCompat(projectEnvironment, cleanDiagnosticReporter)
 
     // Phase 1: FIR pre-IR cleanup
     pipeline.firMetadataSanitizer.cleanupFirTree(analysisResults)
@@ -592,7 +589,7 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
     pipeline.firMetadataSanitizer.cleanupFirMetadataSources(irInput.irModuleFragment)
 
     // Phase 4: Code generation
-    val result = generateCodeFromIr(irInput, compilerEnvironment)
+    val result = generateCodeFromIrCompat(irInput, compilerEnvironment)
 
     // Write bytecode from generationState.factory to disk.
     // Apply bytecode post-processing (strip @Throws annotations and private metadata)
@@ -685,16 +682,13 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
     val moduleProto = moduleBuilder.build()
 
     // Serialize the module
-    val version = JvmMetadataVersion.INSTANCE
-    val versionArray = version.toArray()
+    val versionArray = currentMetadataVersionArray()
     // 4KB initial buffer - aligns with memory page size and is sufficient for most .kotlin_module
     // files
     val baos = ByteArrayOutputStream(4096)
     val out = DataOutputStream(baos)
     out.writeInt(versionArray.size)
-    for (number in versionArray) {
-      out.writeInt(number)
-    }
+    versionArray.forEach { number -> out.writeInt(number) }
     // Write flags for Kotlin 1.4+
     out.writeInt(0)
     moduleProto.writeTo(out)
@@ -1253,7 +1247,7 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
         isScript,
         fileBelongsToModule,
         createLibrarySession = { sessionProvider ->
-          FirJvmSessionFactory.createLibrarySession(
+          createLibrarySessionCompat(
               rootModuleName,
               sessionProvider,
               libraryList.moduleDataProvider,
@@ -1266,7 +1260,7 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
           )
         },
     ) { moduleFiles, moduleData, sessionProvider, sessionConfigurator ->
-      FirJvmSessionFactory.createModuleBasedSession(
+      createSourceSessionCompat(
           moduleData,
           sessionProvider,
           javaSourcesScope,
@@ -1292,11 +1286,7 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
             }
           },
           extensionRegistrars,
-          configuration.languageVersionSettings,
-          configuration.get(JVMConfigurationKeys.JVM_TARGET, JvmTarget.DEFAULT),
-          configuration.get(CommonConfigurationKeys.LOOKUP_TRACKER),
-          configuration.get(CommonConfigurationKeys.ENUM_WHEN_TRACKER),
-          configuration.get(CommonConfigurationKeys.IMPORT_TRACKER),
+          configuration,
           predefinedJavaComponents = predefinedJavaComponents,
           needRegisterJavaElementFinder = true,
           sessionConfigurator,
@@ -1362,11 +1352,11 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
           ) -> FirSession,
   ): SessionWithSources<F> {
     val platformModuleData =
-        FirModuleDataImpl(
+        createSourceModuleData(
             rootModuleName,
             libraryList.regularDependencies,
             libraryList.dependsOnDependencies,
-            libraryList.friendsDependencies,
+            libraryList.friendDependenciesCompat,
             targetPlatform,
         )
 

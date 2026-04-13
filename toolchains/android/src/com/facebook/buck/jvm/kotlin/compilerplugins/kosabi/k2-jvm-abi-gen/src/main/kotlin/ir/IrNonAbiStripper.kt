@@ -9,6 +9,11 @@
  */
 
 @file:SuppressWarnings("PackageLocationMismatch")
+@file:Suppress("OPT_IN_USAGE_ERROR")
+@file:OptIn(
+    com.facebook.DeprecatedForRemovalCompilerApiCompat::class,
+    com.facebook.DirectDeclarationsAccessCompat::class,
+)
 
 package com.facebook
 
@@ -29,8 +34,6 @@ import org.jetbrains.kotlin.ir.symbols.IrReturnTargetSymbol
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.ir.types.*
 import org.jetbrains.kotlin.ir.util.kotlinFqName
-import org.jetbrains.kotlin.ir.visitors.IrElementTransformer
-import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.psi.KtFile
 
@@ -105,7 +108,7 @@ internal class NonAbiDeclarationsStrippingIrExtension(private val sourceFiles: L
     // Recursively check children
     var hasError = false
     expression.acceptChildren(
-        object : IrElementVisitorVoid {
+        object : IrElementVisitorVoidCompat() {
           override fun visitElement(element: IrElement) {
             if (element is IrExpression && element.type is IrErrorType) {
               hasError = true
@@ -124,7 +127,7 @@ internal class NonAbiDeclarationsStrippingIrExtension(private val sourceFiles: L
 
   private fun stripSourceRetentionAnnotations(moduleFragment: IrModuleFragment) {
     moduleFragment.accept(
-        object : IrElementVisitorVoid {
+        object : IrElementVisitorVoidCompat() {
           override fun visitElement(element: IrElement) {
             element.acceptChildren(this, null)
           }
@@ -211,21 +214,21 @@ internal class NonAbiDeclarationsStrippingIrExtension(private val sourceFiles: L
 internal class NonAbiDeclarationsStrippingIrVisitor(
     private val irFactory: IrFactory,
     private val irBuiltins: IrBuiltIns,
-) : IrElementTransformer<Nothing?> {
+) : IrElementTransformerVoidCompat() {
 
-  override fun visitFile(declaration: IrFile, data: Nothing?): IrFile {
+  override fun visitFile(declaration: IrFile): IrFile {
     declaration.removeNonPublicApi()
-    return super.visitFile(declaration, data)
+    return super.visitFile(declaration)
   }
 
-  override fun visitDeclaration(declaration: IrDeclarationBase, data: Nothing?): IrStatement {
+  override fun visitDeclaration(declaration: IrDeclarationBase): IrStatement {
     if (declaration is IrDeclarationContainer) {
       declaration.removeNonPublicApi()
     }
-    return super.visitDeclaration(declaration, data)
+    return super.visitDeclaration(declaration)
   }
 
-  override fun visitClass(declaration: IrClass, data: Nothing?): IrStatement {
+  override fun visitClass(declaration: IrClass): IrStatement {
     // Strip PRIVATE supertypes from the class's implemented interfaces.
     // Internal supertypes are kept because source-only ABI is consumed within the same
     // module, where internal types are accessible. Stripping them would cause Java consumers
@@ -257,7 +260,7 @@ internal class NonAbiDeclarationsStrippingIrVisitor(
     // override methods from the parent enum class that in turn implements a private interface.
     convertPublicFakeOverridesOfNonPublicMethods(declaration)
 
-    return super.visitClass(declaration, data)
+    return super.visitClass(declaration)
   }
 
   // Convert public fake override methods that ultimately override non-public methods.
@@ -378,7 +381,7 @@ internal class NonAbiDeclarationsStrippingIrVisitor(
     return false
   }
 
-  override fun visitField(declaration: IrField, data: Nothing?): IrStatement {
+  override fun visitField(declaration: IrField): IrStatement {
     // For fields with initializers containing function calls,
     // replace the initializer with a default constant value.
     // This handles cases like: const val X = (10 * TimeConstants.MS_PER_SECOND).toInt()
@@ -397,7 +400,7 @@ internal class NonAbiDeclarationsStrippingIrVisitor(
         }
       }
     }
-    return super.visitField(declaration, data)
+    return super.visitField(declaration)
   }
 
   // Check if an expression tree contains any function calls
@@ -405,7 +408,7 @@ internal class NonAbiDeclarationsStrippingIrVisitor(
     if (expression is IrCall) return true
     var hasCall = false
     expression.acceptChildren(
-        object : IrElementVisitorVoid {
+        object : IrElementVisitorVoidCompat() {
           override fun visitElement(element: IrElement) {
             if (element is IrCall) hasCall = true
             element.acceptChildren(this, null)
@@ -511,7 +514,7 @@ internal class NonAbiDeclarationsStrippingIrVisitor(
     return irFactory.createExpressionBody(-1, -1, defaultValue)
   }
 
-  override fun visitSimpleFunction(declaration: IrSimpleFunction, data: Nothing?): IrStatement {
+  override fun visitSimpleFunction(declaration: IrSimpleFunction): IrStatement {
     if (!declaration.origin.isSynthetic) {
       if (declaration.parent is IrProperty) {
         // for properties we need to generate a default body
@@ -533,15 +536,14 @@ internal class NonAbiDeclarationsStrippingIrVisitor(
         generateDefaultExpressionBody(parameter.type)?.let { parameter.defaultValue = it }
       }
     }
-    return super.visitSimpleFunction(declaration, data)
+    return super.visitSimpleFunction(declaration)
   }
 
   override fun visitAnonymousInitializer(
       declaration: IrAnonymousInitializer,
-      data: Nothing?,
   ): IrStatement {
     // we also need to strip bodies from init {} blocks
     declaration.body = irFactory.createBlockBody(-1, -1)
-    return super.visitAnonymousInitializer(declaration, data)
+    return super.visitAnonymousInitializer(declaration)
   }
 }

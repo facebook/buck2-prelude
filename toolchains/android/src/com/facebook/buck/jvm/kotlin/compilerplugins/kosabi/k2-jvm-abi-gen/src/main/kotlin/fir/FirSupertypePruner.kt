@@ -9,6 +9,10 @@
  */
 
 @file:SuppressWarnings("PackageLocationMismatch")
+@file:Suppress("OPT_IN_USAGE_ERROR")
+@file:OptIn(
+    com.facebook.DirectDeclarationsAccessCompat::class,
+)
 
 package com.facebook
 
@@ -33,7 +37,6 @@ import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrMetadataSourceOwner
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
-import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.ClassId
 
@@ -49,7 +52,7 @@ internal class FirSupertypePruner {
    */
   fun stripPrivateSupertypesFromFirMetadataSources(moduleFragment: IrModuleFragment) {
     moduleFragment.accept(
-        object : IrElementVisitorVoid {
+        object : IrElementVisitorVoidCompat() {
           override fun visitElement(element: IrElement) {
             element.acceptChildren(this, null)
           }
@@ -266,7 +269,7 @@ internal class FirSupertypePruner {
    */
   fun stripInternalSupertypesFromFirMetadataSources(moduleFragment: IrModuleFragment) {
     moduleFragment.accept(
-        object : IrElementVisitorVoid {
+        object : IrElementVisitorVoidCompat() {
           override fun visitElement(element: IrElement) {
             element.acceptChildren(this, null)
           }

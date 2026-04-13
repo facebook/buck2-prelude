@@ -9,6 +9,11 @@
  */
 
 @file:SuppressWarnings("PackageLocationMismatch")
+@file:Suppress("OPT_IN_USAGE_ERROR")
+@file:OptIn(
+    com.facebook.DeprecatedForRemovalCompilerApiCompat::class,
+    com.facebook.DirectDeclarationsAccessCompat::class,
+)
 
 package com.facebook
 
@@ -59,7 +64,6 @@ import org.jetbrains.kotlin.ir.declarations.IrMetadataSourceOwner
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
-import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
@@ -106,7 +110,7 @@ internal class FirMetadataSanitizerStage : AbiGenStage {
     val THROWS_KOTLIN_FQ_NAME = FqName("kotlin.Throws")
 
     moduleFragment.accept(
-        object : IrElementVisitorVoid {
+        object : IrElementVisitorVoidCompat() {
           override fun visitElement(element: IrElement) {
             element.acceptChildren(this, null)
           }

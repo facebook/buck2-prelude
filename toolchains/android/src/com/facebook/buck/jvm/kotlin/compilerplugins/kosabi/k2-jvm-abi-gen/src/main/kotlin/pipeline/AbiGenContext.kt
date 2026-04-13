@@ -14,7 +14,6 @@ package com.facebook
 
 import java.io.File
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
-import org.jetbrains.kotlin.cli.jvm.compiler.pipeline.ModuleCompilerIrBackendInput
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.fir.pipeline.FirResult
 import org.jetbrains.kotlin.psi.KtFile
@@ -34,5 +33,5 @@ class AbiGenContext(
     val firResult: FirResult,
 ) {
   /** Set after FIR-to-IR conversion. */
-  var irBackendInput: ModuleCompilerIrBackendInput? = null
+  var irBackendInput: ModuleCompilerIrBackendInputCompat? = null
 }

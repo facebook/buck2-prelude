@@ -9,6 +9,10 @@
  */
 
 @file:SuppressWarnings("PackageLocationMismatch")
+@file:Suppress("OPT_IN_USAGE_ERROR")
+@file:OptIn(
+    com.facebook.DirectDeclarationsAccessCompat::class,
+)
 
 package com.facebook
 

@@ -9,6 +9,10 @@
  */
 
 @file:SuppressWarnings("PackageLocationMismatch")
+@file:Suppress("OPT_IN_USAGE_ERROR")
+@file:OptIn(
+    com.facebook.DirectDeclarationsAccessCompat::class,
+)
 
 package com.facebook
 
@@ -46,7 +50,6 @@ import org.jetbrains.kotlin.ir.declarations.IrMetadataSourceOwner
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
-import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.name.FqName
 
 /**
@@ -93,7 +96,7 @@ internal class FirMetadataSanitizer {
     val THROWS_KOTLIN_FQ_NAME = FqName("kotlin.Throws")
 
     moduleFragment.accept(
-        object : IrElementVisitorVoid {
+        object : IrElementVisitorVoidCompat() {
           override fun visitElement(element: IrElement) {
             element.acceptChildren(this, null)
           }
@@ -228,7 +231,7 @@ internal class FirMetadataSanitizer {
   // evaluation. We strip any annotation that has error expressions in its arguments.
   fun stripAnnotationsWithErrorsFromFirMetadataSources(moduleFragment: IrModuleFragment) {
     moduleFragment.accept(
-        object : IrElementVisitorVoid {
+        object : IrElementVisitorVoidCompat() {
           override fun visitElement(element: IrElement) {
             element.acceptChildren(this, null)
           }
@@ -348,7 +351,7 @@ internal class FirMetadataSanitizer {
   // KSP2/DI processors to fail when they see private interface methods.
   fun stripPrivateDeclarationsFromFirMetadataSources(moduleFragment: IrModuleFragment) {
     moduleFragment.accept(
-        object : IrElementVisitorVoid {
+        object : IrElementVisitorVoidCompat() {
           override fun visitElement(element: IrElement) {
             element.acceptChildren(this, null)
           }
