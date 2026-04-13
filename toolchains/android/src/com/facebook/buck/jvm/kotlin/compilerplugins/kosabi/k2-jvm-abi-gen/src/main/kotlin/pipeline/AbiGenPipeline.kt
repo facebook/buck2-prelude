@@ -520,6 +520,86 @@ internal class FirMetadataSanitizerStage : AbiGenStage {
     )
   }
 
+  // --- Public utility methods ---
+
+  // Recursively check if a FIR element contains error expressions.
+  // Used by K2JvmAbiFirAnalysisHandlerExtension to check const val initializer resolvability.
+  @OptIn(SymbolInternals::class)
+  fun hasErrorExpressionRecursive(element: FirElement): Boolean {
+    return when (element) {
+      is FirErrorExpression -> true
+      is FirQualifiedAccessExpression -> {
+        try {
+          if (
+              element.resolvedType is ConeErrorType ||
+                  element.calleeReference is FirErrorNamedReference
+          ) {
+            return true
+          }
+
+          val calleeReference = element.calleeReference
+          if (calleeReference is FirResolvedNamedReference) {
+            val symbol = calleeReference.resolvedSymbol
+            if (symbol is FirPropertySymbol && symbol.isConst) {
+              val initializer = symbol.fir.initializer
+              if (initializer == null) {
+                return true
+              }
+              if (isConstValInitializerUnresolvable(initializer)) {
+                return true
+              }
+            }
+          }
+          false
+        } catch (_: Exception) {
+          false
+        }
+      }
+      else -> {
+        var hasError = false
+        element.acceptChildren(
+            object : FirDefaultVisitorVoid() {
+              override fun visitElement(childElement: FirElement) {
+                if (!hasError && hasErrorExpressionRecursive(childElement)) {
+                  hasError = true
+                }
+              }
+            }
+        )
+        hasError
+      }
+    }
+  }
+
+  private fun isConstValInitializerUnresolvable(initializer: FirElement): Boolean {
+    return when (initializer) {
+      is FirErrorExpression -> true
+      is org.jetbrains.kotlin.fir.expressions.FirFunctionCall -> {
+        try {
+          val calleeReference = initializer.calleeReference
+          if (calleeReference is FirResolvedNamedReference) {
+            val name = calleeReference.name.asString()
+            if (name == "TODO") {
+              return true
+            }
+          }
+          initializer.resolvedType is ConeErrorType
+        } catch (_: Exception) {
+          false
+        }
+      }
+      is FirQualifiedAccessExpression -> {
+        try {
+          initializer.resolvedType is ConeErrorType ||
+              initializer.calleeReference is FirErrorNamedReference
+        } catch (_: Exception) {
+          false
+        }
+      }
+      else -> false
+    }
+  }
+
   // --- FIR tree sanitizing visitor for cleanupFirTree ---
 
   /**
@@ -688,82 +768,6 @@ internal class FirMetadataSanitizerStage : AbiGenStage {
   }
 }
 
-@OptIn(SymbolInternals::class)
-internal fun hasErrorExpressionRecursive(element: FirElement): Boolean {
-  return when (element) {
-    is FirErrorExpression -> true
-    is FirQualifiedAccessExpression -> {
-      try {
-        if (
-            element.resolvedType is ConeErrorType ||
-                element.calleeReference is FirErrorNamedReference
-        ) {
-          return true
-        }
-
-        val calleeReference = element.calleeReference
-        if (calleeReference is FirResolvedNamedReference) {
-          val symbol = calleeReference.resolvedSymbol
-          if (symbol is FirPropertySymbol && symbol.isConst) {
-            val initializer = symbol.fir.initializer
-            if (initializer == null) {
-              return true
-            }
-            if (isConstValInitializerUnresolvable(initializer)) {
-              return true
-            }
-          }
-        }
-        false
-      } catch (_: Exception) {
-        false
-      }
-    }
-    else -> {
-      var hasError = false
-      element.acceptChildren(
-          object : FirDefaultVisitorVoid() {
-            override fun visitElement(childElement: FirElement) {
-              if (!hasError && hasErrorExpressionRecursive(childElement)) {
-                hasError = true
-              }
-            }
-          }
-      )
-      hasError
-    }
-  }
-}
-
-private fun isConstValInitializerUnresolvable(initializer: FirElement): Boolean {
-  return when (initializer) {
-    is FirErrorExpression -> true
-    is org.jetbrains.kotlin.fir.expressions.FirFunctionCall -> {
-      try {
-        val calleeReference = initializer.calleeReference
-        if (calleeReference is FirResolvedNamedReference) {
-          val name = calleeReference.name.asString()
-          if (name == "TODO") {
-            return true
-          }
-        }
-        initializer.resolvedType is ConeErrorType
-      } catch (_: Exception) {
-        false
-      }
-    }
-    is FirQualifiedAccessExpression -> {
-      try {
-        initializer.resolvedType is ConeErrorType ||
-            initializer.calleeReference is FirErrorNamedReference
-      } catch (_: Exception) {
-        false
-      }
-    }
-    else -> false
-  }
-}
-
 /**
  * IR sanitization stage.
  *
@@ -779,7 +783,7 @@ internal class IrSanitizerStage : AbiGenStage {
 
   /** Create the IR generation extension to be registered during FIR-to-IR conversion. */
   fun createExtension(sourceFiles: List<KtFile>): IrGenerationExtension {
-    return K2JvmAbiFirAnalysisHandlerExtension.NonAbiDeclarationsStrippingIrExtension(sourceFiles)
+    return NonAbiDeclarationsStrippingIrExtension(sourceFiles)
   }
 }
 
