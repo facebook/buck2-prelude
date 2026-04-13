@@ -206,7 +206,7 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
   override fun doAnalysis(project: Project, configuration: CompilerConfiguration): Boolean {
     val updatedConfiguration =
         configuration.copy().apply {
-          put(JVMConfigurationKeys.RETAIN_OUTPUT_IN_MEMORY, false)
+          put(JVMConfigurationKeys.RETAIN_OUTPUT_IN_MEMORY, true)
           put(JVMConfigurationKeys.OUTPUT_DIRECTORY, File(outputPath))
           put(JVMConfigurationKeys.VALIDATE_BYTECODE, true)
           put(JVMConfigurationKeys.SKIP_BODIES, true)
@@ -694,19 +694,26 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
 
     // Write bytecode from generationState.factory to disk.
     // We need to manually extract and write each output file.
+    // Apply bytecode post-processing (strip @Throws annotations and private metadata)
+    // in-memory before writing to avoid a separate read-back pass.
     val outputDir = configuration[JVMConfigurationKeys.OUTPUT_DIRECTORY]
+    val transformers = listOf(ThrowsAnnotationStripper(), PrivateMetadataStripper())
     if (outputDir != null) {
       val outputFiles = result.generationState.factory.asList()
       outputFiles.forEach { outputFile ->
         val file = File(outputDir, outputFile.relativePath)
         file.parentFile?.mkdirs()
-        file.writeBytes(outputFile.asByteArray())
+        var bytes = outputFile.asByteArray()
+        if (file.extension == "class") {
+          for (transformer in transformers) {
+            val transformed = transformer.transform(bytes)
+            if (transformed != null) {
+              bytes = transformed
+            }
+          }
+        }
+        file.writeBytes(bytes)
       }
-    }
-
-    // Post-process bytecode: strip @Throws annotations and private metadata.
-    if (outputDir != null) {
-      postProcessBytecode(outputDir)
     }
 
     // Manually generate .kotlin_module file for top-level declarations.
@@ -715,27 +722,6 @@ class K2JvmAbiFirAnalysisHandlerExtension(private val outputPath: String) :
     generateKotlinModuleFile(irInput.irModuleFragment, module.getModuleName(), configuration)
 
     return result
-  }
-
-  private fun postProcessBytecode(outputDir: File) {
-    val transformers = listOf(ThrowsAnnotationStripper(), PrivateMetadataStripper())
-    outputDir
-        .walkTopDown()
-        .filter { it.extension == "class" }
-        .forEach { classFile ->
-          var bytes = classFile.readBytes()
-          var modified = false
-          for (transformer in transformers) {
-            val result = transformer.transform(bytes)
-            if (result != null) {
-              bytes = result
-              modified = true
-            }
-          }
-          if (modified) {
-            classFile.writeBytes(bytes)
-          }
-        }
   }
 
   // Generate the .kotlin_module file manually.
