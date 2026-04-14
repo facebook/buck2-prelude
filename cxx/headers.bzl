@@ -75,8 +75,10 @@ Headers = record(
     include_path = field(cmd_args),
     # NOTE(agallagher): Used for module hack replacement.
     symlink_tree = field(Artifact | None, None),
-    # args that map symlinked private headers to source path
+    # -fdebug-prefix-map args that map symlinked headers to source path
     file_prefix_args = field([cmd_args, None], None),
+    # -fcoverage-prefix-map args (clang-only, separated so non-clang compilers can skip them)
+    coverage_prefix_args = field([cmd_args, None], None),
 )
 
 CHeader = record(
@@ -282,11 +284,17 @@ def prepare_headers(
         headers = {h: (symlink_dir, "{}/" + h) for h in srcs}
         hmap = _mk_hmap(actions, cxx_toolchain_info, output_name, headers, allow_cache_upload, uses_content_based_paths)
         include_prefix = _infer_include_prefix(srcs, header_namespace)
-        file_prefix_args = _get_debug_prefix_args(cxx_toolchain_info, symlink_dir, header_namespace, include_prefix)
+        replacement = _get_prefix_map_replacement(cxx_toolchain_info, symlink_dir, header_namespace, include_prefix)
+        file_prefix_args = None
+        coverage_prefix_args = None
+        if replacement != None:
+            file_prefix_args = cmd_args(cmd_args(symlink_dir, format = "-fdebug-prefix-map={}=" + replacement))
+            coverage_prefix_args = cmd_args(cmd_args(symlink_dir, format = "-fcoverage-prefix-map={}=" + replacement))
         return Headers(
             include_path = cmd_args(hmap, hidden = symlink_dir),
             symlink_tree = symlink_dir,
             file_prefix_args = file_prefix_args,
+            coverage_prefix_args = coverage_prefix_args,
         )
     fail("Unsupported header mode: {}".format(header_mode))
 
@@ -415,7 +423,9 @@ def _infer_include_prefix(srcs: dict[str, Artifact], header_namespace: [str, Non
         break
     return ""
 
-def _get_debug_prefix_args(cxx_toolchain_info: CxxToolchainInfo, header_dir: Artifact, header_namespace: [str, None] = None, include_prefix: str = "") -> [cmd_args, None]:
+def _get_prefix_map_replacement(cxx_toolchain_info: CxxToolchainInfo, header_dir: Artifact, header_namespace: [str, None] = None, include_prefix: str = "") -> [str, None]:
+    """Compute the replacement path for -fdebug-prefix-map and -fcoverage-prefix-map."""
+
     # NOTE(@christylee): Do we need to enable debug-prefix-map for darwin and windows?
     if cxx_toolchain_info.linker_info.type != LinkerType("gnu"):
         return None
@@ -430,12 +440,7 @@ def _get_debug_prefix_args(cxx_toolchain_info: CxxToolchainInfo, header_dir: Art
             prefix_target = paths.join(prefix_target, package) if prefix_target else package
     if include_prefix:
         prefix_target = paths.join(prefix_target, include_prefix) if prefix_target else include_prefix
-    replacement = prefix_target if prefix_target else cell
-    debug_fmt = "-fdebug-prefix-map={}=" + replacement
-
-    return cmd_args(
-        cmd_args(header_dir, format = debug_fmt),
-    )
+    return prefix_target if prefix_target else cell
 
 def _mk_hmap(actions: AnalysisActions, cxx_toolchain_info: CxxToolchainInfo, name: str, headers: dict[str, (Artifact, str)], allow_cache_upload: bool, uses_content_based_paths: bool = False) -> Artifact:
     output = actions.declare_output(
