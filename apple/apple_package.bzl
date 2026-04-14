@@ -61,6 +61,7 @@ def apple_package_impl(ctx: AnalysisContext) -> list[Provider]:
         sub_targets = sub_targets,
     ), ApplePackageInfo(
         name = package_name,
+        app_bundle = contents,
         extension = ctx.attrs.ext,
         package = package,
         dsyms = ctx.attrs.bundle[AppleDebuggableInfo].dsyms,
