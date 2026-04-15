@@ -460,10 +460,12 @@ java_test = prelude_rule(
             "_java_test_toolchain": toolchains_common.java_test(),
             "_java_toolchain": toolchains_common.java(),
         } |
+        constraint_overrides.attributes |
         buck.licenses_arg() |
         buck.contacts_arg() |
         validation_common.attrs_validators_arg()
     ) | jvm_common.annotation_processors() | jvm_common.plugins() | jvm_common.javac() | test_common.attributes() | jvm_common.classic_java_content_based_paths(),
+    cfg = constraint_overrides.transition,
 )
 
 java_test_runner = prelude_rule(
