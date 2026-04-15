@@ -1877,10 +1877,34 @@ def _mk_argsfiles(
             coverage_prefix_args = headers_tag.tag_artifacts(preprocessor.set.project_as_args("coverage_prefix_args"))
             file_prefix_args = cmd_args(file_prefix_args, coverage_prefix_args)
 
-        # filename example: .cpp.file_prefix_cxx_args
         file_prefix_args_filename = filename_prefix + "file_prefix_cxx_args"
-        argsfiles.append(mk_argsfile(file_prefix_args_filename, file_prefix_args))
-        args_list.append(file_prefix_args)
+
+        # GCC copies all flags into COLLECT_GCC_OPTIONS env var before exec'ing cc1. This single
+        # string can exceed Linux's 128KB MAX_ARG_STRLEN limit when there are hundreds of prefix-map
+        # flags.
+        #
+        # Delivering via -specs injects flags directly into cc1 without touching
+        # COLLECT_GCC_OPTIONS.
+        #
+        # Assembly may report compiler_type=="gcc" via as_compiler_info even on Clang toolchains;
+        # -specs= is GCC-driver-only so skip it for assembly.
+        if compiler_info.compiler_type == "gcc" and _get_category(ext) != "asm_compile":
+            specs_content = cmd_args(
+                "*cc1:\n+ ",
+                file_prefix_args,
+                delimiter = " ",
+            )
+            specs_file, _ = actions.write(
+                file_prefix_args_filename + ".specs",
+                specs_content,
+                allow_args = True,
+                has_content_based_path = uses_content_based_paths,
+            )
+            prefix_ref = cmd_args(specs_file, format = "-specs={}")
+        else:
+            prefix_ref = file_prefix_args
+        argsfiles.append(mk_argsfile(file_prefix_args_filename, prefix_ref))
+        args_list.append(prefix_ref)
 
     make_file_prefix_argsfile()
 
