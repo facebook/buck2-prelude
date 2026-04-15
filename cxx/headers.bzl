@@ -278,8 +278,18 @@ def prepare_headers(
         _normalize_header_srcs(srcs),
         has_content_based_path = uses_content_based_paths,
     )
+    prefix_map_flag = "-fdebug-prefix-map"
     if header_mode == HeaderMode("symlink_tree_only"):
-        return Headers(include_path = cmd_args(symlink_dir), symlink_tree = symlink_dir)
+        include_prefix = _infer_include_prefix(srcs, header_namespace)
+        replacement = _get_prefix_map_replacement(cxx_toolchain_info, symlink_dir, header_namespace, include_prefix)
+        file_prefix_args = None
+        if replacement != None:
+            file_prefix_args = cmd_args(cmd_args(symlink_dir, format = prefix_map_flag + "={}=" + replacement))
+        return Headers(
+            include_path = cmd_args(symlink_dir),
+            symlink_tree = symlink_dir,
+            file_prefix_args = file_prefix_args,
+        )
     if header_mode == HeaderMode("symlink_tree_with_header_map"):
         headers = {h: (symlink_dir, "{}/" + h) for h in srcs}
         hmap = _mk_hmap(actions, cxx_toolchain_info, output_name, headers, allow_cache_upload, uses_content_based_paths)
@@ -288,7 +298,7 @@ def prepare_headers(
         file_prefix_args = None
         coverage_prefix_args = None
         if replacement != None:
-            file_prefix_args = cmd_args(cmd_args(symlink_dir, format = "-fdebug-prefix-map={}=" + replacement))
+            file_prefix_args = cmd_args(cmd_args(symlink_dir, format = prefix_map_flag + "={}=" + replacement))
             coverage_prefix_args = cmd_args(cmd_args(symlink_dir, format = "-fcoverage-prefix-map={}=" + replacement))
         return Headers(
             include_path = cmd_args(hmap, hidden = symlink_dir),
