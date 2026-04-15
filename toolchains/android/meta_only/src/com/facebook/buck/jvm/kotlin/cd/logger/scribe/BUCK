@@ -18,8 +18,8 @@ buck_kotlin_library(
         "fbsource//third-party/java/org/slf4j/slf4j-nop:slf4j-nop",
     ],
     deps = [
-        "fbcode//dsi/logger/log_entry/KotlinCDLoggerConfig:kotlin_c_d_log_entry-java-swift-java17",
-        "fbcode//scribe/api/producer/thrift/experimental:structured_producer-java-swift-java17",
+        "fbcode//dsi/logger/log_entry/KotlinCDLoggerConfig:kotlin_c_d_log_entry-java-swift-data-type-java17",
+        "fbcode//thrift/lib/java/serialization:serialization-java17",
         "prelude//toolchains/android/src/com/facebook/buck/jvm/kotlin/cd/analytics/logger:logger",
         "prelude//toolchains/android/src/com/facebook/buck/jvm/kotlin/cd/analytics/logger/model:model",
     ],
