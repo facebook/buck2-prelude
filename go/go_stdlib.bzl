@@ -95,7 +95,7 @@ def _build_stdlib_impl(actions: AnalysisActions, target_label: Label, go_toolcha
                 standard = True,
                 pkg_import_path = lib.import_path,
                 package_root = goroot.short_path + "/src/" + lib.import_path,
-                embed_srcs = lib.embed_files,
+                embed_srcs = {src.short_path: src for src in lib.embed_files},
                 compiler_flags = [],
                 assembler_flags = [],
                 coverage_enabled = False,

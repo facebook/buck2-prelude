@@ -45,6 +45,7 @@ load(
 )
 load(
     "@prelude//utils:utils.bzl",
+    "from_named_set",
     "map_idx",
     "map_val",
     "value_or",
@@ -68,7 +69,7 @@ def go_exported_library_impl(ctx: AnalysisContext) -> list[Provider]:
         main = True,
         sources = GoSourceInputs(
             srcs = ctx.attrs.srcs,
-            embed_srcs = ctx.attrs.embed_srcs,
+            embed_srcs = from_named_set(ctx.attrs.embed_srcs),
             package_root = ctx.attrs.package_root,
         ),
         cgo_build_context = cgo_build_context,

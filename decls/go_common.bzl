@@ -97,10 +97,21 @@ def _external_linker_flags_arg():
 
 def _embed_srcs_arg():
     return {
-        "embed_srcs": attrs.list(attrs.source(), default = [], doc = """
-    The set of files and directories to be embeded if match go:embed patters, e.g. `//go:embed *.txt`
+        "embed_srcs": attrs.named_set(attrs.source(), default = [], doc = """
+    The set of files and directories to be embedded if match go:embed patterns, e.g. `//go:embed *.txt`
 
-    ```
+    Can be specified as either:
+    - A list of source files (names derived from short_path)
+    - A dict mapping custom names to source files (for stable naming of generated targets)
+
+    Example (list):
+        embed_srcs = ["data/config.json", "templates/index.html"]
+
+    Example (dict):
+        embed_srcs = {
+            "config.json": ":generated_config",
+            "index.html": "templates/index.html",
+        }
 """),
     }
 

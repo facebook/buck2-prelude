@@ -18,6 +18,7 @@ load(
 )
 load(
     "@prelude//utils:utils.bzl",
+    "from_named_set",
     "map_val",
     "value_or",
 )
@@ -91,7 +92,7 @@ def go_test_impl(ctx: AnalysisContext) -> list[Provider]:
         main = False,
         sources = GoSourceInputs(
             srcs = srcs,
-            embed_srcs = ctx.attrs.embed_srcs,
+            embed_srcs = from_named_set(ctx.attrs.embed_srcs),
             package_root = ctx.attrs.package_root,
         ),
         cgo_build_context = cgo_build_context,

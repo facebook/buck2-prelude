@@ -36,7 +36,7 @@ GoBuildConfig = record(
 
 GoSourceInputs = record(
     srcs = field(list[Artifact]),
-    embed_srcs = field(list[Artifact], []),
+    embed_srcs = field(dict[str, Artifact], {}),
     package_root = field(str | None, None),
 )
 
@@ -246,7 +246,7 @@ BuildPackageParams = record(
     standard = field(bool),
     pkg_import_path = field(str),
     package_root = field(str),
-    embed_srcs = field(list[Artifact]),
+    embed_srcs = field(dict[str, Artifact]),
     compiler_flags = field(list[str]),
     assembler_flags = field(list[str]),
     coverage_enabled = field(bool),
@@ -583,7 +583,7 @@ def _pack(actions: AnalysisActions, go_toolchain: GoToolchainInfo, pkg_import_pa
 
     return pkg_file
 
-def _embedcfg(actions: AnalysisActions, go_toolchain: GoToolchainInfo, pkg_import_path: str, package_root: str, embed_srcs: list[Artifact], embed_patterns: list[str]) -> Artifact | None:
+def _embedcfg(actions: AnalysisActions, go_toolchain: GoToolchainInfo, pkg_import_path: str, package_root: str, embed_srcs: dict[str, Artifact], embed_patterns: list[str]) -> Artifact | None:
     if len(embed_patterns) == 0:
         return None
 
@@ -591,7 +591,7 @@ def _embedcfg(actions: AnalysisActions, go_toolchain: GoToolchainInfo, pkg_impor
 
     srcs_dir = actions.copied_dir(
         "__embed_srcs_dir__",
-        {src.short_path.removeprefix(package_root).lstrip("/"): src for src in embed_srcs},
+        {name.removeprefix(package_root).lstrip("/"): src for name, src in embed_srcs.items()},
         has_content_based_path = True,
     )
 
