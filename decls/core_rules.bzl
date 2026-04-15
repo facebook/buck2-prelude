@@ -23,7 +23,7 @@ PlatformExePlatform = ["linux", "macos", "windows"]
 
 RemoteFileType = ["data", "executable", "exploded_zip"]
 
-TargetCpuType = ["arm", "armv7", "arm64", "x86", "x86_64", "mips", "riscv64"]
+TargetCpuType = ["arm", "armv7", "arm64", "arm64e", "x86", "x86_64", "mips", "riscv64"]
 
 def _has_content_based_path_attr():
     return {

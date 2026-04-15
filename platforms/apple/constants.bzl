@@ -31,6 +31,8 @@ APPLETVSIMULATOR_ARM64 = "appletvsimulator-arm64"
 
 IPHONEOS_ARM64 = "iphoneos-arm64"
 
+IPHONEOS_ARM64E = "iphoneos-arm64e"
+
 IPHONESIMULATOR_ARM64 = "iphonesimulator-arm64"
 
 IPHONESIMULATOR_X86_64 = "iphonesimulator-x86_64"
@@ -81,6 +83,7 @@ appletv_platforms = struct(
 
 ios_platforms = struct(
     IPHONEOS_ARM64 = IPHONEOS_ARM64,
+    IPHONEOS_ARM64E = IPHONEOS_ARM64E,
     IPHONESIMULATOR_ARM64 = IPHONESIMULATOR_ARM64,
     IPHONESIMULATOR_X86_64 = IPHONESIMULATOR_X86_64,
 )

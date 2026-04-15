@@ -42,7 +42,7 @@ def _generate_framework_and_dsym_select_maps(prebuilt_xcframework_args, platform
             )
 
             for arch in platform["archs"]:
-                if arch not in ["arm64", "x86_64"]:
+                if arch not in ["arm64", "arm64e", "x86_64"]:
                     fail("Unsupported " + platform["platform"] + " arch: " + arch)
 
                 config_key = "ovr_config//cpu:" + arch
@@ -249,9 +249,11 @@ def _parse_platform(name):
         isSimulator = substrings[2] == "simulator"
         isCatalyst = substrings[2] == "maccatalyst"
     archs = []
-    for arch in ["arm64", "x86_64", "arm64_32"]:
-        if arch in substrings[1]:
+    remaining = substrings[1]
+    for arch in ["arm64e", "arm64_32", "arm64", "x86_64"]:
+        if arch in remaining:
             archs.append(arch)
+            remaining = remaining.replace(arch, "")
     if not archs:
         fail("Failed to parse architectures for xcframework platform " + name)
 

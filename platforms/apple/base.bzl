@@ -31,6 +31,7 @@ _MOBILE_PLATFORMS = [
     appletv_platforms.APPLETVOS_ARM64,
     appletv_platforms.APPLETVSIMULATOR_ARM64,
     ios_platforms.IPHONEOS_ARM64,
+    ios_platforms.IPHONEOS_ARM64E,
     ios_platforms.IPHONESIMULATOR_ARM64,
     ios_platforms.IPHONESIMULATOR_X86_64,
     watch_platforms.WATCHOS_ARM64,
