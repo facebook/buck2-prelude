@@ -19,7 +19,7 @@ load("@prelude//android:cpu_filters.bzl", "CPU_FILTER_FOR_PRIMARY_PLATFORM", "CP
 load("@prelude//android:relinker_linker_outputs.bzl", "get_extra_relinker_args")
 load("@prelude//android:util.bzl", "EnhancementContext", "merge_extra_linker_args")
 load("@prelude//android:voltron.bzl", "ROOT_MODULE", "all_targets_in_root_module", "get_apk_module_graph_info", "is_root_module")
-# @oss-disable[end= ]: load("@prelude//android/meta_only:gatorade.bzl", "add_gatorade_relinker_args", "early_gatorade_libraries", "gatorade_libraries", "is_late_gatorade_enabled")
+# @oss-disable[end= ]: load("@prelude//android/meta_only:gatorade.bzl", "add_gatorade_relinker_args", "early_gatorade_libraries", "gatorade_deferred_libs", "gatorade_libraries", "is_late_gatorade_enabled")
 load("@prelude//cxx:cxx_toolchain_types.bzl", "CxxToolchainInfo", "PicBehavior")
 load(
     "@prelude//cxx:link.bzl",
@@ -401,13 +401,32 @@ def get_android_binary_native_library_info(
             # A JSON manifest listing the <abi>/<soname> entries is produced alongside so that
             # the combine script knows exactly which libraries to replace without guessing.
             relinked_libs_by_platform = relink_libraries(ctx, final_shared_libs_by_platform)
-            relinked_lib_files = {}
-            for platform, libs in relinked_libs_by_platform.items():
-                abi_directory = CPU_FILTER_TO_ABI_DIRECTORY[platform]
-                for soname, shlib in libs.items():
-                    relinked_lib_files["{}/{}".format(abi_directory, soname)] = shlib.stripped_lib or shlib.lib.output
-            ctx.actions.symlinked_dir(outputs[relinked_libs_output], relinked_lib_files)
-            ctx.actions.write_json(outputs[relinked_libs_manifest], sorted(relinked_lib_files.keys()))
+
+            def write_relinked_libs_outputs(ctx, libs_by_platform, out_dir, out_manifest):
+                relinked_lib_files = {}
+                for platform, libs in libs_by_platform.items():
+                    abi_directory = CPU_FILTER_TO_ABI_DIRECTORY[platform]
+                    for soname, shlib in libs.items():
+                        relinked_lib_files["{}/{}".format(abi_directory, soname)] = shlib.stripped_lib or shlib.lib.output
+                ctx.actions.symlinked_dir(out_dir, relinked_lib_files)
+                ctx.actions.write_json(out_manifest, sorted(relinked_lib_files.keys()))
+
+            if False: # @oss-enable
+            # @oss-disable[end= ]: if is_late_gatorade_enabled(ctx):
+                # Run Gatorade cross-library optimization + codegen + re-link on
+                # the deferred relinked libs. The callback writes the final
+                # Gatorade-processed libs to the relinked_libs_output artifacts.
+                def deferred_gatorade_output(ctx, gatorade_libs_by_platform, dyn_outputs):
+                    write_relinked_libs_outputs(ctx, gatorade_libs_by_platform, dyn_outputs[relinked_libs_output], dyn_outputs[relinked_libs_manifest])
+
+                gatorade_deferred_libs(
+                    ctx,
+                    relinked_libs_by_platform,
+                    deferred_gatorade_output,
+                    [outputs[relinked_libs_output], outputs[relinked_libs_manifest]],
+                )
+            else:
+                write_relinked_libs_outputs(ctx, relinked_libs_by_platform, outputs[relinked_libs_output], outputs[relinked_libs_manifest])
 
             # Bind unrelinked subtarget outputs (same as final since we skipped inline relinking)
             _link_library_subtargets(ctx, outputs, lib_outputs_by_platform, original_shared_libs_by_platform, final_shared_libs_by_platform, merged_shared_lib_targets_by_platform, split_groups, native_merge_debug, unrelinked = True)
@@ -446,8 +465,10 @@ def get_android_binary_native_library_info(
         }
 
         if False: # @oss-enable
-        # @oss-disable[end= ]: if is_late_gatorade_enabled(ctx):
+        # @oss-disable[end= ]: if is_late_gatorade_enabled(ctx) and not defer_relink:
             # Prevent Buildifier from moving comments in a way that breaks things.
+            # When defer_relink is True, Gatorade runs in the deferred pipeline via
+            # gatorade_deferred_libs() above.
             args = [
                 ctx,
                 final_shared_libs_by_platform,
