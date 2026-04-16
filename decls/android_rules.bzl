@@ -18,7 +18,7 @@ load(
     "VALIDATION_DEPS_ATTR_NAME",
 )
 load("@prelude//android:build_only_native_code.bzl", "is_build_only_native_code")
-load("@prelude//android:configuration.bzl", "cpu_split_transition", "cpu_transition", "is_building_android_binary_attr")
+load("@prelude//android:configuration.bzl", "CPU_TRANSITION_ATTRS", "cpu_split_transition", "cpu_transition", "is_building_android_binary_attr")
 load("@prelude//android:cpu_filters.bzl", "ALL_CPU_FILTERS")
 load("@prelude//decls:test_common.bzl", "test_common")
 load("@prelude//transitions:constraint_overrides.bzl", "constraint_overrides")
@@ -52,8 +52,6 @@ SdkProguardType = ["default", "optimized", "none"]
 
 # @oss-disable[end= ]: GatoradePhase = ["early", "late"]
 
-FORCE_SINGLE_CPU = read_root_config("buck2", "android_force_single_cpu") in ("True", "true")
-FORCE_SINGLE_DEFAULT_CPU = read_root_config("buck2", "android_force_single_default_cpu") in ("True", "true")
 DISABLE_STRIPPING = read_root_config("android", "disable_stripping") in ("True", "true")
 
 # Format is {"ovveride_name": {"re_cap_key": "re_cap_value"}}; for example:
@@ -195,11 +193,9 @@ work around the 64K limit on the number of methods that can be referenced in a s
     "_dex_toolchain": toolchains_common.dex(),
     "_exec_os_type": buck.exec_os_type_arg(),
     "_is_building_android_binary": attrs.default_only(attrs.bool(default = True)),
-    "_is_force_single_cpu": attrs.default_only(attrs.bool(default = FORCE_SINGLE_CPU)),
-    "_is_force_single_default_cpu": attrs.default_only(attrs.bool(default = FORCE_SINGLE_DEFAULT_CPU)),
     "_java_toolchain": toolchains_common.java_for_android(),
     VALIDATION_DEPS_ATTR_NAME: attrs.set(attrs.transition_dep(cfg = cpu_transition), sorted = True, default = []),
-} | buck.licenses_arg() | buck.labels_arg() | buck.contacts_arg()
+} | CPU_TRANSITION_ATTRS | buck.licenses_arg() | buck.labels_arg() | buck.contacts_arg()
 
 ANDROID_BINARY_ATTRS = ANDROID_BINARY_BUNDLE_COMMON_ATTRS | {
     "strip_libraries": attrs.bool(default = not DISABLE_STRIPPING),
@@ -334,10 +330,9 @@ android_aar = prelude_rule(
             "_android_toolchain": toolchains_common.android(),
             "_cxx_toolchain": attrs.split_transition_dep(cfg = cpu_split_transition, default = "toolchains//:android-hack"),
             "_is_building_android_binary": attrs.default_only(attrs.bool(default = True)),
-            "_is_force_single_cpu": attrs.default_only(attrs.bool(default = FORCE_SINGLE_CPU)),
-            "_is_force_single_default_cpu": attrs.default_only(attrs.bool(default = FORCE_SINGLE_DEFAULT_CPU)),
             "_java_toolchain": toolchains_common.java_for_android(),
         } |
+        CPU_TRANSITION_ATTRS |
         buck.licenses_arg() |
         buck.labels_arg() |
         buck.contacts_arg()
@@ -635,10 +630,9 @@ android_instrumentation_apk = prelude_rule(
             "_dex_toolchain": toolchains_common.dex(),
             "_exec_os_type": buck.exec_os_type_arg(),
             "_is_building_android_binary": attrs.default_only(attrs.bool(default = True)),
-            "_is_force_single_cpu": attrs.default_only(attrs.bool(default = FORCE_SINGLE_CPU)),
-            "_is_force_single_default_cpu": attrs.default_only(attrs.bool(default = FORCE_SINGLE_DEFAULT_CPU)),
             "_java_toolchain": toolchains_common.java_for_android(),
         } |
+        CPU_TRANSITION_ATTRS |
         buck.licenses_arg() |
         buck.labels_arg() |
         buck.contacts_arg()
