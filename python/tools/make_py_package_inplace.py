@@ -26,7 +26,7 @@ $ ./make_py_package_inplace.py  \\
     --template prelude/python/run_inplace.py.in \\
     # These two args create the hashbang for the bootstrapper script \\
     --python="/usr/bin/python3" \\
-    --python-interpreter-flags="-Es" \\
+    --python-interpreter-flags="-Xgil=0" \\
     # This is based on the path in dests. This is the module that gets executed \\
     # to start program execution \\
     --entry-point=lib.foo  \\
@@ -75,11 +75,6 @@ def parse_args() -> argparse.Namespace:
         "--host-python",
         required=True,
         help="The host python binary to use to e.g. compiling bytecode",
-    )
-    parser.add_argument(
-        "--python-interpreter-flags",
-        default="-Es",
-        help="The interpreter flags for the hashbang",
     )
     entry_point = parser.add_mutually_exclusive_group(required=True)
     entry_point.add_argument(
@@ -134,7 +129,7 @@ def parse_args() -> argparse.Namespace:
         help="environment variables to set before launching the runtime. (e.g. -e FOO=BAR BAZ=QUX)",
     )
     parser.add_argument(
-        "--interpreter_flags",
+        "--python-interpreter-flags",
         action="append",
         default=[],
         help="additional flags to pass to the Python interpreter (e.g. -Xgil=0)",
@@ -166,9 +161,6 @@ def write_bootstrapper(args: argparse.Namespace) -> None:
     #                 the current shell. So, we hack in /usr/bin/env in the front
     #                 for now, and let it do the lifting. OSX: Bringing you the best
     #                 of 1980s BSD in 2021...
-    #                 Also, make sure we add PYTHON_INTERPRETER_FLAGS back. We had to
-    #                 exclude it for now, because linux doesn't like multiple args
-    #                 after /usr/bin/env
 
     ld_preload = None
     if args.preload_libraries:
@@ -179,13 +171,10 @@ def write_bootstrapper(args: argparse.Namespace) -> None:
         python = os.path.abspath(python)
 
     new_data = data.replace("<PYTHON>", f"/usr/bin/env {python}")
-    # Keep the shebang placeholder empty — Linux doesn't support multiple args
-    # after /usr/bin/env, so interpreter flags can't go in the shebang line.
-    new_data = new_data.replace("<PYTHON_INTERPRETER_FLAGS>", "")
     # Instead, pass interpreter flags via the Python variable that the re-exec
     # path uses (e.g. -Xgil=0 for free-threaded builds).
     new_data = new_data.replace(
-        "<PYTHON_RUNTIME_FLAGS>", " ".join(args.interpreter_flags or [])
+        "<PYTHON_INTERPRETER_FLAGS>", " ".join(args.python_interpreter_flags or [])
     )
 
     new_data = new_data.replace("<MODULES_DIR>", str(relative_modules_dir))

@@ -180,7 +180,7 @@ def _live_par_windows_bootstrap(
         for k, v in ctx.attrs.runtime_env.items():
             bootstrap.add(cmd_args(["--runtime_env", "{}={}".format(k, v)]))
     for flag in ctx.attrs.interpreter_args:
-        bootstrap.add(cmd_args(["--interpreter_flags={}".format(flag)]))
+        bootstrap.add(cmd_args(["--python-interpreter-flags={}".format(flag)]))
     ctx.actions.run(bootstrap, category = "par", identifier = "bootstrap{}".format(output_suffix))
 
 def make_default_info(pex: PexProviders) -> Provider:
@@ -600,7 +600,7 @@ def _make_py_package_impl(
             for k, v in ctx.attrs.runtime_env.items():
                 bootstrap.add(cmd_args(["--runtime_env", "{}={}".format(k, v)]))
         for flag in ctx.attrs.interpreter_args:
-            bootstrap.add(cmd_args(["--interpreter_flags={}".format(flag)]))
+            bootstrap.add(cmd_args(["--python-interpreter-flags={}".format(flag)]))
 
         ctx.actions.run(bootstrap, category = "par", identifier = "bootstrap{}".format(output_suffix))
 

@@ -1,4 +1,4 @@
-#!<PYTHON> <PYTHON_INTERPRETER_FLAGS>
+#!<PYTHON>
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under both the MIT license found in the
@@ -15,7 +15,7 @@ native_libs_env_var = "<NATIVE_LIBS_ENV_VAR>"
 native_libs_dirs = <NATIVE_LIBS_DIRS>
 native_libs_preload_env_var = "<NATIVE_LIBS_PRELOAD_ENV_VAR>"
 native_libs_preload = <NATIVE_LIBS_PRELOAD>
-interpreter_flags = "<PYTHON_RUNTIME_FLAGS>"
+interpreter_flags = "<PYTHON_INTERPRETER_FLAGS>"
 unc_prefix = "\\\\?\\"
 
 import os
