@@ -9,6 +9,7 @@
 load("@prelude//apple:apple_toolchain_types.bzl", "AppleToolsInfo")
 load(
     ":apple_bundle_types.bzl",
+    "AppleBundleInfo",
     "AppleBundleLinkerMapInfo",
     "AppleInfoPlistInfo",
 )
@@ -61,7 +62,7 @@ def apple_package_impl(ctx: AnalysisContext) -> list[Provider]:
         sub_targets = sub_targets,
     ), ApplePackageInfo(
         name = package_name,
-        app_bundle = contents,
+        bundle_info = ctx.attrs.bundle[AppleBundleInfo],
         extension = ctx.attrs.ext,
         package = package,
         dsyms = ctx.attrs.bundle[AppleDebuggableInfo].dsyms,

@@ -6,9 +6,11 @@
 # of this source tree. You may select, at your option, one of the
 # above-listed licenses.
 
+load(":apple_bundle_types.bzl", "AppleBundleInfo")
+
 ApplePackageInfo = provider(
     fields = {
-        "app_bundle": provider_field(Artifact),
+        "bundle_info": provider_field(AppleBundleInfo),
         "dsyms": provider_field(list[Artifact]),
         "extension": provider_field(str),
         "info_plist": provider_field(Artifact),
