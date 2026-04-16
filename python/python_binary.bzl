@@ -11,6 +11,7 @@ load(
     "ArtifactGroupInfo",
     "ArtifactOutputs",  # @unused Used as a type
 )
+load("@prelude//:attrs_validators.bzl", "get_attrs_validation_specs")
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//:resources.bzl", "gather_resources")
 load("@prelude//cxx:cxx_context.bzl", "get_opt_cxx_toolchain_info")
@@ -75,7 +76,7 @@ load(
 load(":python_runtime_bundle.bzl", "PythonRuntimeBundleInfo")
 load(":source_db.bzl", "create_dbg_source_db", "create_python_source_db_info", "create_source_db_no_deps")
 load(":toolchain.bzl", "NativeLinkStrategy", "PackageStyle", "PythonToolchainInfo", "get_package_style")
-load(":typing.bzl", "create_per_target_type_check")
+load(":typing.bzl", "create_per_target_type_check", "create_type_check_validation")
 load(":versions.bzl", "LibraryName", "LibraryVersion", "gather_versioned_dependencies", "resolve_versions")
 
 # We do a lot of merging extensions, so don't use O(n) type annotations
@@ -218,7 +219,7 @@ def _add_executable_subtargets(
         main: EntryPoint,
         source_db_no_deps: DefaultInfo,
         src_manifest: ManifestInfo | None,
-        python_deps: list[PythonLibraryInfo]) -> PexProviders:
+        python_deps: list[PythonLibraryInfo]) -> (PexProviders, Artifact | None):
     python_toolchain = ctx.attrs._python_toolchain[PythonToolchainInfo]
     exe = PexProviders(
         default_output = exe.default_output,
@@ -239,23 +240,25 @@ def _add_executable_subtargets(
 
     # Type check
     type_checker = python_toolchain.type_checker
-    if type_checker != None:
-        exe.sub_targets.update({
-            "typecheck": [
-                create_per_target_type_check(
-                    ctx,
-                    type_checker,
-                    src_manifest,
-                    python_deps,
-                    typeshed = python_toolchain.typeshed_stubs,
-                    py_version = ctx.attrs.py_version_for_type_checking,
-                    typing_enabled = ctx.attrs.typing,
-                    sharding_enabled = ctx.attrs.shard_typing,
-                ),
-            ],
-        })
+    validation_output = None
 
-    return exe
+    if type_checker != None:
+        type_check_info = create_per_target_type_check(
+            ctx,
+            type_checker,
+            src_manifest,
+            python_deps,
+            typeshed = python_toolchain.typeshed_stubs,
+            py_version = ctx.attrs.py_version_for_type_checking,
+            typing_enabled = ctx.attrs.typing,
+            sharding_enabled = ctx.attrs.shard_typing,
+        )
+        exe.sub_targets.update({"typecheck": [type_check_info]})
+
+        if ctx.attrs.typing and ctx.attrs.typing_validation:
+            validation_output = create_type_check_validation(ctx, type_checker, type_check_info.default_outputs[0])
+
+    return exe, validation_output
 
 def _compute_pex_providers(
         ctx,
@@ -424,9 +427,18 @@ def _compute_pex_providers(
             other_outputs = [gc_sections_data.binary],
         )]
 
-    updated_pex = _add_executable_subtargets(ctx, pex, dbg_source_db, dbg_source_db_output, library, main, source_db_no_deps, src_manifest, python_deps)
+    updated_pex, validation_output = _add_executable_subtargets(ctx, pex, dbg_source_db, dbg_source_db_output, library, main, source_db_no_deps, src_manifest, python_deps)
 
-    return compute_providers(ctx, updated_pex, executable_type)
+    providers = compute_providers(ctx, updated_pex, executable_type)
+
+    # Build-time type check validation
+    validation_specs = get_attrs_validation_specs(ctx)
+    if validation_output != None:
+        validation_specs.append(ValidationSpec(name = "pyre", validation_result = validation_output))
+    if validation_specs:
+        providers.append(ValidationInfo(validations = validation_specs))
+
+    return providers
 
 def _convert_python_library_to_executable(
         ctx: AnalysisContext,

@@ -11,6 +11,7 @@ load(
     "ArtifactOutputs",  # @unused Used as a type
     "unpack_artifact_map",
 )
+load("@prelude//:attrs_validators.bzl", "get_attrs_validation_specs")
 load("@prelude//:paths.bzl", "paths")
 load(
     "@prelude//:resources.bzl",
@@ -60,7 +61,7 @@ load(":needed_coverage.bzl", "PythonNeededCoverageInfo")
 load(":python.bzl", "NativeDepsInfoTSet", "PythonLibraryInfo", "PythonLibraryManifests", "PythonLibraryManifestsTSet")
 load(":source_db.bzl", "create_python_source_db_info", "create_source_db_no_deps")
 load(":toolchain.bzl", "PythonToolchainInfo")
-load(":typing.bzl", "create_per_target_type_check")
+load(":typing.bzl", "create_per_target_type_check", "create_type_check_validation")
 load(":versions.bzl", "VersionedDependenciesInfo", "gather_versioned_dependencies", "resolve_versions")
 
 def dest_prefix(label: Label, base_module: [None, str]) -> str:
@@ -403,18 +404,24 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
     # Type check
     type_checker = python_toolchain.type_checker
     if type_checker != None:
-        sub_targets["typecheck"] = [
-            create_per_target_type_check(
-                ctx,
-                type_checker,
-                src_type_manifest,
-                deps,
-                typeshed = python_toolchain.typeshed_stubs,
-                py_version = ctx.attrs.py_version_for_type_checking,
-                typing_enabled = ctx.attrs.typing,
-                sharding_enabled = ctx.attrs.shard_typing,
-            ),
-        ]
+        type_check_info = create_per_target_type_check(
+            ctx,
+            type_checker,
+            src_type_manifest,
+            deps,
+            typeshed = python_toolchain.typeshed_stubs,
+            py_version = ctx.attrs.py_version_for_type_checking,
+            typing_enabled = ctx.attrs.typing,
+            sharding_enabled = ctx.attrs.shard_typing,
+        )
+        sub_targets["typecheck"] = [type_check_info]
+
+        # Build-time type check validation (separate action for sole-output constraint)
+        if ctx.attrs.typing and ctx.attrs.typing_validation:
+            validation_output = create_type_check_validation(ctx, type_checker, type_check_info.default_outputs[0])
+            validation_specs = get_attrs_validation_specs(ctx)
+            validation_specs.append(ValidationSpec(name = "pyre", validation_result = validation_output))
+            providers.append(ValidationInfo(validations = validation_specs))
 
     providers.append(DefaultInfo(sub_targets = sub_targets))
 

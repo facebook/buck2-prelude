@@ -141,6 +141,26 @@ def _create_sharded_type_check(
 
     return commands
 
+def create_type_check_validation(
+        ctx: AnalysisContext,
+        executable: RunInfo,
+        type_check_result: Artifact) -> Artifact:
+    """Create a separate action converting type check result to ValidationSpec JSON.
+
+    This must be a separate action because ValidationSpec requires the validation
+    result artifact to be the sole output of its producing action.
+    """
+    validation_output = ctx.actions.declare_output("type_check_validation.json", has_content_based_path = False)
+    cmd = cmd_args(
+        executable,
+        type_check_result,
+        "--convert-validation",
+        "--output",
+        validation_output.as_output(),
+    )
+    ctx.actions.run(cmd, category = "type_check_validation")
+    return validation_output
+
 def create_per_target_type_check(
         ctx: AnalysisContext,
         executable: RunInfo,

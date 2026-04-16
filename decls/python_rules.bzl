@@ -166,6 +166,10 @@ def _typing_arg():
         "typing": attrs.bool(default = False, doc = """
     Determines whether to perform type checking on the given target. Default is False.
 """),
+        "typing_validation": attrs.bool(default = False, doc = """
+    When True (and typing is also True), Pyre type checking runs as a build
+    validation during normal buck build, failing the build on type errors.
+"""),
     }
 
 cxx_python_extension = prelude_rule(
