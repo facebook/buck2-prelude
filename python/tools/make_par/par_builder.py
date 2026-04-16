@@ -25,7 +25,7 @@ class ParBuilder:
         self.warnings = options.warnings
         self.mode = mode
         self.runtime_env = options.runtime_env
-        self.runtime_args = options.runtime_args
+        self.interpreter_flags = options.interpreter_flags
         self.ld_preload = options.ld_preload
 
         self.python = options.python
@@ -86,7 +86,7 @@ class ParBuilder:
         if flags:
             cmd.append("-" + "".join(flags))
 
-        if self.runtime_args:
-            cmd.extend(self.runtime_args)
+        if self.interpreter_flags:
+            cmd.extend(self.interpreter_flags)
 
         return " ".join(cmd)

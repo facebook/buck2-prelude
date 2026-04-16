@@ -138,7 +138,7 @@ def _live_par_generated_files(
         for k, v in ctx.attrs.runtime_env.items():
             gen_bootstrap.add(cmd_args(["--runtime_env={}={}".format(k, v)]))
     if ctx.attrs.interpreter_args:
-        gen_bootstrap.add(cmd_args(["--runtime-args={}".format(json.encode(ctx.attrs.interpreter_args))]))
+        gen_bootstrap.add(cmd_args(["--interpreter-flags={}".format(json.encode(ctx.attrs.interpreter_args))]))
 
     gen_bootstrap.add([
         "--python",
@@ -569,7 +569,7 @@ def _make_py_package_impl(
             for k, v in ctx.attrs.runtime_env.items():
                 cmd.add(cmd_args(["--passthrough", "--runtime_env={}={}".format(k, v)]))
         if ctx.attrs.interpreter_args:
-            cmd.add(cmd_args(["--passthrough", "--runtime-args={}".format(json.encode(ctx.attrs.interpreter_args))]))
+            cmd.add(cmd_args(["--passthrough", "--interpreter-flags={}".format(json.encode(ctx.attrs.interpreter_args))]))
         if package_style == PackageStyle("outplace"):
             cmd.add(cmd_args("--passthrough=--copy-files", hidden = runtime_artifacts))
 
