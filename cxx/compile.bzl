@@ -1877,6 +1877,11 @@ def _mk_argsfiles(
             coverage_prefix_args = headers_tag.tag_artifacts(preprocessor.set.project_as_args("coverage_prefix_args"))
             file_prefix_args = cmd_args(file_prefix_args, coverage_prefix_args)
 
+        # NVCC passes argsfile flags to device subtools (cicc, ptxas) which don't understand
+        # -ffile-prefix-map.
+        if ext == CxxExtension(".cu") and compiler_info.compiler_type == "cuda":
+            file_prefix_args = cmd_args(file_prefix_args, replace_regex = ("-ffile-prefix-map=", "-fdebug-prefix-map="))
+
         file_prefix_args_filename = filename_prefix + "file_prefix_cxx_args"
 
         # GCC copies all flags into COLLECT_GCC_OPTIONS env var before exec'ing cc1. This single

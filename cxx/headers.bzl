@@ -278,7 +278,7 @@ def prepare_headers(
         _normalize_header_srcs(srcs),
         has_content_based_path = uses_content_based_paths,
     )
-    prefix_map_flag = "-fdebug-prefix-map"
+    prefix_map_flag = "-ffile-prefix-map"
     if header_mode == HeaderMode("symlink_tree_only"):
         include_prefix = _infer_include_prefix(srcs, header_namespace)
         replacement = _get_prefix_map_replacement(cxx_toolchain_info, symlink_dir, header_namespace, include_prefix)
@@ -434,7 +434,7 @@ def _infer_include_prefix(srcs: dict[str, Artifact], header_namespace: [str, Non
     return ""
 
 def _get_prefix_map_replacement(cxx_toolchain_info: CxxToolchainInfo, header_dir: Artifact, header_namespace: [str, None] = None, include_prefix: str = "") -> [str, None]:
-    """Compute the replacement path for -fdebug-prefix-map and -fcoverage-prefix-map."""
+    """Compute the replacement path for prefix-map flags."""
 
     # NOTE(@christylee): Do we need to enable debug-prefix-map for darwin and windows?
     if cxx_toolchain_info.linker_info.type != LinkerType("gnu"):
