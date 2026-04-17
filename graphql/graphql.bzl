@@ -28,15 +28,13 @@ GraphQLAndroidInfo = record(
     enable_associated_library = bool,
 )
 
-GraphQLCxxInfo = record()
-
 GraphQLInfo = provider(
     fields = {
         "config_name": provider_field(str),
         "enforce_colocation": provider_field(bool),
         "is_subconfig": provider_field(bool),
         "is_test_target": provider_field(bool),
-        "platform_config": provider_field(GraphQLAndroidInfo | GraphQLCxxInfo | GraphQLiOSInfo),
+        "platform_config": provider_field(GraphQLAndroidInfo | GraphQLiOSInfo),
         "srcs": provider_field(list[Artifact]),
         "target": provider_field(Label),
     },
