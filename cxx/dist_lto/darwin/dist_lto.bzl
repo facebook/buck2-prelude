@@ -103,6 +103,11 @@ def create_output_first_codegen_round_native_object_file(ctx, name, double_codeg
         return ctx.actions.declare_output(name + ".opt.first_codegen_round.o", has_content_based_path = uses_content_based_paths)
     return None
 
+def create_output_precodegen_ir(ctx, name, double_codegen_enabled, uses_content_based_paths):
+    if double_codegen_enabled:
+        return ctx.actions.declare_output(name + ".opt.precodegen.bc", has_content_based_path = uses_content_based_paths)
+    return None
+
 def complete_distributed_link_with_expanded_archive_link_data(
         ctx: AnalysisContext,
         artifacts,
@@ -199,6 +204,7 @@ def complete_distributed_link_with_expanded_archive_link_data(
                         merged_bc_output = ctx.actions.declare_output(name + ".merged.bc", has_content_based_path = False)
 
                     output_first_codegen_round_native_object_file = create_output_first_codegen_round_native_object_file(ctx, name, double_codegen_enabled, uses_content_based_paths)
+                    output_precodegen_ir = create_output_precodegen_ir(ctx, name, double_codegen_enabled, uses_content_based_paths)
 
                     data = DThinLTOLinkData(
                         data_type = LinkDataType("eager_bitcode"),
@@ -209,6 +215,7 @@ def complete_distributed_link_with_expanded_archive_link_data(
                             plan = plan_output,
                             output_final_native_object_file = final_native_object_file_output,
                             output_first_codegen_round_native_object_file = output_first_codegen_round_native_object_file,
+                            output_precodegen_ir = output_precodegen_ir,
                             merged_bc = merged_bc_output,
                             extra_outputs = declare_extra_opt_outputs(name),
                         ),
@@ -229,6 +236,7 @@ def complete_distributed_link_with_expanded_archive_link_data(
                         merged_bc_output = ctx.actions.declare_output(name + ".merged.bc", has_content_based_path = False)
 
                     output_first_codegen_round_native_object_file = create_output_first_codegen_round_native_object_file(ctx, name, double_codegen_enabled, uses_content_based_paths)
+                    output_precodegen_ir = create_output_precodegen_ir(ctx, name, double_codegen_enabled, uses_content_based_paths)
 
                     # The first member in a non force loaded virtual archive gets --start-lib prended on the command line
                     archive_start = (not linkable.link_whole) and virtual_archive_index == 0
@@ -242,6 +250,7 @@ def complete_distributed_link_with_expanded_archive_link_data(
                             plan = plan_output,
                             output_final_native_object_file = final_native_object_file_output,
                             output_first_codegen_round_native_object_file = output_first_codegen_round_native_object_file,
+                            output_precodegen_ir = output_precodegen_ir,
                             merged_bc = merged_bc_output,
                             archive_start = archive_start,
                             archive_end = archive_end,
@@ -273,6 +282,7 @@ def complete_distributed_link_with_expanded_archive_link_data(
                         # for these outputs because we need to know the final path before running the action.
                         merged_bc_output = ctx.actions.declare_output(name + ".merged.bc", has_content_based_path = False)
                     output_first_codegen_round_native_object_file = create_output_first_codegen_round_native_object_file(ctx, name, double_codegen_enabled, uses_content_based_paths)
+                    output_precodegen_ir = create_output_precodegen_ir(ctx, name, double_codegen_enabled, uses_content_based_paths)
 
                     raw_link_data.append(DThinLTOLinkData(
                         data_type = LinkDataType("lazy_bitcode"),
@@ -283,6 +293,7 @@ def complete_distributed_link_with_expanded_archive_link_data(
                             plan = plan_output,
                             output_final_native_object_file = final_native_object_file_output,
                             output_first_codegen_round_native_object_file = output_first_codegen_round_native_object_file,
+                            output_precodegen_ir = output_precodegen_ir,
                             merged_bc = merged_bc_output,
                             archive_start = archive_start,
                             archive_end = archive_end,
@@ -356,23 +367,32 @@ def complete_distributed_link_with_expanded_archive_link_data(
         # there is no point optimizing it.
         if not optimization_plan.loaded_by_linker or not optimization_plan.is_bitcode or optimization_plan.merge_state == BitcodeMergeState("ABSORBED").value:
             ctx.actions.write(outputs[output_native_object_file].as_output(), "")
-            if double_codegen_state == DoubleCodegenState("disabled") or double_codegen_state == DoubleCodegenState("second_round"):
+            if double_codegen_state == DoubleCodegenState("first_round"):
+                ctx.actions.write(outputs[bitcode_link_data.output_precodegen_ir].as_output(), "")
+            if double_codegen_state == DoubleCodegenState("disabled") or double_codegen_state == DoubleCodegenState("first_round"):
                 mapped_extra_outputs = {output_type: outputs[artifact] for output_type, artifact in bitcode_link_data.extra_outputs.items()}
                 for extra_output_artifact in mapped_extra_outputs.values():
                     ctx.actions.write(extra_output_artifact.as_output(), "")
             return
 
         opt_cmd = cmd_args(lto_opt)
-        if premerger_enabled:
-            if optimization_plan.merge_state == BitcodeMergeState("STANDALONE").value:
-                opt_cmd.add("--input", input_object_file)
-            elif optimization_plan.merge_state == BitcodeMergeState("ROOT").value:
-                opt_cmd.add("--input", merged_bc)
-            else:
-                fail("Invalid merge state {} for bitcode file: {}".format(optimization_plan.merge_state, output_index_shard_file))
+        if double_codegen_state == DoubleCodegenState("second_round"):
+            # For the second round, resume from the precodegen IR produced in the first round
+            opt_cmd.add("--input", bitcode_link_data.output_precodegen_ir)
+            opt_cmd.add("--codegen-only")
         else:
-            opt_cmd.add("--input", input_object_file)
+            # First round or disabled, there is nothing to resume from
+            if premerger_enabled:
+                if optimization_plan.merge_state == BitcodeMergeState("STANDALONE").value:
+                    opt_cmd.add("--input", input_object_file)
+                elif optimization_plan.merge_state == BitcodeMergeState("ROOT").value:
+                    opt_cmd.add("--input", merged_bc)
+                else:
+                    fail("Invalid merge state {} for bitcode file: {}".format(optimization_plan.merge_state, output_index_shard_file))
+            else:
+                opt_cmd.add("--input", input_object_file)
 
+        # Always provide the index regardless of round because codegen depends on information in the index
         opt_cmd.add("--index", output_index_shard_file)
 
         opt_cmd.add(cmd_args(hidden = common_opt_cmd))
@@ -383,13 +403,17 @@ def complete_distributed_link_with_expanded_archive_link_data(
         elif double_codegen_state == DoubleCodegenState("second_round"):
             opt_cmd.add("--read-cgdata", merged_cgdata)
 
-        imported_input_bitcode_files = [sorted_index_link_data[idx].link_data.input_object_file for idx in optimization_plan.imports]
+        # Second round has already completed importing, so the only bitcode file necessary is the one being optimized,
+        # inlined functions have already been embedded into the saved module in round 1
+        if double_codegen_state != DoubleCodegenState("second_round"):
+            imported_input_bitcode_files = [sorted_index_link_data[idx].link_data.input_object_file for idx in optimization_plan.imports]
 
-        if premerger_enabled:
-            imported_merged_input_bitcode_files = [sorted_index_link_data[idx].link_data.merged_bc for idx in optimization_plan.imports]
-            opt_cmd.add(cmd_args(hidden = imported_merged_input_bitcode_files))
+            if premerger_enabled:
+                imported_merged_input_bitcode_files = [sorted_index_link_data[idx].link_data.merged_bc for idx in optimization_plan.imports]
+                opt_cmd.add(cmd_args(hidden = imported_merged_input_bitcode_files))
 
-        opt_cmd.add(cmd_args(hidden = imported_input_bitcode_files))
+            opt_cmd.add(cmd_args(hidden = imported_input_bitcode_files))
+
         projected_opt_cmd = cmd_args(ctx.actions.tset(IdentityTSet, value = opt_cmd).project_as_args("identity"))
 
         if double_codegen_state == DoubleCodegenState("first_round"):
@@ -401,10 +425,15 @@ def complete_distributed_link_with_expanded_archive_link_data(
 
         # We have to add outputs after wrapping the cmd_args in a projection
         projected_opt_cmd.add("--out", outputs[output_native_object_file].as_output())
+
+        if double_codegen_state == DoubleCodegenState("first_round"):
+            projected_opt_cmd.add("--save-precodegen-ir", outputs[bitcode_link_data.output_precodegen_ir].as_output())
+
         if (
             link_options.extra_linker_outputs_flags_factory and
-            (double_codegen_state == DoubleCodegenState("disabled") or double_codegen_state == DoubleCodegenState("second_round"))
+            (double_codegen_state == DoubleCodegenState("disabled") or double_codegen_state == DoubleCodegenState("first_round"))
         ):
+            # Extra linker outputs are all produced during the first round (or only round if double codegen is disabled)
             mapped_extra_outputs = {output_type: outputs[artifact] for output_type, artifact in bitcode_link_data.extra_outputs.items()}
             extra_outputs_args = cmd_args(
                 link_options.extra_linker_outputs_flags_factory(
@@ -414,17 +443,24 @@ def complete_distributed_link_with_expanded_archive_link_data(
                 ),
             )
             projected_opt_cmd.add("--", extra_outputs_args)
+
         ctx.actions.run(projected_opt_cmd, category = make_cat(category_string), identifier = name)
 
     def dynamic_optimize(bitcode_link_data, double_codegen_state: DoubleCodegenState, merged_cgdata: Artifact | None = None):
         if double_codegen_state == DoubleCodegenState("first_round"):
             optimize_object_outputs = [
                 bitcode_link_data.output_first_codegen_round_native_object_file.as_output(),
+                bitcode_link_data.output_precodegen_ir.as_output(),
             ]
-        else:
-            optimize_object_outputs = [bitcode_link_data.output_final_native_object_file.as_output()]
 
-            # Only add extra linker outputs in second round if double codegen is enabled
+            # Produce extra linker outputs in first round
+            optimize_object_outputs += [artifact.as_output() for artifact in bitcode_link_data.extra_outputs.values()]
+        elif double_codegen_state == DoubleCodegenState("second_round"):
+            # Only produce the final native object file in the second round
+            optimize_object_outputs = [bitcode_link_data.output_final_native_object_file.as_output()]
+        else:
+            # If there is only one around, produce everything in that round
+            optimize_object_outputs = [bitcode_link_data.output_final_native_object_file.as_output()]
             optimize_object_outputs += [artifact.as_output() for artifact in bitcode_link_data.extra_outputs.values()]
 
         ctx.actions.dynamic_output(
