@@ -148,9 +148,9 @@ class LiveBuilder(ParBuilder):
         py_cmd = self._get_python_command(base_dir="$BASE_DIR")
         cmd = interp or py_cmd
 
-        if options.runtime_env:
+        if self.runtime_env:
             env_list = ["export"]
-            env_list.extend(options.runtime_env)
+            env_list.extend(self.runtime_env)
             env = " ".join(env_list)
         else:
             env = ""

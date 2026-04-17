@@ -24,7 +24,10 @@ class ParBuilder:
         self.strict_tabs = options.strict_tabs
         self.warnings = options.warnings
         self.mode = mode
-        self.runtime_env = options.runtime_env
+        self.runtime_env = list(options.runtime_env)
+        self.runtime_env.append(
+            "FB_PAR_FIX_OS_ARGV={}".format("1" if options.fix_os_argv else "")
+        )
         self.interpreter_flags = options.interpreter_flags
         self.ld_preload = options.ld_preload
 

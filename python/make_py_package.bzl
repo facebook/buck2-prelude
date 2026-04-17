@@ -704,7 +704,7 @@ def _make_py_package_live(
             output,
             python_toolchain,
             python_internal_tools,
-            build_args,
+            build_args + ctx.attrs.inplace_build_args,
             main,
             preload_libraries,
             output_suffix,
