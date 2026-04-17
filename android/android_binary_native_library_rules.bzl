@@ -419,12 +419,7 @@ def get_android_binary_native_library_info(
                 def deferred_gatorade_output(ctx, gatorade_libs_by_platform, dyn_outputs):
                     write_relinked_libs_outputs(ctx, gatorade_libs_by_platform, dyn_outputs[relinked_libs_output], dyn_outputs[relinked_libs_manifest])
 
-                gatorade_deferred_libs(
-                    ctx,
-                    relinked_libs_by_platform,
-                    deferred_gatorade_output,
-                    [outputs[relinked_libs_output], outputs[relinked_libs_manifest]],
-                )
+                # @oss-disable[end= ]: gatorade_deferred_libs(ctx, relinked_libs_by_platform, deferred_gatorade_output, [outputs[relinked_libs_output], outputs[relinked_libs_manifest]])
             else:
                 write_relinked_libs_outputs(ctx, relinked_libs_by_platform, outputs[relinked_libs_output], outputs[relinked_libs_manifest])
 
