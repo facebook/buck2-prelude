@@ -25,18 +25,21 @@ EXIT_SUCCESS, EXIT_FAILURE = 0, 1
 
 def main(argv: List[str]) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", help="The output native object file.")
-    parser.add_argument("--input", help="The input bitcode object file.")
-    parser.add_argument("--index", help="The thinlto index file.")
+    parser.add_argument("--out", help="The output native object file.", required=True)
+    parser.add_argument("--input", help="The input bitcode object file.", required=True)
+    parser.add_argument("--index", help="The thinlto index file.", required=True)
+    parser.add_argument(
+        "--compiler", help="The path to the Clang compiler binary.", required=True
+    )
     parser.add_argument(
         "--shared-args",
         help="The argsfile containing unfiltered and unprocessed flags, common to all opt actions in this link.",
+        required=True,
     )
     parser.add_argument(
         "--extra-outputs-args",
         help="The argsfile containing unfiltered and unprocessed flags, specifying extra outputs produced by this opt action.",
     )
-    parser.add_argument("--compiler", help="The path to the Clang compiler binary.")
     parser.add_argument(
         "--print-command",
         action="store_true",
