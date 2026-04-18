@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -59,6 +60,29 @@ public class D8Utils {
       Path androidJarPath,
       Collection<Path> classpathFiles,
       Optional<Integer> minSdkVersion)
+      throws CompilationFailedException, IOException {
+    return runD8Command(
+        diagnosticsHandler,
+        outputDexFile,
+        filesToDex,
+        options,
+        primaryDexClassNamesPath,
+        androidJarPath,
+        classpathFiles,
+        minSdkVersion,
+        OptionalInt.empty());
+  }
+
+  public static D8Output runD8Command(
+      D8DiagnosticsHandler diagnosticsHandler,
+      Path outputDexFile,
+      Iterable<Path> filesToDex,
+      Set<D8Options> options,
+      Optional<Path> primaryDexClassNamesPath,
+      Path androidJarPath,
+      Collection<Path> classpathFiles,
+      Optional<Integer> minSdkVersion,
+      OptionalInt threadCount)
       throws CompilationFailedException, IOException {
     Set<Path> inputs = new HashSet<>();
     for (Path toDex : filesToDex) {
@@ -103,6 +127,9 @@ public class D8Utils {
                     opt.minimalMainDex = true;
                   } else if (options.contains(D8Options.MAXIMIZE_PRIMARY_DEX)) {
                     opt.minimalMainDex = false;
+                  }
+                  if (threadCount.isPresent()) {
+                    opt.threadCount = threadCount.getAsInt();
                   }
                 });
 

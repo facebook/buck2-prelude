@@ -28,6 +28,7 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -48,6 +49,10 @@ import org.kohsuke.args4j.Option;
 public class MultiDexExecutableMain {
   /** name suffix that identifies it as a Java class file. */
   private static final String CLASS_NAME_SUFFIX = ".class";
+
+  /** Thread count for main D8 compilation (capped to avoid diminishing returns). */
+  private static final OptionalInt D8_THREAD_COUNT =
+      OptionalInt.of(Math.min(Runtime.getRuntime().availableProcessors(), 48));
 
   @Option(name = "--primary-dex")
   @Nullable
@@ -226,7 +231,8 @@ public class MultiDexExecutableMain {
                 Optional.of(hackMainDexListForBootstrapRun),
                 Paths.get(androidJar),
                 filesToDex,
-                minSdkVersion);
+                minSdkVersion,
+                D8_THREAD_COUNT);
           } catch (CompilationFailedException e) {
             throw new IOException(e);
           }
@@ -261,7 +267,8 @@ public class MultiDexExecutableMain {
                 Optional.empty(),
                 Paths.get(androidJar),
                 filesToDex,
-                minSdkVersion);
+                minSdkVersion,
+                D8_THREAD_COUNT);
           } catch (CompilationFailedException e) {
             throw new IOException(e);
           }
@@ -318,7 +325,8 @@ public class MultiDexExecutableMain {
           Optional.ofNullable(primaryDexClassNamesPath),
           Paths.get(androidJar),
           classpath,
-          minSdkVersion);
+          minSdkVersion,
+          D8_THREAD_COUNT);
     } catch (CompilationFailedException e) {
       throw new IOException(e);
     }
