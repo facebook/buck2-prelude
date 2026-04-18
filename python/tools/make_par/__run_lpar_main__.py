@@ -26,6 +26,7 @@ def __invoke_main() -> None:
     sys.argv[0] = os.getenv("FB_LPAR_INVOKED_NAME", sys.argv[0])
 
     if os.environ.get("FB_PAR_FIX_OS_ARGV"):
+        # pyre-fixme[21]: Could not find module `__par__.meta_only.process_title`.
         from __par__.meta_only.process_title import set_os_argv
 
         set_os_argv(sys.argv)
