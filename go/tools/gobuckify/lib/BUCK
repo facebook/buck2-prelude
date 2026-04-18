@@ -8,7 +8,7 @@ source_listing()
 
 prelude = native # @oss-enable
 go_library = prelude.go_library # @oss-enable
-go_unittest = prelude.go_unittest # @oss-enable
+go_unittest = prelude.go_test # @oss-enable
 
 go_library(
     name = "gobuckifylib",
