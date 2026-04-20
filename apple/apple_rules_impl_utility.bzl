@@ -143,7 +143,7 @@ def _apple_bundle_like_common_attrs():
         "_incremental_bundling_enabled": attrs.bool(default = False),
         "_profile_bundling_enabled": attrs.bool(default = False),
         "_provisioning_profile_sources": attrs.dep(default = "fbsource//xplat/buck2/platform/apple:provisioning_profile_sources"),
-        "_provisioning_profile_sources_enabled": attrs.bool(default = read_bool("apple", "provisioning_profile_sources_enabled", False)),
+        "_provisioning_profile_sources_enabled": attrs.bool(default = read_bool("apple", "provisioning_profile_sources_enabled", True)),
         # FIXME: prelude// should be standalone (not refer to fbsource//)
         "_provisioning_profiles": attrs.dep(default = "fbsource//xplat/buck2/platform/apple:provisioning_profiles"),
         "_resource_bundle": attrs.option(attrs.dep(providers = [AppleBundleResourceInfo]), default = None),
