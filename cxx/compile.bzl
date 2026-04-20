@@ -1754,18 +1754,7 @@ def _mk_argsfiles(
                 "src": compiler_info_argsfile,
                 "_cxx_toolchain": impl_params._cxx_toolchain,
             }).artifact("argsfile")
-            filtered_info_argsfile = actions.assert_has_content_based_path(filtered_info_argsfile)
-
-            # TODO(nml): Currently we need to copy the output file so its content-based
-            # path is the same across different configurations. We should move the whole
-            # anon rule to the compiler_info target instead, but this would require some
-            # refactoring, so we do this for now to experiment with content-based
-            # configuration merging.
-            compiler_info_argsfile = actions.copy_file(
-                filename_prefix + "filtered_toolchain_cxx_args",
-                filtered_info_argsfile,
-                has_content_based_path = True,
-            )
+            compiler_info_argsfile = actions.assert_has_content_based_path(filtered_info_argsfile)
 
         argsfiles.append(compiler_info_argsfile)
         args_list.append(compiler_info_flags)
