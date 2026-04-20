@@ -1040,7 +1040,13 @@ apple_test = prelude_rule(
 
 apple_toolchain = prelude_rule(
     name = "apple_toolchain",
-    docs = "",
+    docs = """
+        An `apple_toolchain()` rule defines the set of tools and settings used to build Apple targets.
+        It specifies paths to compilers, linkers, code signing utilities, resource compilers, and other
+        tools from the Apple SDK and Xcode. Rules such as `apple_binary()`, `apple_library()`, and
+        `apple_bundle()` reference an `apple_toolchain()` to determine which tools and SDK to use
+        during compilation, linking, and bundling.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -1204,7 +1210,11 @@ prebuilt_apple_framework = prelude_rule(
 
 scene_kit_assets = prelude_rule(
     name = "scene_kit_assets",
-    docs = "",
+    docs = """
+        A `scene_kit_assets()` rule specifies a SceneKit asset catalog (`.scnassets` directory)
+        to be included in an `apple_bundle()`. The assets are compiled using the
+        `copy_scene_kit_assets` tool from the Apple toolchain during bundling.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -1221,7 +1231,12 @@ scene_kit_assets = prelude_rule(
 
 swift_toolchain = prelude_rule(
     name = "swift_toolchain",
-    docs = "",
+    docs = """
+        A `swift_toolchain()` rule defines the Swift compiler and associated tools used to build
+        Swift code in Apple targets. It specifies the `swiftc` compiler, standard library tools,
+        module paths, SDK paths, and compiler flags. An `apple_toolchain()` references a
+        `swift_toolchain()` via its `swift_toolchain` attribute to enable Swift compilation.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -1325,6 +1340,12 @@ apple_universal_executable = prelude_rule(
 
 apple_provisioning_profile_sources = prelude_rule(
     name = "apple_provisioning_profile_sources",
+    docs = """
+        An `apple_provisioning_profile_sources()` rule specifies a set of provisioning profile
+        targets that are available for code signing Apple bundles. These profiles are used during
+        the signing step of `apple_bundle()` to match a valid, non-expired profile to the bundle
+        identifier and entitlements.
+    """,
     impl = apple_provisioning_profile_sources_impl,
     examples = None,
     further = None,
@@ -1335,6 +1356,12 @@ apple_provisioning_profile_sources = prelude_rule(
 
 apple_simulators = prelude_rule(
     name = "apple_simulators",
+    docs = """
+        An `apple_simulators()` rule configures the Apple simulator environment used for
+        running tests. It specifies the simulator broker, device type, OS version, and
+        setup parameters needed to launch and manage iOS/watchOS/tvOS simulators during
+        test execution.
+    """,
     impl = apple_simulators_impl,
     examples = None,
     further = None,
@@ -1425,12 +1452,24 @@ cxx_universal_executable = prelude_rule(
 
 apple_ipa_package = prelude_rule(
     name = "apple_ipa_package",
+    docs = """
+        An `apple_ipa_package()` rule packages an `apple_bundle()` into an IPA file
+        for distribution. The IPA is a compressed archive containing the application
+        bundle in the standard format expected by App Store Connect and ad-hoc
+        distribution workflows.
+    """,
     impl = apple_ipa_package_impl,
     attrs = apple_ipa_package_attribs(),
 )
 
 apple_xcframework = prelude_rule(
     name = "apple_xcframework",
+    docs = """
+        An `apple_xcframework()` rule packages a framework target built for multiple platforms
+        (e.g., iOS device, iOS simulator, macOS) into a single `.xcframework` bundle that can
+        be distributed and consumed by Xcode projects or other build systems. The framework is
+        built per-platform via a split transition and then combined.
+    """,
     impl = apple_xcframework_impl,
     attrs = buck.labels_arg() | buck.contacts_arg() | {
         "framework": attrs.split_transition_dep(cfg = framework_split_transition),
@@ -1443,6 +1482,11 @@ apple_xcframework = prelude_rule(
 
 apple_spm_package = prelude_rule(
     name = "apple_spm_package",
+    docs = """
+        An `apple_spm_package()` rule packages a set of dependencies into a Swift Package
+        Manager (SPM) compatible package. This enables distributing buck2-built libraries
+        in a format that can be consumed by SPM-based projects.
+    """,
     impl = apple_spm_package_impl,
     attrs = (
         apple_common.deps_arg() |
@@ -1455,6 +1499,11 @@ apple_spm_package = prelude_rule(
 
 apple_static_archive = prelude_rule(
     name = "apple_static_archive",
+    docs = """
+        An `apple_static_archive()` rule combines one or more Apple libraries into a single
+        static archive (`.a` file). This is useful for distributing prebuilt libraries
+        where multiple object files need to be bundled together.
+    """,
     impl = apple_static_archive_impl,
     attrs = (
         buck.labels_arg() |
@@ -1471,6 +1520,12 @@ apple_static_archive = prelude_rule(
 
 apple_selective_debugging = prelude_rule(
     name = "apple_selective_debugging",
+    docs = """
+        An `apple_selective_debugging()` rule configures which targets have debug information
+        included in the final binary. By specifying include/exclude patterns for build targets
+        or regular expressions, you can reduce binary size by stripping debug info from
+        dependencies you don't need to debug.
+    """,
     impl = apple_selective_debugging_impl,
     attrs = {
         "exclude_build_target_patterns": attrs.list(attrs.string(), default = []),
@@ -1484,6 +1539,12 @@ apple_selective_debugging = prelude_rule(
 
 apple_macos_bundle = prelude_rule(
     name = "apple_macos_bundle",
+    docs = """
+        An `apple_macos_bundle()` rule generates a macOS application bundle. It applies
+        the macOS platform transition automatically, so the binary and its dependencies
+        are built for macOS regardless of the default target platform. Use case is Mac
+        Catalyst apps which want to include an AppKit framework.
+    """,
     impl = apple_macos_bundle_impl,
     attrs = apple_macos_bundle_attrs(),
     cfg = macos_transition,
@@ -1491,6 +1552,11 @@ apple_macos_bundle = prelude_rule(
 
 apple_watchos_bundle = prelude_rule(
     name = "apple_watchos_bundle",
+    docs = """
+        An `apple_watchos_bundle()` rule generates a watchOS application bundle. It applies
+        the watchOS platform transition automatically, so the binary and its dependencies
+        are built for watchOS regardless of the default target platform.
+    """,
     impl = apple_watchos_bundle_impl,
     attrs = apple_watchos_bundle_attrs(),
     cfg = watch_transition,
@@ -1498,6 +1564,9 @@ apple_watchos_bundle = prelude_rule(
 
 apple_resource_bundle = prelude_rule(
     name = "apple_resource_bundle",
+    docs = """
+        An `apple_resource_bundle()` is a rule that exists for internal implementation reasons to compile resources for the Apple platform. It's used by the Apple rules and not for public consumption.
+    """,
     impl = apple_resource_bundle_impl,
     attrs = (
         buck.labels_arg() |
@@ -1533,6 +1602,11 @@ apple_resource_bundle = prelude_rule(
 
 apple_resource_dedupe_alias = prelude_rule(
     name = "apple_resource_dedupe_alias",
+    docs = """
+        An `apple_resource_dedupe_alias()` rule creates an alias for a resource target
+        with a resource configuration transition applied. This enables the resource
+        deduplication pipeline to dedupe the same resources across arch-transitions (i.e., universal binaries - x86 + arm64).
+    """,
     impl = apple_resource_dedupe_alias_impl,
     attrs = {
         "actual": attrs.transition_dep(cfg = apple_resource_transition),
@@ -1541,12 +1615,23 @@ apple_resource_dedupe_alias = prelude_rule(
 
 mockingbird_mock = prelude_rule(
     name = "mockingbird_mock",
+    docs = """
+        A `mockingbird_mock()` rule generates mock implementations using the Mockingbird
+        mocking framework. The generated mocks can be used in `apple_test()` targets for
+        unit testing Swift and Objective-C code.
+    """,
     impl = mockingbird_mock_impl,
     attrs = mockingbird_mock_attrs(),
 )
 
 resource_group_map = prelude_rule(
     name = "resource_group_map",
+    docs = """
+        A `resource_group_map()` rule defines a mapping of resource groups for an
+        `apple_bundle()`. Each group specifies which dependencies' resources should be
+        placed together, enabling fine-grained control over how resources are partitioned
+        across bundles in a multi-bundle application (e.g., app extensions, plugins).
+    """,
     impl = resource_group_map_impl,
     attrs = {
         "map": attrs.list(
@@ -1566,12 +1651,22 @@ resource_group_map = prelude_rule(
 
 apple_xcuitest = prelude_rule(
     name = "apple_xcuitest",
+    docs = """
+        An `apple_xcuitest()` rule defines an XCUITest UI test target. It builds a test
+        runner bundle that launches the application under test and executes UI automation
+        tests using Apple's XCTest UI testing framework.
+    """,
     impl = apple_xcuitest_impl,
     attrs = apple_xcuitest_extra_attrs(),
 )
 
 apple_info_plist = prelude_rule(
     name = "apple_info_plist",
+    docs = """
+        An `apple_info_plist()` rule defines mutations to apply to an `Info.plist` file.
+        It supports update, merge, and restricted merge operations, allowing you to
+        programmatically set, override, or combine plist entries during the build.
+    """,
     impl = apple_info_plist_impl,
     attrs = {
         "mutations": attrs.list(attrs.one_of(
