@@ -105,13 +105,19 @@ def _embed_srcs_arg():
     - A dict mapping custom names to source files (for stable naming of generated targets)
 
     Example (list):
-        embed_srcs = ["data/config.json", "templates/index.html"]
+
+    ```
+    embed_srcs = ["data/config.json", "templates/index.html"]
+    ```
 
     Example (dict):
-        embed_srcs = {
-            "config.json": ":generated_config",
-            "index.html": "templates/index.html",
-        }
+
+    ```
+    embed_srcs = {
+        "config.json": ":generated_config",
+        "index.html": "templates/index.html",
+    }
+    ```
 """),
     }
 
