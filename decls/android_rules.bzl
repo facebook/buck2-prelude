@@ -127,9 +127,9 @@ android_library(), android_resource(), cxx_library(), groovy_library(), java_lib
     "is_voltron_language_pack_enabled": attrs.bool(default = False, doc = ""),
     "keystore": attrs.dep(doc = "A build target that identifies a keystore to use to sign the APK."),
     "locales": attrs.list(attrs.string(), default = [], doc = ""),
-    "manifest": attrs.option(attrs.one_of(attrs.transition_dep(cfg = cpu_transition), attrs.source()), default = None, doc = ""),
+    "manifest": attrs.option(attrs.one_of(attrs.transition_dep(cfg = cpu_transition), attrs.source()), default = None, doc = """Relative path to the Android manifest for the APK. The common case is that the manifest will be in the same directory as the rule, in which case this will simply be 'AndroidManifest.xml', but it can also reference an `android_manifest()` rule. Prefer using `manifest_skeleton`, which performs merging automatically. Exactly one of `manifest` and `manifest_skeleton` must be set."""),
     "manifest_entries": attrs.dict(key = attrs.string(), value = attrs.any(), default = {}, doc = "Insert values into the packaged AndroidManifest.xml file. Valid values are min_sdk_version, target_sdk_version, version_code, version_name, and debug_mode."),
-    "manifest_skeleton": attrs.option(attrs.one_of(attrs.transition_dep(cfg = cpu_transition), attrs.source()), default = None, doc = ""),
+    "manifest_skeleton": attrs.option(attrs.one_of(attrs.transition_dep(cfg = cpu_transition), attrs.source()), default = None, doc = """Relative path to the skeleton Android manifest for the APK. An `android_manifest()` will be created automatically to merge all manifests from libraries and resources going into the app. The common case is that the manifest will be in the same directory as the rule, in which case this will simply be 'AndroidManifest.xml'. Exactly one of `manifest` and `manifest_skeleton` must be set."""),
     "min_sdk_version": attrs.option(attrs.int(), default = None),
     "minimize_primary_dex_size": attrs.bool(default = False, doc = ""),
     "multidex_min_api": attrs.option(attrs.string(), default = None, doc = ""),
@@ -143,8 +143,8 @@ android_library(), android_resource(), cxx_library(), groovy_library(), java_lib
     "native_library_merge_sequence": attrs.option(attrs.list(attrs.one_of(
         attrs.tuple(attrs.string(), attrs.list(attrs.regex())),
         attrs.list(attrs.tuple(attrs.string(), attrs.list(attrs.regex()))),
-    )), default = None, doc = ""),
-    "native_library_merge_sequence_blocklist": attrs.option(attrs.list(attrs.regex()), default = None, doc = ""),
+    )), default = None, doc = """Defines a prioritized sequence of instructions for merging native libraries. Sequence entries are tuples comprised of a merged library name and a list of regular expressions for which matching native library targets and their dependencies will be added to the merged library, unless an earlier entry already matched them. Merged library names must begin with `lib` and end with `.so`. This is an advanced option for apps with many native libraries."""),
+    "native_library_merge_sequence_blocklist": attrs.option(attrs.list(attrs.regex()), default = None, doc = """Defines a list of regular expressions for which matching native library targets will not be merged by `native_library_merge_sequence`. Blocked targets' unblocked dependencies will still be merged."""),
     "native_library_pick_first": attrs.list(attrs.string(), default = [], doc = ""),
     "no_dx": attrs.list(attrs.dep(), default = [], doc = """List of dependency targets whose Java code should be excluded from the DEX files in the final APK. \
 The classes from these targets will not be dexed, but their other resources will still be included. \
@@ -341,7 +341,12 @@ android_aar = prelude_rule(
 
 android_app_modularity = prelude_rule(
     name = "android_app_modularity",
-    docs = "",
+    docs = """
+        An `android_app_modularity()` rule is used to determine the modular
+        structure of an Android app. It defines how application modules are
+        configured and which dependencies belong to each module, enabling
+        dynamic delivery and on-demand loading of app features.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -369,7 +374,9 @@ for how to resolve duplicate classes using this attribute."""),
 
 android_binary = prelude_rule(
     name = "android_binary",
-    docs = "",
+    docs = """
+        An `android_binary()` rule is used to generate an Android APK.
+    """,
     examples = None,
     further = None,
     attrs = ANDROID_BINARY_ATTRS,
@@ -519,7 +526,13 @@ android_build_config = prelude_rule(
 
 android_bundle = prelude_rule(
     name = "android_bundle",
-    docs = "",
+    docs = """
+        An `android_bundle()` rule is used to generate an Android App Bundle
+        (AAB). It shares most attributes with `android_binary()`, but produces
+        an AAB file instead of an APK. App Bundles are the recommended
+        publishing format for Google Play, enabling optimized APK delivery
+        per device configuration.
+    """,
     examples = None,
     further = None,
     attrs = ANDROID_BUNDLE_ATTRS,
@@ -981,7 +994,11 @@ android_prebuilt_aar = prelude_rule(
                  files originating from this `.aar` file. The `.so` files will always be packaged directly into
                  the main `.apk`.
             """),
-            "deps": attrs.list(attrs.dep(), default = []),
+            "deps": attrs.list(attrs.dep(), default = [], doc = """
+                Dependencies of this prebuilt AAR. Listed deps are automatically exported to consumers of this rule
+                 and are used to resolve the transitive classpath for desugaring. Use this to specify libraries that
+                 the `.aar` depends on at compile time or runtime but are not bundled within the `.aar` itself.
+            """),
             "desugar_deps": attrs.list(attrs.dep(), default = []),
             "dex_weight_factor": attrs.int(default = 1),
             "for_primary_apk": attrs.bool(default = False),
