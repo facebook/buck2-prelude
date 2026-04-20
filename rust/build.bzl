@@ -736,7 +736,7 @@ def rust_compile(
             ctx,
             compile_ctx.cxx_toolchain_info,
             emit_op.output,
-            identifier = "{}/__{}_{}_dwp".format(common_args.subdir, common_args.tempfile, str(emit)),
+            identifier = "{}/__{}_{}_dwp".format(common_args.subdir, common_args.tempfile, emit.value),
             category_suffix = "rust",
             # TODO(T110378142): Ideally, referenced objects are a list of
             # artifacts, but currently we don't track them properly.  So, we
