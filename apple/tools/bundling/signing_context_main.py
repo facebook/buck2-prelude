@@ -50,6 +50,12 @@ def _build_signing_info_json(
             "fingerprint": selected_profile_info.identity.fingerprint,
             "subject_common_name": selected_profile_info.identity.subject_common_name,
         }
+        if profile_metadata.provisioned_devices is not None:
+            signing_info["provisioned_devices"] = "list"
+        elif profile_metadata.provisions_all_devices:
+            signing_info["provisioned_devices"] = "all"
+        else:
+            signing_info["provisioned_devices"] = "none"
 
     return signing_info
 
