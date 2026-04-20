@@ -957,10 +957,9 @@ def _rustc_flags(
         if str(flag) == '"-g"':
             flags[i] = "-Cdebuginfo=2"
         if toolchain_info.advanced_unstable_linking:
-            if isinstance(flag, str):
-                if flag.startswith("-Clink-arg"):
-                    fail("-Clink-arg is not supported with advanced_unstable_linking, use the " +
-                         "target's or toolchain's `linker_flags` instead")
+            if "-Clink-arg" in str(flag):
+                fail("-Clink-arg is not supported with advanced_unstable_linking, use the " +
+                     "target's or toolchain's `linker_flags` instead")
 
     return flags
 
