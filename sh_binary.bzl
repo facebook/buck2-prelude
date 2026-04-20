@@ -72,6 +72,9 @@ def _generate_script(
             # callees disambiguate (see D28960177 for more context).
             "export BUCK_SH_BINARY_VERSION_UNSTABLE=2",
             cmd_args("export BUCK_PROJECT_ROOT=\"$__SCRIPT_DIR/", resources_dir, "\"", delimiter = ""),
+            # Normalize backslashes to forward slashes for the Windows-host /
+            # Linux-target (RE) case where relative_to produces Windows-style separators.
+            "export BUCK_PROJECT_ROOT=\"${BUCK_PROJECT_ROOT//\\\\//}\"",
             # In buck1, the paths for resources that are outputs of rules have
             # different paths in BUCK_PROJECT_ROOT and
             # BUCK_DEFAULT_RUNTIME_RESOURCES, but we use the same paths. buck1's
