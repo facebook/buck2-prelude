@@ -268,6 +268,8 @@ cxx_python_extension = prelude_rule(
             # when coverage for that target is enabled by `exported_needs_coverage_instrumentation`
             # or by any of the target's dependencies.
             "coverage_instrumentation_compiler_flags": attrs.list(attrs.string(), default = []),
+            # Optional clang_profile_list target for selective coverage instrumentation via -fprofile-list.
+            "coverage_profile_list": attrs.option(attrs.dep(), default = None),
             "cuda_compile_style": attrs.enum(CudaCompileStyle.values(), default = "mono"),
             "exported_needs_coverage_instrumentation": attrs.bool(default = False),
             "extra_dwp_flags": attrs.list(attrs.string(), default = []),

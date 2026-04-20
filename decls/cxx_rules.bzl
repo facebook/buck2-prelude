@@ -51,6 +51,8 @@ def _cxx_binary_and_test_attrs():
         # selected for coverage either in the target or in one
         # of the target's dependencies.
         "coverage_instrumentation_compiler_flags": attrs.list(attrs.string(), default = []),
+        # Optional clang_profile_list target for selective coverage instrumentation via -fprofile-list.
+        "coverage_profile_list": attrs.option(attrs.dep(), default = None),
         "cuda_compile_style": attrs.enum(CudaCompileStyle.values(), default = "mono"),
         "enable_distributed_thinlto": attrs.bool(default = False),
         "exported_needs_coverage_instrumentation": attrs.bool(default = False),

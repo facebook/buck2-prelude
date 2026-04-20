@@ -288,6 +288,8 @@ CxxRuleConstructorParams = record(
     use_content_based_paths = field(bool, False),
     # Coverage instrumentation compiler flags
     coverage_instrumentation_compiler_flags = field(list[str], []),
+    # Optional profile list artifact for selective coverage via -fprofile-list
+    coverage_profile_list = field(Artifact | None, None),
     # Separate debug info
     separate_debug_info = field(bool, False),
     # Cuda compile stype
