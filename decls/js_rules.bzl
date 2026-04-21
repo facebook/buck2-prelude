@@ -15,7 +15,11 @@ load(":common.bzl", "buck", "prelude_rule")
 
 js_bundle = prelude_rule(
     name = "js_bundle",
-    docs = "",
+    docs = """
+        A `js_bundle()` rule builds a JavaScript bundle from one or more entry points,
+        pulling in `js_library()` dependencies and invoking a worker tool to perform
+        the bundling.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -38,7 +42,10 @@ js_bundle = prelude_rule(
 
 js_bundle_genrule = prelude_rule(
     name = "js_bundle_genrule",
-    docs = "",
+    docs = """
+        `js_bundle_genrule` is a genrule that acts on a `js_bundle` and provides a bunch of
+        additional environment variables for the genrule to use.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -69,7 +76,10 @@ js_bundle_genrule = prelude_rule(
 
 js_library = prelude_rule(
     name = "js_library",
-    docs = "",
+    docs = """
+        A `js_library()` rule groups together JavaScript source files and assets so they
+        can be consumed by a `js_bundle()`.
+    """,
     examples = None,
     further = None,
     attrs = (
