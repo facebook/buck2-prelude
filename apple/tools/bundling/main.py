@@ -25,6 +25,7 @@ from apple.tools.code_signing.codesign_bundle import (
     codesign_bundle,
     CodesignConfiguration,
     CodesignedPath,
+    selection_profile_context_from_signing_context,
     SigningContextWithProfileSelection,
     write_empty_codesign_manifest,
 )
@@ -200,6 +201,13 @@ def _args_parser() -> argparse.ArgumentParser:
         help="Path to bundle telemetry logger tool. If provided, will be invoked after bundle assembly completes.",
     )
 
+    parser.add_argument(
+        "--signing-info-output",
+        type=Path,
+        required=False,
+        help="Path to the output JSON file for simplified signing identity metadata.",
+    )
+
     add_args_for_signing_context(parser)
 
     return parser
@@ -316,6 +324,16 @@ def _main() -> None:
     signing_context, selected_identity_argument = (
         signing_context_and_selected_identity_from_args(args)
     )
+
+    if args.signing_info_output:
+        selection_profile_context = selection_profile_context_from_signing_context(
+            signing_context
+        )
+        signing_info = _build_signing_info_json(
+            args, selected_identity_argument, selection_profile_context
+        )
+        with open(args.signing_info_output, "w") as signing_info_file:
+            json.dump(signing_info, signing_info_file, indent=4)
 
     with args.spec.open(mode="rb") as spec_file:
         spec = json.load(spec_file, object_hook=lambda d: BundleSpecItem(**d))
@@ -450,6 +468,42 @@ def _main() -> None:
 
     if telemetry_tmp_dir is not None:
         telemetry_tmp_dir.cleanup()
+
+
+def _build_signing_info_json(
+    args: argparse.Namespace,
+    selected_identity: Optional[str],
+    selection_profile_context: Optional[object],
+) -> dict:
+    if not args.codesign:
+        return {}
+
+    signing_info: dict = {
+        "codesign_type": "adhoc" if args.ad_hoc else "distribution",
+    }
+
+    if selected_identity:
+        signing_info["codesign_identity"] = selected_identity
+
+    if selection_profile_context:
+        selected_profile_info = selection_profile_context.selected_profile_info
+        profile_metadata = selected_profile_info.profile
+        signing_info["provisioning_profile"] = {
+            "uuid": profile_metadata.uuid,
+            "file_name": profile_metadata.file_path.name,
+        }
+        signing_info["signing_certificate"] = {
+            "fingerprint": selected_profile_info.identity.fingerprint,
+            "subject_common_name": selected_profile_info.identity.subject_common_name,
+        }
+        if profile_metadata.provisioned_devices is not None:
+            signing_info["provisioned_devices"] = "list"
+        elif profile_metadata.provisions_all_devices:
+            signing_info["provisioned_devices"] = "all"
+        else:
+            signing_info["provisioned_devices"] = "none"
+
+    return signing_info
 
 
 def _get_selected_profile_path(

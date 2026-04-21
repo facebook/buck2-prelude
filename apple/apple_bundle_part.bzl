@@ -300,6 +300,9 @@ def assemble_bundle(
     if bundle_telemetry_logger:
         command.add("--bundle-telemetry-logger", bundle_telemetry_logger)
 
+    signing_info_output = ctx.actions.declare_output("signing-info.json", has_content_based_path = False)
+    command.add("--signing-info-output", signing_info_output.as_output())
+
     command_json = ctx.actions.declare_output("bundling_command.json", has_content_based_path = False)
     command_json_cmd_args = ctx.actions.write_json(command_json, command, with_inputs = True, pretty = True)
     subtargets["command"] = [DefaultInfo(default_output = command_json, other_outputs = [command_json_cmd_args])]
@@ -377,15 +380,12 @@ def assemble_bundle(
     ]
 
     signing_context_output = ctx.actions.declare_output("provisioning-manifest.json", has_content_based_path = False)
-    signing_info_output = ctx.actions.declare_output("signing-info.json", has_content_based_path = False)
     ctx.actions.run(
         cmd_args(
             [
                 tools.signing_context,
                 "--output",
                 signing_context_output.as_output(),
-                "--signing-info-output",
-                signing_info_output.as_output(),
             ] + platform_args + codesign_args,
         ),
         category = "apple_provisioning_manifest",
