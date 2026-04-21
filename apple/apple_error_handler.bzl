@@ -25,7 +25,7 @@ _APPLE_STDERR_ERROR_CATEGORIES = [
     # I would only add additional categories here if you think someone in open-source would benefit    @oss-disable
 
     # codesigning issues
-    ErrorEnricher(matcher = "codesignprovisioningerror", category = "code_sign_error"),
+    ErrorEnricher(matcher = "codesignprovisioningerror", category = "code_sign_error"), # @oss-enable
     ErrorEnricher(matcher = "the timestamp service is not available", category = "code_sign_error"),
 
     # compilation issues
@@ -61,9 +61,24 @@ def _match(matcher: str | BuckRegex, lowercase_stderr: str) -> bool:
         fail("Unknown matcher type: {}", type(matcher))
 
 def _add_category_strings(ctx: ActionErrorCtx, lowercase_stderr: str, errors: list[ActionSubError], source: list[ErrorEnricher]):
-    for error_category in source:
-        if _match(error_category.matcher, lowercase_stderr):
-            errors.append(ctx.new_sub_error(category = "apple_" + error_category.category, message = error_category.message))
+    for enricher in source:
+        if not _match(enricher.matcher, lowercase_stderr):
+            continue
+
+        subcategory = None
+        remediation = None
+        if enricher.subcategory_extractor:
+            subcategory = enricher.subcategory_extractor(lowercase_stderr)
+            if subcategory and enricher.subcategory_remediations and subcategory in enricher.subcategory_remediations:
+                remediation = enricher.subcategory_remediations[subcategory]
+
+        errors.append(ctx.new_sub_error(
+            category = "apple_" + enricher.category,
+            message = enricher.message,
+            subcategory = subcategory,
+            remediation = remediation,
+            show_in_stderr = remediation != None,
+        ))
 
 def _category_match(message: str, path: str, categories: list[ErrorEnricher]) -> ErrorEnricher | None:
     for error_category in categories:
