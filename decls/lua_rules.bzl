@@ -98,8 +98,8 @@ cxx_lua_extension = prelude_rule(
 lua_binary = prelude_rule(
     name = "lua_binary",
     docs = """
-        A `lua_library()` rule is used to group together Lua sources
-        to be packaged into a top-level `lua_binary()` rule.
+        A `lua_binary()` rule is used to build an executable that uses Lua
+        sources from all transitive `lua_library()` dependencies.
     """,
     examples = """
         ```
