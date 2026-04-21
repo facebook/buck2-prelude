@@ -388,6 +388,8 @@ def assemble_bundle(
                 signing_context_output.as_output(),
             ] + platform_args + codesign_args,
         ),
+        local_only = force_local_bundling,
+        prefer_local = not force_local_bundling,
         category = "apple_provisioning_manifest",
     )
 
