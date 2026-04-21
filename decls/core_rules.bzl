@@ -605,6 +605,13 @@ filegroup = prelude_rule(
             "out": attrs.option(attrs.string(), default = None, doc = """
                 The name of the output directory. Defaults to the rule's name.
             """),
+            "allow_duplicate_srcs_DO_NOT_USE": attrs.bool(default = False, doc = """
+                If true, duplicate sources will result in a soft error rather than a
+                build failure. Having duplicate sources means that one of the duplicate
+                sources is not actually added to the filegroup. This attribute only
+                exists for backwards compatibility. Existing usages should be fixed
+                to remove duplicate sources and then this attribute should be removed.
+            """),
         } |
         _has_content_based_path_attr() |
         buck.licenses_arg() |
