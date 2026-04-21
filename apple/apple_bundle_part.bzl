@@ -65,6 +65,7 @@ AppleBundleConstructionResult = record(
     sub_targets = field(dict[str, list[Provider]]),
     codesign_manifest_tree = field(AppleBundleCodesignManifestTree),
     signing_context_tree = field(AppleBundleSigningContextTree),
+    signing_info = field(Artifact),
 )
 
 def bundle_output(ctx: AnalysisContext) -> Artifact:
@@ -425,6 +426,7 @@ def assemble_bundle(
         providers = providers,
         codesign_manifest_tree = codesign_manifest_tree,
         signing_context_tree = signing_context_tree,
+        signing_info = signing_info_output,
     )
 
 def _make_codesign_manifest_tree(ctx: AnalysisContext, codesign_manifest: Artifact, inner_parts: list[AppleBundleCodesignManifestTreePart]) -> AppleBundleCodesignManifestTree:

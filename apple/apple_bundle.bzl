@@ -484,6 +484,7 @@ def apple_bundle_impl(ctx: AnalysisContext) -> list[Provider]:
             skip_copying_swift_stdlib = ctx.attrs.skip_copying_swift_stdlib,
             codesign_manifest_tree = bundle_result.codesign_manifest_tree,
             signing_context_tree = bundle_result.signing_context_tree,
+            signing_info = bundle_result.signing_info,
         ),
         AppleDebuggableInfo(
             dsyms = dsym_artifacts,
