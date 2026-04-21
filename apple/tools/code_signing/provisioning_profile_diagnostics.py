@@ -12,20 +12,17 @@ from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import List, Optional, Type, TypeVar
 
+# Remediation text for diagnostic messages. Meta builds import from
+# meta_only/codesign_diagnostics_text.py (arc ios-certs doctor + internal links);
+# OSS builds use the generic Apple Developer Portal defaults from
+# codesign_diagnostics_text.py in this directory.
+# @oss-disable[end= ]: from ..meta_only.codesign_diagnostics_text import (
+    # @oss-disable[end= ]: CodesignDiagnosticsText,
+# @oss-disable[end= ]: )
 from .apple_platform import ApplePlatform
 from .identity import CodeSigningIdentity
 from .provisioning_profile_metadata import ProvisioningProfileMetadata
-
-META_IOS_DEVELOPER_CERTIFICATE_LINK: str = "https://www.internalfb.com/intern/qa/5198/how-do-i-get-the-fb-ios-developer-certificate"
-META_IOS_PROVISIONING_PROFILES_LINK: str = (
-    "https://www.internalfb.com/intern/apple/download-provisioning-profile/"
-)
-META_IOS_PROVISIONING_PROFILES_COMMAND: str = (
-    "arc ios-certs --download-provisioning-profiles"
-)
-META_IOS_CERTS_ALL_COMMAND: str = "arc ios-certs --all"
-# TODO(T197258387): Remove references to `arc download-provisioning-profile` in this wiki page.
-META_IOS_BUILD_AND_RUN_ON_DEVICE_LINK: str = "https://www.internalfb.com/intern/wiki/Ios-first-steps/running-on-device/#2-register-your-device-i"
+from .codesign_diagnostics_text import CodesignDiagnosticsText # @oss-enable
 
 
 class IProvisioningProfileDiagnostics(metaclass=ABCMeta):
@@ -167,7 +164,7 @@ def interpret_provisioning_profile_diagnostics(
 
     dirs_msg = ", ".join(f"`{d}`" for d in provisioning_profiles_dirs)
     header = f"Failed to find provisioning profile in directories {dirs_msg} that is suitable for code signing. Here is the best guess for how to fix it:\n\n⚠️  "
-    footer = f"\n\nFor more info about running on an iOS device read {META_IOS_BUILD_AND_RUN_ON_DEVICE_LINK}."
+    footer = CodesignDiagnosticsText.DEVICE_LINK
     if log_file_path:
         non_bundle_id_mismatches = [
             f"`{mismatch.profile.file_path.name}`: {mismatch.log_message()}"
@@ -214,7 +211,7 @@ def interpret_provisioning_profile_diagnostics(
                 header,
                 f"The provisioning profile `{mismatch.profile.file_path.name}` satisfies all constraints, but no matching certificates were found in your keychain. ",
                 identities_description,
-                f"Execute `{META_IOS_CERTS_ALL_COMMAND}` or download and install the latest certificate from {META_IOS_DEVELOPER_CERTIFICATE_LINK}.",
+                CodesignDiagnosticsText.CERT_REMEDIATION,
                 footer,
             ]
         )
@@ -226,7 +223,7 @@ def interpret_provisioning_profile_diagnostics(
                 f"The provisioning profile `{mismatch.profile.file_path.name}` is the best match, but it doesn't contain all the needed entitlements. ",
                 f"Expected entitlement item with key `{mismatch.mismatched_key}` and value `{mismatch.mismatched_value}` is missing. ",
                 f"Usually that means the application entitlements were changed recently, provisioning profile was updated and you need to download & install the latest version of provisioning profile for Bundle ID `{bundle_id}`.",
-                f"Execute `{META_IOS_PROVISIONING_PROFILES_COMMAND}` or download from from {META_IOS_PROVISIONING_PROFILES_LINK}",
+                CodesignDiagnosticsText.ENTITLEMENTS_REMEDIATION,
                 footer,
             ]
         )
@@ -237,7 +234,7 @@ def interpret_provisioning_profile_diagnostics(
             [
                 header,
                 f"The provisioning profile `{mismatch.profile.file_path.name}` is the best match, but it only supports the following platforms: {supported_platforms}. Unfortunately, it doesn't include the requested platform, `{mismatch.platform_constraint}`. ",
-                f"This could indicate two possibilities: either the provisioning profile was recently updated to include the needed platform, or there is a separate profile supporting the required platform that you are missing. In the latter case, you would need to download and install it from {META_IOS_PROVISIONING_PROFILES_LINK}",
+                f"This could indicate two possibilities: either the provisioning profile was recently updated to include the needed platform, or there is a separate profile supporting the required platform that you are missing. In the latter case, {CodesignDiagnosticsText.PLATFORM_LINK}",
                 footer,
             ]
         )
@@ -246,9 +243,8 @@ def interpret_provisioning_profile_diagnostics(
         return "".join(
             [
                 header,
-                f"The provisioning profile `{mismatch.profile.file_path.name}` is the the best match; however, it has expired",
-                f"Execute `{META_IOS_PROVISIONING_PROFILES_COMMAND}` to get the latest provisioning profiles.",
-                f"Alternatively, please download and install a valid profile from {META_IOS_PROVISIONING_PROFILES_LINK}",
+                f"The provisioning profile `{mismatch.profile.file_path.name}` is the best match; however, it has expired",
+                CodesignDiagnosticsText.PROFILES_DOWNLOAD,
                 footer,
             ]
         )
@@ -257,8 +253,7 @@ def interpret_provisioning_profile_diagnostics(
         [
             header,
             f"No provisioning profile matching the Bundle ID `{bundle_id}` was found. ",
-            f"Execute `{META_IOS_PROVISIONING_PROFILES_COMMAND}` to get the latest provisioning profiles.",
-            f"Alternatively, please download and install the appropriate profile from {META_IOS_PROVISIONING_PROFILES_LINK}",
+            CodesignDiagnosticsText.PROFILES_DOWNLOAD,
             footer,
         ]
     )

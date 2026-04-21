@@ -26,6 +26,9 @@ from typing import Any, cast, Dict, List, Optional, Union
 
 from apple.tools.plistlib_utils import detect_format_and_load
 
+# @oss-disable[end= ]: from ..meta_only.codesign_diagnostics_text import (
+    # @oss-disable[end= ]: CodesignDiagnosticsText,
+# @oss-disable[end= ]: )
 # @oss-disable[end= ]: from ..meta_only.entitlements_mismatch.check_entitlements import (
     # @oss-disable[end= ]: verify_entitlements,
 # @oss-disable[end= ]: )
@@ -37,6 +40,8 @@ from .codesign_command_factory import (
     ICodesignCommandFactory,
     ManifestCodesignCommandFactory,
 )
+
+from .codesign_diagnostics_text import CodesignDiagnosticsText # @oss-enable
 from .fast_adhoc import is_fast_adhoc_codesign_allowed, should_skip_adhoc_signing_path
 from .identity import CodeSigningIdentity
 from .info_plist_metadata import InfoPlistMetadata
@@ -49,9 +54,6 @@ from .prepare_info_plist import prepare_info_plist
 from .provisioning_profile_diagnostics import (
     interpret_provisioning_profile_diagnostics,
     IProvisioningProfileDiagnostics,
-    META_IOS_BUILD_AND_RUN_ON_DEVICE_LINK,
-    META_IOS_PROVISIONING_PROFILES_COMMAND,
-    META_IOS_PROVISIONING_PROFILES_LINK,
 )
 from .provisioning_profile_metadata import ProvisioningProfileMetadata
 from .provisioning_profile_selection import (
@@ -231,12 +233,8 @@ def _select_best_provisioning_profile(
     if not has_profiles:
         dirs_msg = ", ".join(f"'{d}'" for d in provisioning_profiles_dirs)
         raise CodeSignProvisioningError(
-            (
-                f"\n\nFailed to find any provisioning profiles. Please make sure to install required provisioning profiles and make sure they are located at {dirs_msg}.\n\n"
-                f"Execute `{META_IOS_PROVISIONING_PROFILES_COMMAND}` to download the profiles.\n"
-                f"Please follow the wiki to build & run on device: {META_IOS_BUILD_AND_RUN_ON_DEVICE_LINK}.\n"
-                f"Provisioning profiles for your app can also be downloaded from {META_IOS_PROVISIONING_PROFILES_LINK}.\n"
-            )
+            f"\n\nFailed to find any provisioning profiles. Please make sure to install required provisioning profiles and make sure they are located at {dirs_msg}.\n\n"
+            + CodesignDiagnosticsText.NO_PROFILES_REMEDIATION
         )
 
     if not all_mismatches:
