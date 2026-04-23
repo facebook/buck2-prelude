@@ -26,11 +26,8 @@ transition_alias = rule(
     supports_incoming_transition = True,
 )
 
-def _constraint_value_with_transition_impl(ctx: AnalysisContext) -> list[Provider]:
-    constraint = ConstraintValueInfo(
-        setting = ctx.attrs.constraint_setting[ConstraintSettingInfo],
-        label = ctx.label.raw_target(),
-    )
+def _buildscript_platform_transition_impl(ctx: AnalysisContext) -> list[Provider]:
+    constraint = ctx.attrs.value[ConstraintValueInfo]
 
     def transition_impl(platform: PlatformInfo) -> PlatformInfo:
         return PlatformInfo(
@@ -45,31 +42,13 @@ def _constraint_value_with_transition_impl(ctx: AnalysisContext) -> list[Provide
 
     return [
         DefaultInfo(),
-        ConfigurationInfo(
-            constraints = {constraint.setting.label: constraint},
-            values = {},
-        ),
         TransitionInfo(impl = transition_impl),
     ]
 
-# Value of the "prelude//rust/buildscript:buildscript_for_platform" constraint.
-#
-# This is used in `select` (as ConfigurationInfo) and in `incoming_transition`
-# (as TransitionInfo).
-#
-#     buildscript_genrule(
-#         name = "anyhow-1.0.100-build-script-run",
-#         buildscript = select({
-#             "prelude//rust/buildscript:platform_index_0": ":anyhow-1.0.100-build-script-build-riscv64gc",
-#             ...
-#         }),
-#         ...
-#     )
-#
-constraint_value_with_transition = rule(
-    impl = _constraint_value_with_transition_impl,
+buildscript_platform_transition = rule(
+    impl = _buildscript_platform_transition_impl,
     attrs = {
-        "constraint_setting": attrs.dep(),
+        "value": attrs.dep(providers = [ConstraintValueInfo]),
     },
     is_configuration_rule = True,
 )

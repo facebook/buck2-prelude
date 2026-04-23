@@ -187,7 +187,7 @@ def apply_platform_attrs_for_buildscript_build(platform_attrs, universal_attrs):
         select({
             "DEFAULT": get_reindeer_platforms(),
         } | {
-            "prelude//rust/buildscript:platform_index_{}".format(i): plat
+            "prelude//rust/buildscript:buildscript_for_platform[{}]".format(i): plat
             for i, plat in enumerate(get_reindeer_platform_names())
         }),
     )
