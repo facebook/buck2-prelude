@@ -440,7 +440,7 @@ def buildscript_run(
         transition_alias(
             name = platform_buildscript_build_name(plat),
             actual = buildscript_rule,
-            incoming_transition = "prelude//rust/buildscript:platform_index_{}".format(i),
+            incoming_transition = "prelude//rust/buildscript:buildscript_platform_transition[{}]".format(i),
             target_compatible_with = buildscript_compatible_with,
             visibility = [],
         )

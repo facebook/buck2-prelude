@@ -11,7 +11,7 @@
 #     transition_alias(
 #         name = "anyhow-1.0.100-build-script-build-riscv64gc",
 #         actual = ":anyhow-1.0.100-build-script-build",
-#         incoming_transition = "prelude//rust/buildscript:platform_index_99",
+#         incoming_transition = "prelude//rust/buildscript:buildscript_platform_transition[99]",
 #     )
 #
 # This allows `anyhow-1.0.100-build-script-run` to take an exec dependency on
@@ -26,29 +26,30 @@ transition_alias = rule(
     supports_incoming_transition = True,
 )
 
-def _buildscript_platform_transition_impl(ctx: AnalysisContext) -> list[Provider]:
-    constraint = ctx.attrs.value[ConstraintValueInfo]
+def _transitions_for_constraint_impl(ctx: AnalysisContext) -> list[Provider]:
+    sub_targets = {}
 
-    def transition_impl(platform: PlatformInfo) -> PlatformInfo:
-        return PlatformInfo(
-            label = platform.label,
-            configuration = ConfigurationInfo(
-                constraints = platform.configuration.constraints | {
-                    constraint.setting.label: constraint,
-                },
-                values = platform.configuration.values,
+    for name, constraint_value in ctx.attrs.constraint[DefaultInfo].sub_targets.items():
+        sub_targets[name] = [TransitionInfo(
+            impl = lambda platform, constraint = constraint_value[ConstraintValueInfo]: PlatformInfo(
+                label = platform.label,
+                configuration = ConfigurationInfo(
+                    constraints = platform.configuration.constraints | {
+                        constraint.setting.label: constraint,
+                    },
+                    values = platform.configuration.values,
+                ),
             ),
-        )
+        )]
 
-    return [
-        DefaultInfo(),
-        TransitionInfo(impl = transition_impl),
-    ]
+    return [DefaultInfo(sub_targets = sub_targets)]
 
-buildscript_platform_transition = rule(
-    impl = _buildscript_platform_transition_impl,
+# Take a constraint setting and turn each of its constraint values into a
+# transition adding that constraint value into the platform configuration.
+transitions_for_constraint = rule(
+    impl = _transitions_for_constraint_impl,
     attrs = {
-        "value": attrs.dep(providers = [ConstraintValueInfo]),
+        "constraint": attrs.dep(),
     },
     is_configuration_rule = True,
 )
