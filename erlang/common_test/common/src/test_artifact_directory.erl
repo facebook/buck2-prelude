@@ -111,6 +111,9 @@ prepare(ExecutionDir, Tests, ArtifactAnnotationFunction) ->
                         filelib:is_regular(File, ?raw_file_access)
                     ],
                     link_to_artifact_dir(
+                        join_paths(LogPrivate, "test.pftrace"), LogPrivate, ArtifactAnnotationFunction
+                    ),
+                    link_to_artifact_dir(
                         join_paths(LogPrivate, "test_metrics.tcompact.b64"),
                         LogPrivate,
                         fun(FileName) -> artifact_annotations:test_metrics_artifact_annotation(FileName, Tests) end
