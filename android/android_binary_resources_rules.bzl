@@ -297,7 +297,7 @@ def _maybe_filter_resources(
         if not_filtered_string_dirs:
             filter_resources_cmd.add([
                 "--not-filtered-string-dirs",
-                ctx.actions.write("not_filtered_string_dirs", not_filtered_string_dirs),
+                ctx.actions.write("not_filtered_string_dirs", not_filtered_string_dirs, has_content_based_path = False),
             ])
 
         allowlisted_locales = {resource.res: resource.allowlisted_locales for resource in resources if resource.allowlisted_locales}
@@ -388,7 +388,7 @@ def _maybe_generate_string_source_map(
 
     prefix = "voltron_" if is_voltron_string_source_map else ""
     output = actions.declare_output("{}string_source_map".format(prefix), dir = True, has_content_based_path = False)
-    res_dirs_file = actions.write("resource_dirs_for_{}string_source_map".format(prefix), res_dirs)
+    res_dirs_file = actions.write("resource_dirs_for_{}string_source_map".format(prefix), res_dirs, has_content_based_path = False)
     generate_string_source_map_cmd = cmd_args([
         android_toolchain.copy_string_resources[RunInfo],
         "--res-dirs",

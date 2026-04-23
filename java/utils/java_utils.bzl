@@ -176,10 +176,10 @@ def get_class_to_source_map_info(
 
 def get_classpath_subtargets(actions: AnalysisActions, packaging_info: JavaPackagingInfo) -> dict[str, list[Provider]]:
     proj = packaging_info.packaging_deps.project_as_args("full_jar_args")
-    output = actions.write("classpath", proj)
+    output = actions.write("classpath", proj, has_content_based_path = False)
 
     classpath_targets_proj = packaging_info.packaging_deps.project_as_args("full_jar_owner_args")
-    classpath_targets_output = actions.write("classpath_targets", classpath_targets_proj)
+    classpath_targets_output = actions.write("classpath_targets", classpath_targets_proj, has_content_based_path = False)
 
     return {
         "classpath": [DefaultInfo(output, other_outputs = [proj])],

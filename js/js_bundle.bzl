@@ -127,7 +127,7 @@ def _get_android_resource_info(ctx: AnalysisContext, js_bundle_info: JsBundleInf
         identifier = identifier,
     )
     expect(ctx.attrs.android_package != None, "Must provide android_package for android builds!")
-    r_dot_java_package = ctx.actions.write("{}_{}".format(identifier, JAVA_PACKAGE_FILENAME), ctx.attrs.android_package)
+    r_dot_java_package = ctx.actions.write("{}_{}".format(identifier, JAVA_PACKAGE_FILENAME), ctx.attrs.android_package, has_content_based_path = False)
     return AndroidResourceInfo(
         raw_target = ctx.label.raw_target(),
         aapt2_compile_output = aapt2_compile_output,

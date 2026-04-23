@@ -129,10 +129,10 @@ def get_android_binary_native_library_info(
         original_shared_libs_by_platform[platform] = shared_libs
 
     if not all_prebuilt_native_library_dirs and not included_shared_lib_targets:
-        enhance_ctx.debug_output("native_libs", ctx.actions.write("native_libs", []))
+        enhance_ctx.debug_output("native_libs", ctx.actions.write("native_libs", [], has_content_based_path = False))
         enhance_ctx.debug_output("linker_argsfiles", ctx.actions.symlinked_dir("linker_argsfiles", {}, has_content_based_path = False))
-        enhance_ctx.debug_output("linker_commands", ctx.actions.write("linker_commands", []))
-        enhance_ctx.debug_output("unstripped_native_libraries", ctx.actions.write("unstripped_native_libraries", []))
+        enhance_ctx.debug_output("linker_commands", ctx.actions.write("linker_commands", [], has_content_based_path = False))
+        enhance_ctx.debug_output("unstripped_native_libraries", ctx.actions.write("unstripped_native_libraries", [], has_content_based_path = False))
         enhance_ctx.debug_output("unstripped_native_libraries_json", ctx.actions.write_json("unstripped_native_libraries_json", {}, has_content_based_path = False))
         enhance_ctx.debug_output("unstripped_native_libraries_files", ctx.actions.symlinked_dir("unstripped_native_libraries_files", {}, has_content_based_path = False))
         return AndroidBinaryNativeLibsInfo(
@@ -177,7 +177,7 @@ def get_android_binary_native_library_info(
         non_root_module_lib_assets,
     ]
 
-    fake_input = ctx.actions.write("dynamic.trigger", "")
+    fake_input = ctx.actions.write("dynamic.trigger", "", has_content_based_path = False)
 
     # some cases don't actually need to use a dynamic_output, but it's simplest to consistently use it anyway. we need some fake input to allow that.
     dynamic_inputs = [fake_input]
@@ -214,7 +214,7 @@ def get_android_binary_native_library_info(
         for platform, deps in deps_by_platform.items():
             linkable_graph = create_linkable_graph(ctx, deps = deps)
             graph_node_map = get_linkable_graph_node_map_func(linkable_graph)()
-            linkables_debug = ctx.actions.write("linkables." + platform, list(graph_node_map.keys()))
+            linkables_debug = ctx.actions.write("linkables." + platform, list(graph_node_map.keys()), has_content_based_path = False)
             enhance_ctx.debug_output("linkables." + platform, linkables_debug)
             linkable_nodes_by_platform[platform] = graph_node_map
 
@@ -358,7 +358,7 @@ def get_android_binary_native_library_info(
             shared_object_targets_lines = ""
             for soname, targets in shared_object_targets.items():
                 shared_object_targets_lines += soname + " " + " ".join(targets) + "\n"
-            shared_object_targets_txt = ctx.actions.write("shared_object_targets.txt", shared_object_targets_lines)
+            shared_object_targets_txt = ctx.actions.write("shared_object_targets.txt", shared_object_targets_lines, has_content_based_path = False)
             native_library_merge_debug_outputs["shared_object_targets.txt"] = shared_object_targets_txt
 
             if mergemap_gencode_jar:
@@ -1227,7 +1227,7 @@ def write_merged_library_map(ctx: AnalysisContext, shared_libs_by_platform: dict
             lines.append("{} {}".format(original_soname, final_soname))
 
     # we wanted it sorted by original_soname
-    return ctx.actions.write("merged_library_map.txt", sorted(lines))
+    return ctx.actions.write("merged_library_map.txt", sorted(lines), has_content_based_path = False)
 
 def run_mergemap_codegen(ctx: AnalysisContext, merge_generator: Dependency, merged_library_map: Artifact) -> Artifact:
     mapping_java = ctx.actions.declare_output("MergedLibraryMapping.java", has_content_based_path = False)
@@ -1277,7 +1277,7 @@ def write_jni_on_load_mappings(ctx: AnalysisContext, shared_libs_by_platform: di
             targets_str = "[\n            {},\n        ]".format(target_lines)
         lines.append('    (\n        "{}",\n        {},\n    ),'.format(soname, targets_str))
 
-    return ctx.actions.write("jni_on_load_mappings.txt", "\n".join(lines))
+    return ctx.actions.write("jni_on_load_mappings.txt", "\n".join(lines), has_content_based_path = False)
 
 # We can't merge a prebuilt shared (that has no archive) and must use it's original info.
 # Ideally this would probably be structured info on the linkablenode.
@@ -1709,11 +1709,13 @@ def _create_all_relinkable_links(
                 "{}/{}/original.args".format(platform, soname),
                 [unpack_link_args(args, LinkOrdering("topological")) for args in lib.link_args] if lib.link_args else "",
                 allow_args = True,
+                has_content_based_path = False,
             )
             final_args, _ = ctx.actions.write(
                 "{}/{}/final.args".format(platform, soname),
                 [unpack_link_args(args, LinkOrdering("topological")) for args in final.link_args] if final.link_args else "",
                 allow_args = True,
+                has_content_based_path = False,
             )
             debug_outputs["{}/{}/original.args".format(platform, soname)] = original_args
             debug_outputs["{}/{}/final.args".format(platform, soname)] = final_args

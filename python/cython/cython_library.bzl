@@ -126,7 +126,7 @@ def _gather_cython_includes(
 
     # Build __init__.py markers for package directories
     all_dirs = {}
-    init_py = ctx.actions.write("__cython_init__/__init__.py", "")
+    init_py = ctx.actions.write("__cython_init__/__init__.py", "", has_content_based_path = False)
     for path in raw_headers.keys():
         parts = paths.dirname(path).split("/")
         for i in range(len(parts)):

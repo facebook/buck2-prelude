@@ -151,7 +151,7 @@ def build_bundle(
             if key != "excluded_resources":
                 fail("Only 'excluded_resources' is supported in packaging_options right now!")
             else:
-                bundle_builder_args.add("--excluded-resources", actions.write("excluded_resources.txt", value))
+                bundle_builder_args.add("--excluded-resources", actions.write("excluded_resources.txt", value, has_content_based_path = False))
 
     actions.run(bundle_builder_args, category = "bundle_build")
 

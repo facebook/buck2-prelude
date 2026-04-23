@@ -458,7 +458,7 @@ def _make_package(
         "extra-libraries: " + libname,
         "depends: " + ", ".join([lib.id for lib in hlis]),
     ]
-    pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + ".conf", conf)
+    pkg_conf = ctx.actions.write("pkg-" + artifact_suffix + ".conf", conf, has_content_based_path = False)
 
     db = ctx.actions.declare_output("db-" + artifact_suffix, has_content_based_path = False)
 

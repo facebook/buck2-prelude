@@ -577,7 +577,7 @@ def java_library_impl(ctx: AnalysisContext) -> list[Provider]:
             cxx_resource_info,
             linkable_graph,
             # Add an unused default output in case this target is used an an attr.source() anywhere.
-            DefaultInfo(default_output = ctx.actions.write("{}/unused.jar".format(ctx.label.name), [])),
+            DefaultInfo(default_output = ctx.actions.write("{}/unused.jar".format(ctx.label.name), [], has_content_based_path = False)),
             TemplatePlaceholderInfo(keyed_variables = {
                 "classpath": "unused_but_needed_for_analysis",
             }),
@@ -715,7 +715,7 @@ def build_java_library(
         gwt_cmd_args = cmd_args(
             java_toolchain.jar_builder,
             "--entries-to-jar",
-            ctx.actions.write("gwt_entries.txt", entries),
+            ctx.actions.write("gwt_entries.txt", entries, has_content_based_path = False),
             "--output",
             gwt_output.as_output(),
             hidden = entries,

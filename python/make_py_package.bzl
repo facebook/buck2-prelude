@@ -207,7 +207,7 @@ def _fail_at_build_time(
         ctx: AnalysisContext,
         python_internal_tools: PythonInternalToolsInfo,
         msg: str) -> PexProviders:
-    error_message = ctx.actions.write("__error_message", msg)
+    error_message = ctx.actions.write("__error_message", msg, has_content_based_path = False)
     dummy_output = ctx.actions.declare_output("__dummy_output", has_content_based_path = False)
     cmd = cmd_args([
         python_internal_tools.fail_with_message,
@@ -722,6 +722,7 @@ def _make_py_package_live(
     source_manifests_path = ctx.actions.write(
         "__source_manifests{}.txt".format(output_suffix),
         sources,
+        has_content_based_path = False,
     )
     cmd.add(cmd_args(source_manifests_path, format = "--sources={}", hidden = sources))
     runtime_files.extend(pex_modules.manifests.src_artifacts())
@@ -733,6 +734,7 @@ def _make_py_package_live(
         resource_manifests_path = ctx.actions.write(
             "__resource_manifests{}.txt".format(output_suffix),
             resources,
+            has_content_based_path = False,
         )
 
         # Since we allow including directories for resources we have to enumerate the directory at build time, so we pass the resource artifacts as a hidden arg so that it will be materialized on disk when we build the par.
@@ -748,6 +750,7 @@ def _make_py_package_live(
         bytecode_manifests_path = ctx.actions.write(
             "__bytecode_manifests{}.txt".format(output_suffix),
             bytecode_manifests,
+            has_content_based_path = False,
         )
         cmd.add(cmd_args(bytecode_manifests_path, format = "--bytecode={}", hidden = bytecode_manifests))
 
@@ -759,11 +762,12 @@ def _make_py_package_live(
         bytecode_artifacts_path = ctx.actions.write(
             "__bytecode_artifacts{}.txt".format(output_suffix),
             cmd_args(bytecode_artifacts),
+            has_content_based_path = False,
         )
         cmd.add(cmd_args(bytecode_artifacts_path, format = "--bytecode-artifacts={}"))
 
     if pex_modules.extra_manifests != None:
-        extras_manifest = ctx.actions.write("{}-extra.txt".format(name), [cmd_args(a, p, delimiter = "::") for a, p in pex_modules.extra_manifests.artifacts], with_inputs = True)
+        extras_manifest = ctx.actions.write("{}-extra.txt".format(name), [cmd_args(a, p, delimiter = "::") for a, p in pex_modules.extra_manifests.artifacts], with_inputs = True, has_content_based_path = False)
         cmd.add(cmd_args(extras_manifest.without_associated_artifacts(), format = "--extras={}"))
         runtime_files.append(extras_manifest)
 
@@ -800,7 +804,7 @@ def _make_py_package_live(
         ],
     ))
 
-    generated_manifest = ctx.actions.write("{}-generated.txt".format(name), [cmd_args(a, p, delimiter = "::") for a, p in generated_files], with_inputs = True)
+    generated_manifest = ctx.actions.write("{}-generated.txt".format(name), [cmd_args(a, p, delimiter = "::") for a, p in generated_files], with_inputs = True, has_content_based_path = False)
     cmd.add(cmd_args(generated_manifest.without_associated_artifacts(), format = "--generated={}"))
     runtime_files.extend([a for a, _ in generated_files])
 
@@ -972,6 +976,7 @@ def _pex_modules_common_args(
     src_manifests_path = ctx.actions.write(
         "__src_manifests{}.txt".format(suffix),
         _srcs(srcs, format = "--module-manifest={}"),
+        has_content_based_path = False,
     )
     native_libraries = gen_shared_libs_action(
         actions = ctx.actions,
@@ -1002,6 +1007,7 @@ def _pex_modules_common_args(
         debuginfo_srcs_path = ctx.actions.write(
             "__debuginfo___srcs{}.txt".format(suffix),
             _srcs([src for _, src in debuginfo_files], format = "--debuginfo-src={}"),
+            has_content_based_path = False,
         )
         debuginfo_srcs_args = cmd_args(debuginfo_srcs_path)
         cmd.add(cmd_args(debuginfo_srcs_args, format = "@{}"))
@@ -1097,6 +1103,7 @@ def _pex_modules_args(
                 bytecode_manifests,
                 format = "--module-manifest={}",
             ),
+            has_content_based_path = False,
         )
         cmd.append(cmd_args(bytecode_manifests_path, format = "@{}"))
         hidden.append(bytecode_manifests)
@@ -1109,6 +1116,7 @@ def _pex_modules_args(
         bytecode_artifacts_path = ctx.actions.write(
             "__bytecode_artifacts{}.txt".format(output_suffix),
             cmd_args(bytecode_artifacts),
+            has_content_based_path = False,
         )
         cmd.append(cmd_args(bytecode_artifacts_path, format = "--bytecode-artifacts={}"))
 
@@ -1127,6 +1135,7 @@ def _pex_modules_args(
         resource_manifests_path = ctx.actions.write(
             "__resource_manifests{}.txt".format(output_suffix),
             _srcs(resources, format = "--resource-manifest={}"),
+            has_content_based_path = False,
         )
         resource_manifest_args = cmd_args(resource_manifests_path, hidden = resources)
         cmd.append(cmd_args(resource_manifest_args, format = "@{}"))
@@ -1324,6 +1333,7 @@ def _generate_manifest_module(
     src_manifests_path = ctx.actions.write(
         "__module_manifests.txt",
         src_manifests,
+        has_content_based_path = False,
     )
     cmd = cmd_args(
         python_internal_tools.make_py_package_manifest_module,

@@ -52,7 +52,7 @@ def _create_fat_jar(
         "--output",
         output.as_output(),
         "--jars_file",
-        ctx.actions.write("{}jars_file".format(name_prefix), jars),
+        ctx.actions.write("{}jars_file".format(name_prefix), jars, has_content_based_path = False),
     ]
 
     if concat_jars:
@@ -67,7 +67,7 @@ def _create_fat_jar(
         )
         args += [
             "--native_libs_file",
-            ctx.actions.write("{}native_libs".format(name_prefix), [cmd_args([native_lib.soname.ensure_str(), native_lib.lib.output], delimiter = " ") for native_lib in native_libs]),
+            ctx.actions.write("{}native_libs".format(name_prefix), [cmd_args([native_lib.soname.ensure_str(), native_lib.lib.output], delimiter = " ") for native_lib in native_libs], has_content_based_path = False),
         ]
         if do_not_create_inner_jar:
             args += [
@@ -97,7 +97,7 @@ def _create_fat_jar(
 
     blocklist = ctx.attrs.blocklist
     if blocklist:
-        args += ["--blocklist", ctx.actions.write("{}blocklist_args".format(name_prefix), blocklist)]
+        args += ["--blocklist", ctx.actions.write("{}blocklist_args".format(name_prefix), blocklist, has_content_based_path = False)]
 
     if ctx.attrs.meta_inf_directory:
         args += ["--meta_inf_directory", ctx.attrs.meta_inf_directory]
@@ -164,7 +164,7 @@ def java_binary_impl(ctx: AnalysisContext) -> list[Provider]:
 
     if ctx.attrs._build_only_native_code:
         return [
-            DefaultInfo(default_output = ctx.actions.write("{}/unused.jar".format(ctx.label.name), [])),
+            DefaultInfo(default_output = ctx.actions.write("{}/unused.jar".format(ctx.label.name), [], has_content_based_path = False)),
             RunInfo(),
         ]
 

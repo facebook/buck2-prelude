@@ -50,7 +50,7 @@ def get_preprocessed_java_classes(enhance_ctx: EnhancementContext, input_jars: d
     }
 
     output_jars = output_jars_to_owners.keys()
-    output_jars_file = ctx.actions.write("preprocessed_java_classes/output_jars.txt", output_jars)
+    output_jars_file = ctx.actions.write("preprocessed_java_classes/output_jars.txt", output_jars, has_content_based_path = False)
 
     preprocess_cmd = [
         "/usr/bin/env",

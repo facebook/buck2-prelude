@@ -670,7 +670,7 @@ def _create_non_template_providers(
             ))
     shared_library_info, cxx_resource_info, linkable_graph = create_native_providers(ctx, ctx.label, packaging_deps)
 
-    output_for_classpath_macro = library_output.abi if (library_output and library_output.abi.owner != None) else ctx.actions.write("dummy_output_for_classpath_macro.txt", "Unused")
+    output_for_classpath_macro = library_output.abi if (library_output and library_output.abi.owner != None) else ctx.actions.write("dummy_output_for_classpath_macro.txt", "Unused", has_content_based_path = False)
     java_packaging_dep = create_java_packaging_dep(
         ctx,
         library_output.full_library if library_output else None,

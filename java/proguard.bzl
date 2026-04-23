@@ -96,7 +96,7 @@ def run_proguard(
         cmd_args(command_line_args_file, format = "@{}", hidden = command_line_args),
     )
 
-    output_jars_file = ctx.actions.write("proguard/output_jars.txt", output_jars)
+    output_jars_file = ctx.actions.write("proguard/output_jars.txt", output_jars, has_content_based_path = False)
 
     is_windows = hasattr(ctx.attrs, "_exec_os_type") and ctx.attrs._exec_os_type[OsLookup].os == Os("windows")
 
@@ -149,7 +149,7 @@ def get_proguard_output(
 
     if skip_proguard:
         input_jars_to_output_jars = {input_jar: input_jar for input_jar in input_jars.keys()}
-        mapping = ctx.actions.write("proguard/mapping.txt", [])
+        mapping = ctx.actions.write("proguard/mapping.txt", [], has_content_based_path = False)
         configuration = None
         seeds = None
         usage = None
@@ -177,7 +177,7 @@ def get_proguard_output(
         sdk_optimized_proguard_config,
     )
 
-    command_line_args_file = ctx.actions.write("proguard/command-line.txt", command_line_args)
+    command_line_args_file = ctx.actions.write("proguard/command-line.txt", command_line_args, has_content_based_path = False)
 
     if skip_proguard:
         return ProguardOutput(

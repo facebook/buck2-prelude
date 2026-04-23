@@ -156,7 +156,7 @@ def get_multi_dex(
 
     # dynamic actions are not valid with no input, but it's easier to use the same code regardless,
     # so just create an empty input.
-    inputs = [apk_module_graph_file] if apk_module_graph_file else [ctx.actions.write("empty_artifact_for_multi_dex_dynamic_action", [])]
+    inputs = [apk_module_graph_file] if apk_module_graph_file else [ctx.actions.write("empty_artifact_for_multi_dex_dynamic_action", [], has_content_based_path = False)]
     outputs = [primary_dex_file, primary_dex_class_names, root_module_secondary_dex_output_dir, secondary_dex_dir]
     root_module_bootstrap_dex_output_dir = None
     if enable_bootstrap_dexes:
@@ -215,7 +215,7 @@ def get_multi_dex(
                 secondary_dex_dir_for_module = ctx.actions.declare_output("secondary_dex_output_dir_for_module_{}".format(module), dir = True, has_content_based_path = False)
                 secondary_dex_subdir = secondary_dex_dir_for_module.project(_get_secondary_dex_subdir(module))
                 secondary_dex_dir_srcs[_get_secondary_dex_subdir(module)] = secondary_dex_subdir
-                secondary_dex_compression_cmd.add("--module-deps", ctx.actions.write("module_deps_for_{}".format(module), apk_module_graph_info.module_to_module_deps_function(module)))
+                secondary_dex_compression_cmd.add("--module-deps", ctx.actions.write("module_deps_for_{}".format(module), apk_module_graph_info.module_to_module_deps_function(module), has_content_based_path = False))
                 secondary_dex_compression_cmd.add("--secondary-dex-output-dir", secondary_dex_dir_for_module.as_output())
                 jars_to_dex = jars
                 multi_dex_cmd.add("--classpath-files", all_jars_list)
@@ -481,7 +481,7 @@ def merge_to_split_dex(
             split_dex_merge_config.dex_compression in supported_dex_compression,
             "Exopackage can only be enabled for secondary dexes when the dex compression is {}, but the dex compression is '{}'".format(supported_dex_compression, split_dex_merge_config.dex_compression),
         )
-    primary_dex_patterns_file = ctx.actions.write("primary_dex_patterns_file", split_dex_merge_config.primary_dex_patterns)
+    primary_dex_patterns_file = ctx.actions.write("primary_dex_patterns_file", split_dex_merge_config.primary_dex_patterns, has_content_based_path = False)
 
     pre_dexed_libs_with_class_names_and_weight_estimates_files = []
 
@@ -668,6 +668,7 @@ def merge_to_split_dex(
                     bootstrap_dex_class_list = ctx.actions.write(
                         "class_list_for_bootstrap_dex_{}.txt".format(this_dex_number),
                         bootstrap_class_names,
+                        has_content_based_path = False,
                     )
 
                     # Figure out the name of this file and prepare its location for symlinking in final output dir.
@@ -730,6 +731,7 @@ def merge_to_split_dex(
                     secondary_dex_class_list = ctx.actions.write(
                         "class_list_for_secondary_dex_{}_for_module_{}.txt".format(this_dex_number, module),
                         all_class_names,
+                        has_content_based_path = False,
                     )
                     pre_dexed_artifacts = [canary_dex_input.lib.dex] if canary_dex_input.lib.dex else []
                     pre_dexed_artifacts.extend([dex_input.lib.dex for dex_input in secondary_dex_inputs[i] if dex_input.lib.dex])
@@ -738,6 +740,7 @@ def merge_to_split_dex(
                     secondary_dex_class_list = ctx.actions.write(
                         "class_list_for_secondary_dex_{}_for_module_{}.txt".format(this_dex_number, module),
                         flatten([secondary_dex_input.dex_class_names for secondary_dex_input in secondary_dex_inputs[i]]),
+                        has_content_based_path = False,
                     )
                     pre_dexed_artifacts = [secondary_dex_input.lib.dex for secondary_dex_input in secondary_dex_inputs[i] if secondary_dex_input.lib.dex]
 
@@ -769,7 +772,7 @@ def merge_to_split_dex(
                 multi_dex_cmd.add("--module", module)
                 multi_dex_cmd.add("--canary-class-name", module_to_canary_class_name_function(module))
                 if not is_root_module(module):
-                    multi_dex_cmd.add("--module-deps", ctx.actions.write("module_deps_for_{}".format(module), apk_module_graph_info.module_to_module_deps_function(module)))
+                    multi_dex_cmd.add("--module-deps", ctx.actions.write("module_deps_for_{}".format(module), apk_module_graph_info.module_to_module_deps_function(module), has_content_based_path = False))
 
                 ctx.actions.run(
                     multi_dex_cmd,

@@ -57,6 +57,7 @@ def android_apk_impl(ctx: AnalysisContext) -> list[Provider]:
         default_output = ctx.actions.write(
             "{}_exopackage_apk_warning".format(ctx.label.name),
             "exopackage apks should not be used externally, try buck install or building with exopackage disabled\n",
+            has_content_based_path = False,
         )
         sub_targets["exo_apk"] = [DefaultInfo(default_output = output_apk)]  # Used by tests
     else:
@@ -83,8 +84,8 @@ def android_apk_impl(ctx: AnalysisContext) -> list[Provider]:
     install_info = get_install_info(ctx, output_apk = output_apk, manifest = resources_info.manifest, exopackage_info = exopackage_info, definitely_has_native_libs = definitely_has_native_libs)
 
     classpath = [dep.jar for dep in java_packaging_deps if dep.jar]
-    sub_targets["classpath"] = [DefaultInfo(default_output = ctx.actions.write("classpath.txt", classpath), other_outputs = classpath)]
-    sub_targets["classpath_targets"] = [DefaultInfo(default_output = ctx.actions.write("classpath_targets.txt", list(set([jar.owner.raw_target() for jar in classpath]))))]
+    sub_targets["classpath"] = [DefaultInfo(default_output = ctx.actions.write("classpath.txt", classpath, has_content_based_path = False), other_outputs = classpath)]
+    sub_targets["classpath_targets"] = [DefaultInfo(default_output = ctx.actions.write("classpath_targets.txt", list(set([jar.owner.raw_target() for jar in classpath])), has_content_based_path = False))]
 
     return [
         AndroidApkInfo(
@@ -192,9 +193,9 @@ def build_apk(
     if packaging_options:
         for key, value in packaging_options.items():
             if key == "excluded_resources":
-                apk_builder_args.add("--excluded-resources", actions.write("excluded_resources.txt", value))
+                apk_builder_args.add("--excluded-resources", actions.write("excluded_resources.txt", value, has_content_based_path = False))
             elif key == "uncompressed_files":
-                apk_builder_args.add("--uncompressed-files", actions.write("uncompressed_files.txt", value))
+                apk_builder_args.add("--uncompressed-files", actions.write("uncompressed_files.txt", value, has_content_based_path = False))
             else:
                 fail("Only 'excluded_resources' and 'uncompressed_files' are supported in packaging_options right now!")
 
@@ -241,7 +242,7 @@ def get_install_info(
         files["resources_exopackage_res_hash"] = resources_info.res_hash
 
     if definitely_has_native_libs and hasattr(ctx.attrs, "cpu_filters"):
-        files["cpu_filters"] = ctx.actions.write("cpu_filters.txt", ctx.attrs.cpu_filters)
+        files["cpu_filters"] = ctx.actions.write("cpu_filters.txt", ctx.attrs.cpu_filters, has_content_based_path = False)
 
     return InstallInfo(
         installer = ctx.attrs._android_toolchain[AndroidToolchainInfo].installer,

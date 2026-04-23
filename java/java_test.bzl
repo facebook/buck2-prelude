@@ -103,7 +103,7 @@ def build_junit_test(
             cmd_args(classpath),
             **relative_to
         )
-        classpath_args_file = ctx.actions.write("classpath_args_file", classpath_args)
+        classpath_args_file = ctx.actions.write("classpath_args_file", classpath_args, has_content_based_path = False)
         cmd.append(cmd_args(
             classpath_args_file,
             format = "-Dbuck.classpath_file={}",
@@ -143,7 +143,7 @@ def build_junit_test(
             "--jar",
             tests_java_library_info.library_output.full_library,
             "--sources",
-            ctx.actions.write("sources.txt", [] if discover_all else ctx.attrs.srcs),
+            ctx.actions.write("sources.txt", [] if discover_all else ctx.attrs.srcs, has_content_based_path = False),
             "--output",
             class_names.as_output(),
         ]
@@ -181,7 +181,7 @@ def build_junit_test(
             list_tests[RunInfo],
             "list-tests",
             "--sources-file",
-            ctx.actions.write("source_files.txt", ctx.attrs.srcs, with_inputs = True),
+            ctx.actions.write("source_files.txt", ctx.attrs.srcs, with_inputs = True, has_content_based_path = False),
         ])
         env["TPX_LIST_TESTS_COMMAND"] = list_tests_command
 

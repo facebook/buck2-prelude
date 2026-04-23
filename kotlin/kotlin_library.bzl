@@ -160,7 +160,7 @@ def _create_kotlin_sources(
             JavaPackagingDepTSet,
             children = annotation_processor_classpath_tsets,
         ).project_as_args("full_jar_args")
-        kapt_classpath_file = ctx.actions.write("{}kapt_classpath_file".format(output_artifact_prefix), annotation_processor_classpath)
+        kapt_classpath_file = ctx.actions.write("{}kapt_classpath_file".format(output_artifact_prefix), annotation_processor_classpath, has_content_based_path = False)
         compile_kotlin_cmd_args.extend(["--kapt_classpath_file", kapt_classpath_file])
         compile_kotlin_cmd_hidden.add(annotation_processor_classpath)
 
@@ -222,6 +222,7 @@ def _create_kotlin_sources(
             "{}ksp_kotlinc_cmd".format(output_artifact_prefix),
             ksp_kotlinc_cmd_args,
             allow_args = True,
+            has_content_based_path = False,
         )
 
         ksp_cmd.extend(["--kotlinc_cmd_file", ksp_cmd_args_file])
@@ -241,7 +242,7 @@ def _create_kotlin_sources(
     compile_kotlin_cmd_args.append(plugin_cmd_args.compile_kotlin_cmd)
 
     if zipped_sources:
-        zipped_sources_file = ctx.actions.write("{}kotlinc_zipped_source_args".format(output_artifact_prefix), zipped_sources)
+        zipped_sources_file = ctx.actions.write("{}kotlinc_zipped_source_args".format(output_artifact_prefix), zipped_sources, has_content_based_path = False)
         compile_kotlin_cmd_args.append(["--zipped_sources_file", zipped_sources_file])
         compile_kotlin_cmd_hidden.add(zipped_sources)
 
@@ -249,6 +250,7 @@ def _create_kotlin_sources(
         "{}kotlinc_cmd".format(output_artifact_prefix),
         kotlinc_cmd_args,
         allow_args = True,
+        has_content_based_path = False,
     )
 
     compile_kotlin_cmd_hidden.add(plain_sources)
@@ -349,7 +351,7 @@ def kotlin_library_impl(ctx: AnalysisContext) -> list[Provider]:
             cxx_resource_info,
             linkable_graph,
             # Add an unused default output in case this target is used an an attr.source() anywhere.
-            DefaultInfo(default_output = ctx.actions.write("{}/unused.jar".format(ctx.label.name), [])),
+            DefaultInfo(default_output = ctx.actions.write("{}/unused.jar".format(ctx.label.name), [], has_content_based_path = False)),
             TemplatePlaceholderInfo(keyed_variables = {
                 "classpath": "unused_but_needed_for_analysis",
             }),

@@ -120,7 +120,7 @@ def get_aapt2_link(
                 (low_priority_aapt2_compile_rules if resource_info.res_priority == RESOURCE_PRIORITY_LOW else normal_priority_aapt2_compile_rules).append(resource_info.aapt2_compile_output)
         aapt2_compile_rules = low_priority_aapt2_compile_rules + normal_priority_aapt2_compile_rules
 
-        aapt2_compile_rules_args_file = ctx.actions.write("{}/aapt2_compile_rules_args_file".format(identifier), cmd_args(aapt2_compile_rules, delimiter = " "))
+        aapt2_compile_rules_args_file = ctx.actions.write("{}/aapt2_compile_rules_args_file".format(identifier), cmd_args(aapt2_compile_rules, delimiter = " "), has_content_based_path = False)
         aapt2_command.add("-R")
         aapt2_command.add(cmd_args(
             aapt2_compile_rules_args_file,

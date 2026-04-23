@@ -85,7 +85,7 @@ def _make_rustc_shim(ctx: AnalysisContext, cwd: Artifact) -> cmd_args:
 
         null_path = "nul" if ctx.attrs._exec_os_type[OsLookup].os == Os("windows") else "/dev/null"
         dep_args = cmd_args("--sysroot=" + null_path, dep_args, relative_to = cwd)
-        dep_file, _ = ctx.actions.write("rustc_dep_file", dep_args, allow_args = True)
+        dep_file, _ = ctx.actions.write("rustc_dep_file", dep_args, allow_args = True, has_content_based_path = False)
         sysroot_args = cmd_args(
             cmd_args("@", dep_file, delimiter = "", hidden = dep_args),
             # add dep_argsfiles as a separate argument because rustc does NOT support nested @argsfiles

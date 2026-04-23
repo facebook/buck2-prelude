@@ -146,7 +146,7 @@ def _create_pkg_info_if_needed(ctx: AnalysisContext) -> list[AppleBundlePart]:
     extension = get_extension_attr(ctx)
     if extension == "xpc" or extension == "qlgenerator":
         return []
-    artifact = ctx.actions.write("PkgInfo", "APPLWRUN\n")
+    artifact = ctx.actions.write("PkgInfo", "APPLWRUN\n", has_content_based_path = False)
     return [AppleBundlePart(source = artifact, destination = AppleBundleDestination("metadata"))]
 
 def _copy_privacy_manifest_if_needed(ctx: AnalysisContext) -> list[AppleBundlePart]:
@@ -475,6 +475,7 @@ def _run_ibtool(
                 cmd_args(output, format = 'mkdir -p {} && cp -r "$TMPDIR"/ {}'),
             ],
             allow_args = True,
+            has_content_based_path = False,
         )
         command = cmd_args(["/bin/sh", wrapper_script], hidden = [ibtool_command, output])
     else:

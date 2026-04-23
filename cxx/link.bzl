@@ -505,8 +505,8 @@ def _anon_link_impl(ctx):
         opts = opts,
     )
 
-    dwp_placeholder = ctx.actions.write("placeholder_dwp", "")
-    split_debug_output_placeholder = ctx.actions.write("placeholder_split_debug_output", "")
+    dwp_placeholder = ctx.actions.write("placeholder_dwp", "", has_content_based_path = False)
+    split_debug_output_placeholder = ctx.actions.write("placeholder_split_debug_output", "", has_content_based_path = False)
 
     return [
         DefaultInfo(),

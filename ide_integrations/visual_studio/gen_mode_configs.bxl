@@ -88,11 +88,11 @@ def _produce_proj_artifact_with_async_cxx_toolchain(bxl_ctx, actions, fbsource: 
     else:
         platform = compiler_type
 
-    cxxflags_artifact, cxxflags_macro_artifacts = actions.write("cxxflags", cxx_toolchain.cxx_compiler_info.compiler_flags, allow_args = True)
+    cxxflags_artifact, cxxflags_macro_artifacts = actions.write("cxxflags", cxx_toolchain.cxx_compiler_info.compiler_flags, allow_args = True, has_content_based_path = False)
 
-    cxxppflags_artifact, cxxppflags_macro_artifacts = actions.write("cxxppflags", cxx_toolchain.cxx_compiler_info.preprocessor_flags, allow_args = True)
+    cxxppflags_artifact, cxxppflags_macro_artifacts = actions.write("cxxppflags", cxx_toolchain.cxx_compiler_info.preprocessor_flags, allow_args = True, has_content_based_path = False)
 
-    ldflags_artifact, ldflags_macro_artifacts = actions.write("ldflags", cxx_toolchain.linker_info.linker_flags, allow_args = True)
+    ldflags_artifact, ldflags_macro_artifacts = actions.write("ldflags", cxx_toolchain.linker_info.linker_flags, allow_args = True, has_content_based_path = False)
 
     def dyn_output_continuation(ctx, dynamic: dict[Artifact, ArtifactValue], outputs: dict[Artifact, typing.Any], platform = platform) -> None:
         """async continuation/callback for the `dynamic_output` call that reads the cxx_toolchain flags from materialized artifacts and continues to produce the final project file artifact.

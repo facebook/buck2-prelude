@@ -1608,7 +1608,7 @@ def _compiler_type_flags_anon_impl(ctx: AnalysisContext):
     is_nasm = ctx.attrs.compiler_type == "nasm"
     args = _add_compiler_type_flags(ctx.label, ctx.attrs.compiler_type, CxxExtension(ctx.attrs.src_extension))
     content = create_cmd_args(is_nasm, ctx.attrs.is_xcode_argsfile, *args)
-    argsfile_artifact, _ = ctx.actions.write("compiler_type_args", content, allow_args = True)
+    argsfile_artifact, _ = ctx.actions.write("compiler_type_args", content, allow_args = True, has_content_based_path = False)
 
     return [DefaultInfo(default_outputs = [argsfile_artifact])]
 

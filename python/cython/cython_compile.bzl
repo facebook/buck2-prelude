@@ -76,7 +76,7 @@ def _build_package_init_tree(
     if not package_path:
         return init_files
 
-    init_py = actions.write("__cython_init__/" + identifier + "/__init__.py", "")
+    init_py = actions.write("__cython_init__/" + identifier + "/__init__.py", "", has_content_based_path = False)
     parts = package_path.split("/")
     for i in range(len(parts)):
         prefix = "/".join(parts[:i + 1])

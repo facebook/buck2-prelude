@@ -1493,7 +1493,7 @@ def _get_swift_shared_debug_info(swift_dependency_info: SwiftDependencyInfo) -> 
 
 def _get_project_root_file(ctx) -> Artifact:
     content = cmd_args(ctx.label.project_root)
-    return ctx.actions.write("project_root_file", content, absolute = True)
+    return ctx.actions.write("project_root_file", content, absolute = True, has_content_based_path = False)
 
 def _create_compilation_database(
         ctx: AnalysisContext,

@@ -73,7 +73,7 @@ def android_aar_impl(ctx: AnalysisContext) -> list[Provider]:
     ])
 
     if ctx.attrs.remove_classes:
-        remove_classes_file = ctx.actions.write("remove_classes.txt", ctx.attrs.remove_classes)
+        remove_classes_file = ctx.actions.write("remove_classes.txt", ctx.attrs.remove_classes, has_content_based_path = False)
         classes_jar_cmd.add([
             "--blocklist-patterns",
             remove_classes_file,
@@ -97,7 +97,7 @@ def android_aar_impl(ctx: AnalysisContext) -> list[Provider]:
         ])
 
         if ctx.attrs.remove_classes:
-            remove_classes_file = ctx.actions.write("sources_remove_classes.txt", ctx.attrs.remove_classes)
+            remove_classes_file = ctx.actions.write("sources_remove_classes.txt", ctx.attrs.remove_classes, has_content_based_path = False)
             combined_sources_jar_cmd.add([
                 "--blocklist-patterns",
                 remove_classes_file,
@@ -140,7 +140,7 @@ def android_aar_impl(ctx: AnalysisContext) -> list[Provider]:
     native_libs_file = argfile(actions = ctx.actions, name = "native_libs_entries.txt", args = android_binary_native_library_info.native_libs_for_primary_apk)
     native_libs_assets_file = argfile(actions = ctx.actions, name = "native_libs_assets_entries.txt", args = android_binary_native_library_info.root_module_native_lib_assets)
 
-    entries_file = ctx.actions.write("entries.txt", entries)
+    entries_file = ctx.actions.write("entries.txt", entries, has_content_based_path = False)
 
     aar = ctx.actions.declare_output("{}.aar".format(ctx.label.name), has_content_based_path = False)
     create_aar_cmd = cmd_args(

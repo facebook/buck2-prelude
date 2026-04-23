@@ -53,7 +53,7 @@ def android_app_modularity_impl(ctx: AnalysisContext) -> list[Provider]:
     if ctx.attrs._build_only_native_code:
         return [
             # Add an unused default output in case this target is used as an attr.source() anywhere.
-            DefaultInfo(default_output = ctx.actions.write("{}/unused.txt".format(ctx.label.name), [])),
+            DefaultInfo(default_output = ctx.actions.write("{}/unused.txt".format(ctx.label.name), [], has_content_based_path = False)),
         ]
 
     all_deps = ctx.attrs.deps + flatten(ctx.attrs.application_module_configs.values())
@@ -200,6 +200,7 @@ def _get_base_cmd_and_output(
         application_module_blocklist_file = actions.write(
             "application_module_blocklist.txt",
             all_blocklisted_deps,
+            has_content_based_path = False,
         )
         cmd.add([
             "--always-in-main-apk-seeds",
