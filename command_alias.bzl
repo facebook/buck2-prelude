@@ -197,6 +197,10 @@ done
         trampoline_args.add(cmd_args("export ", k, "=", cmd_args(v, quote = "shell"), delimiter = ""))
         trampoline_args.add(cmd_args("export ", k, '="${', k, '//BUCK_COMMAND_ALIAS_ABSOLUTE_PREFIX/$BASE}"', delimiter = ""))
 
+    # Ensure the resolved exe is executable. When Buck2 runs on Windows but this
+    # trampoline executes on Linux via RE, POSIX exec bits can be lost as the
+    # artifact roundtrips through CAS, producing "Permission denied" at exec time.
+    trampoline_args.add('[ -x "${R_ARGS[0]}" ] || chmod +x "${R_ARGS[0]}" 2>/dev/null || true')
     trampoline_args.add('exec "${R_ARGS[@]}" "$@"')
 
     trampoline = actions.declare_output(path, has_content_based_path = has_content_based_path)
