@@ -64,7 +64,14 @@ haskell_binary = prelude_rule(
 
 haskell_ghci = prelude_rule(
     name = "haskell_ghci",
-    docs = "",
+    docs = """
+        A `haskell_ghci()` rule produces a deployable script that
+        launches a GHCi session with the given sources and dependencies
+        preloaded. Building the rule compiles all dependent libraries
+        (including any C++ shared libraries that GHCi needs to load);
+        running the produced script enters the session ready for
+        `:reload`-driven development.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -90,7 +97,11 @@ haskell_ghci = prelude_rule(
 
 haskell_haddock = prelude_rule(
     name = "haskell_haddock",
-    docs = "",
+    docs = """
+        A `haskell_haddock()` rule generates Haddock documentation for
+        the given Haskell dependencies. Extra flags can be passed to the
+        `haddock` tool via `haddock_flags`.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -109,7 +120,14 @@ haskell_haddock = prelude_rule(
 
 haskell_ide = prelude_rule(
     name = "haskell_ide",
-    docs = "",
+    docs = """
+        A `haskell_ide()` rule defines a project set for use with an
+        LSP-based Haskell IDE (such as `ghcide`/HLS). When built, it
+        compiles the dependencies of the listed sources and produces the
+        GHC flags needed to load them as a single multi-component IDE
+        session, which is faster than loading each project individually
+        and avoids `ghcide`'s multi-component limitations.
+    """,
     examples = None,
     further = None,
     attrs = (

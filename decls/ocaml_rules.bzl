@@ -132,7 +132,12 @@ ocaml_library = prelude_rule(
 
 prebuilt_ocaml_library = prelude_rule(
     name = "prebuilt_ocaml_library",
-    docs = "",
+    docs = """
+        A `prebuilt_ocaml_library()` rule wraps a precompiled OCaml library
+        (bytecode and/or native) along with any companion C libraries so it
+        can be consumed as a dependency by `ocaml_binary()` and
+        `ocaml_library()` rules.
+    """,
     examples = None,
     further = None,
     attrs = (
