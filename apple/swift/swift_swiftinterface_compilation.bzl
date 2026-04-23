@@ -82,10 +82,10 @@ def compile_swiftinterface_common(
         children = [pcm_deps_tset, clang_deps_tset, swift_deps_tset],
     )
 
-    swift_module_map_artifact = write_swift_module_map_with_deps(ctx, uncompiled_module_info_name, all_deps_tset)
+    _, swift_module_map_args = write_swift_module_map_with_deps(ctx, uncompiled_module_info_name, all_deps_tset)
     cmd.add([
         "-explicit-swift-module-map-file",
-        swift_module_map_artifact,
+        swift_module_map_args,
     ])
 
     swiftmodule_output = ctx.actions.declare_output(uncompiled_module_info_name + SWIFTMODULE_EXTENSION, has_content_based_path = uses_content_based_paths)

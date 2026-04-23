@@ -137,6 +137,10 @@ SwiftCompilationOutput = record(
     compilation_database = field(SwiftCompilationDatabase),
     # An artifact that represent the Swift module map for this target.
     output_map_artifact = field(Artifact | None),
+    # The JSON file passed to swiftc via -explicit-swift-module-map-file that
+    # describes all transitive Swift module dependencies. Only populated when
+    # explicit modules are enabled.
+    swift_module_map_artifact = field(Artifact | None, None),
     # An optional artifact with files that support consuming the generated library with later versions of the swift compiler.
     swift_library_for_distribution_output = field(SwiftLibraryForDistributionOutput | None),
     # A list of artifacts that stores the index data
@@ -416,7 +420,7 @@ def compile_swift(
     # the tag on the action depending on the use_depsfiles config.
     inputs_tag = ctx.actions.artifact_tag()
 
-    shared_flags = _get_shared_flags(
+    shared_flags, swift_module_map_artifact = _get_shared_flags(
         ctx = ctx,
         deps_providers = deps_providers,
         parse_as_library = parse_as_library,
@@ -548,6 +552,7 @@ def compile_swift(
     return SwiftCompileResult(
         swift_compilation = SwiftCompilationOutput(
             output_map_artifact = object_output.output_map_artifact,
+            swift_module_map_artifact = swift_module_map_artifact,
             object_files = object_output.object_files,
             object_format = toolchain.object_format,
             swiftmodule = output_swiftmodule,
@@ -1059,7 +1064,7 @@ def _get_shared_flags(
         public_modulemap_pp_info: CPreprocessor | None,
         extra_search_paths_flags: list[ArgLike],
         inputs_tag: ArtifactTag,
-        is_macro: bool) -> cmd_args:
+        is_macro: bool) -> (cmd_args, Artifact | None):
     toolchain = get_swift_toolchain_info(ctx)
     cmd = cmd_args()
 
@@ -1192,10 +1197,11 @@ def _get_shared_flags(
     # 3. Transitive SDK deps of user-defined deps.
     # (This is the case, when a user-defined dep exports a type from SDK module,
     # thus such SDK module should be implicitly visible to consumers of that custom dep)
+    swift_module_map_artifact = None
     if uses_explicit_modules(ctx):
         sdk_clang_deps_tset = get_compiled_sdk_clang_deps_tset(ctx, deps_providers)
         sdk_swift_deps_tset = get_compiled_sdk_swift_deps_tset(ctx, deps_providers)
-        _add_swift_module_map_args(
+        swift_module_map_artifact = _add_swift_module_map_args(
             ctx = ctx,
             sdk_swiftmodule_deps_tset = sdk_swift_deps_tset,
             pcm_deps_tset = pcm_deps_tset,
@@ -1221,7 +1227,7 @@ def _get_shared_flags(
     cmd.add(ctx.attrs.swift_compiler_flags)
     cmd.add(extra_search_paths_flags)
 
-    return cmd
+    return (cmd, swift_module_map_artifact)
 
 def _add_swift_module_map_args(
         ctx: AnalysisContext,
@@ -1230,14 +1236,14 @@ def _add_swift_module_map_args(
         sdk_deps_tset: SwiftCompiledModuleTset,
         inputs_tag: ArtifactTag,
         cmd: cmd_args,
-        is_macro: bool):
+        is_macro: bool) -> Artifact:
     module_name = get_module_name(ctx)
     sdk_swiftmodule_deps_tset = [sdk_swiftmodule_deps_tset] if sdk_swiftmodule_deps_tset else []
     all_deps_tset = ctx.actions.tset(
         SwiftCompiledModuleTset,
         children = _get_swift_paths_tsets(is_macro, ctx.attrs.deps + getattr(ctx.attrs, "exported_deps", [])) + [pcm_deps_tset, sdk_deps_tset] + sdk_swiftmodule_deps_tset,
     )
-    swift_module_map_artifact = write_swift_module_map_with_deps(
+    swift_module_map_artifact, swift_module_map_args = write_swift_module_map_with_deps(
         ctx,
         module_name,
         all_deps_tset,
@@ -1246,8 +1252,9 @@ def _add_swift_module_map_args(
         "-Xfrontend",
         "-explicit-swift-module-map-file",
         "-Xfrontend",
-        inputs_tag.tag_artifacts(swift_module_map_artifact),
+        inputs_tag.tag_artifacts(swift_module_map_args),
     ])
+    return swift_module_map_artifact
 
 def _add_swift_deps_flags(
         ctx: AnalysisContext,
