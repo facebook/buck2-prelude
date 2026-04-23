@@ -36,7 +36,11 @@ def dex_min_sdk_version():
 
 gwt_binary = prelude_rule(
     name = "gwt_binary",
-    docs = "",
+    docs = """
+        A `gwt_binary()` rule produces a GWT (Google Web Toolkit) application
+        by invoking the GWT compiler against the listed `modules`. The
+        resulting output can be served as part of a web app.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -63,7 +67,11 @@ gwt_binary = prelude_rule(
 
 jar_genrule = prelude_rule(
     name = "jar_genrule",
-    docs = "",
+    docs = """
+        A `jar_genrule()` is a variant of `genrule()` whose output is
+        packaged into a JAR file. Use it to produce a JAR from arbitrary
+        commands (`bash`/`cmd`/`cmd_exe`) that operate on `srcs`.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -92,7 +100,12 @@ jar_genrule = prelude_rule(
 
 java_annotation_processor = prelude_rule(
     name = "java_annotation_processor",
-    docs = "",
+    docs = """
+        A `java_annotation_processor()` rule declares a Java annotation
+        processor (identified by `processor_class`) that can be referenced
+        from `java_library()` and `kotlin_library()` rules to run during
+        compilation.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -341,7 +354,11 @@ java_library = prelude_rule(
 
 java_plugin = prelude_rule(
     name = "java_plugin",
-    docs = "",
+    docs = """
+        A `java_plugin()` rule declares a `javac` plugin (identified by
+        `plugin_name`) that can be referenced from `java_library()` and
+        `kotlin_library()` rules to run during compilation.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -409,7 +426,12 @@ java_test = prelude_rule(
                  The currently supported options are 'junit' and 'testng'.
             """),
         } |
-        buck.run_test_separately_arg(run_test_separately_type = attrs.bool(default = False)) |
+        buck.run_test_separately_arg(run_test_separately_type = attrs.bool(default = False, doc = """
+            If set to True, the test(s) in this rule are run separately from
+             all other tests. This is useful for integration tests which
+             access a physical device or other limited resource. If unset,
+             the test(s) in this rule run in parallel with all other tests.
+        """)) |
         re_test_common.test_args() |
         buck.test_rule_timeout_ms() |
         {
@@ -470,7 +492,12 @@ java_test = prelude_rule(
 
 java_test_runner = prelude_rule(
     name = "java_test_runner",
-    docs = "",
+    docs = """
+        A `java_test_runner()` rule defines a custom test runner JAR
+        (with a `main_class`) that can be referenced by `java_test()`
+        targets via their `runner` attribute, replacing the default
+        JUnit/TestNG runner.
+    """,
     examples = None,
     further = None,
     attrs = (
