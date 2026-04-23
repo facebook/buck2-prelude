@@ -355,7 +355,12 @@ go_test = prelude_rule(
                 A map of environment variables and values to set when running the test.
             """),
         } |
-        buck.run_test_separately_arg(run_test_separately_type = attrs.bool(default = False)) |
+        buck.run_test_separately_arg(run_test_separately_type = attrs.bool(default = False, doc = """
+            If set to True, the test(s) in this rule are run separately from
+             all other tests. This is useful for integration tests which
+             access a physical device or other limited resource. If unset,
+             the test(s) in this rule run in parallel with all other tests.
+        """)) |
         {
             "platform": attrs.option(attrs.string(), default = None),
             "runner": attrs.option(attrs.dep(), default = None),
@@ -371,6 +376,12 @@ go_test = prelude_rule(
 
 go_bootstrap_binary = prelude_rule(
     name = "go_bootstrap_binary",
+    docs = """
+        A `go_bootstrap_binary()` rule builds a minimal Go executable used
+        during bootstrap, where the full `go_binary()` machinery is not yet
+        available. It invokes the Go toolchain directly with the given
+        sources and `build_args`.
+    """,
     attrs = (
         go_common.srcs_arg() |
         {
@@ -384,6 +395,11 @@ go_bootstrap_binary = prelude_rule(
 
 go_stdlib = prelude_rule(
     name = "go_stdlib",
+    docs = """
+        A `go_stdlib()` rule represents the Go standard library for the
+        target configuration. It has no user-facing attributes and is
+        consumed implicitly by other Go rules.
+    """,
     attrs = {},
     cfg = go_stdlib_transition,
 )
