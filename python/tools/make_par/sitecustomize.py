@@ -84,15 +84,23 @@ def _extract_sitecustomize() -> str | None:
     Uses a dedicated subdirectory to prevent unrelated Python processes from
     picking it up when the unpack dir appears on PYTHONPATH.
     """
-    unpack_dir = os.environ.get("FB_PAR_UNZIP_LOCATION")
-    par_filename = os.environ.get("FB_PAR_FILENAME")
+    import zipimport
+
+    # If sitecustomize wasn't loaded from a zip the child process
+    # can find it the same way the parent did.
+    if not isinstance(__loader__, zipimport.zipimporter):
+        return None
+
+    unpack_dir = os.environ.get("FB_PAR_RUNTIME_FILES") or os.environ.get(
+        "FB_PAR_UNZIP_LOCATION"
+    )
+    par_filename = os.environ.get("FB_PAR_FILENAME") or __loader__.archive
     if not unpack_dir or not par_filename:
         return None
-    if not any(entry.startswith(("/proc/self/fd/", "/dev/fd/")) for entry in sys.path):
-        return None  # Not a fastzip PAR — real sitecustomize is findable
 
+    sitecustomize = os.path.basename(__file__)
     extract_dir = os.path.join(unpack_dir, _SITECUSTOMIZE_SUBDIR)
-    extract_path = os.path.join(extract_dir, "sitecustomize.py")
+    extract_path = os.path.join(extract_dir, sitecustomize)
     if os.path.exists(extract_path):
         return extract_dir  # Already extracted
 
@@ -101,7 +109,7 @@ def _extract_sitecustomize() -> str | None:
 
         os.makedirs(extract_dir, exist_ok=True)
         with zipfile.ZipFile(par_filename) as zf:
-            with zf.open("sitecustomize.py") as src, open(extract_path, "wb") as dst:
+            with zf.open(sitecustomize) as src, open(extract_path, "wb") as dst:
                 dst.write(src.read())
         return extract_dir
     except (OSError, KeyError, zipfile.BadZipFile):
@@ -408,6 +416,10 @@ def __startup__() -> None:
         par = os.environ.get("FB_PAR_FILENAME", "")
         if par and os.path.isfile(par) and par not in sys.path:
             sys.path.insert(0, par)
+            # pex requires bootstrap dir to be in the path
+            bootstrap = os.environ.get("FB_PAR_BOOTSTRAP_DIR", "")
+            if bootstrap and bootstrap not in sys.path:
+                sys.path.append(bootstrap)
             try:
                 from __par__.__startup_function_loader__ import load_startup_functions
             except ImportError:
