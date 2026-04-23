@@ -85,9 +85,6 @@ prepare(ExecutionDir, Tests, ArtifactAnnotationFunction) ->
         fun(_ArtifactDir) ->
             link_tar_ball(ExecutionDir),
             link_to_artifact_dir(
-                join_paths(ExecutionDir, "erlang.perfetto-trace"), ExecutionDir, ArtifactAnnotationFunction
-            ),
-            link_to_artifact_dir(
                 join_paths(ExecutionDir, "result_exec.json"), ExecutionDir, ArtifactAnnotationFunction
             ),
             case coverage_tmp_dir() of
