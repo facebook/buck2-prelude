@@ -14,7 +14,6 @@ These should not be used for first-party code where lints are desired.
 """
 
 load("@prelude//:prelude.bzl", "native")
-load("@prelude//rust/tools:buildscript_platform.bzl", "buildscript_platform_constraints")
 load("@prelude//utils:selects.bzl", "selects")
 load("@prelude//utils:type_defs.bzl", "is_dict", "is_list")
 
@@ -182,20 +181,14 @@ def apply_platform_attrs(platform_attrs, universal_attrs, platform_select = None
 # configured for (which is the execution platform of the build-script-run
 # target).
 def apply_platform_attrs_for_buildscript_build(platform_attrs, universal_attrs):
-    if not rule_exists("buildscript_for_platform="):
-        buildscript_platform_constraints(
-            name = "buildscript_for_platform=",
-            reindeer_platforms = get_reindeer_platform_names(),
-        )
-
     return apply_platform_attrs(
         platform_attrs,
         universal_attrs,
         select({
             "DEFAULT": get_reindeer_platforms(),
         } | {
-            ":buildscript_for_platform=[{}]".format(plat): plat
-            for plat in get_reindeer_platform_names()
+            "prelude//rust/buildscript:platform_index_{}".format(i): plat
+            for i, plat in enumerate(get_reindeer_platform_names())
         }),
     )
 

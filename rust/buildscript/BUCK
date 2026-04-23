@@ -1,0 +1,20 @@
+load("@prelude//utils:source_listing.bzl", "source_listing")
+load(":buildscript_platform.bzl", "constraint_value_with_transition")
+
+oncall("build_infra")
+
+source_listing()
+
+constraint_setting(
+    name = "buildscript_for_platform",
+    visibility = [],
+)
+
+[
+    constraint_value_with_transition(
+        name = "platform_index_{}".format(i),
+        constraint_setting = ":buildscript_for_platform",
+        visibility = ["PUBLIC"],
+    )
+    for i in range(1000)
+]
