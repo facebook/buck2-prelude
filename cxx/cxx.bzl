@@ -1029,6 +1029,7 @@ def cxx_test_impl(ctx: AnalysisContext) -> list[Provider]:
                 re_executor != None
             ),
             use_project_relative_paths = re_executor != None,
+            network_access = getattr(ctx.attrs, "network_access", None),
         ),
     ))
     if output.validation_specs:
