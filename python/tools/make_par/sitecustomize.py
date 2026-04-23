@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import itertools
-import multiprocessing.util as mp_util
 import os
 import sys
 import threading
@@ -110,8 +109,6 @@ def _extract_sitecustomize() -> str | None:
 
 
 def __patch_spawn(var_names: list[str], saved_env: dict[str, str]) -> None:
-    std_spawn = mp_util.spawnv_passfds
-
     # Compute resolved PYTHONPATH once at patch time (not per-spawn).
     # dirs_only=True filters out zip files to avoid RecursionError from
     # zipimport's lazy `import struct` cycle.
@@ -120,37 +117,59 @@ def __patch_spawn(var_names: list[str], saved_env: dict[str, str]) -> None:
     )
 
     # pyre-fixme[53]: Captured variable is not annotated.
-    # pyre-fixme[2]: Parameter must be annotated.
-    def spawnv_passfds(path, args, passfds) -> None | int:
-        with lock:
-            try:
-                proxy_dir = _extract_sitecustomize()
-                for var in var_names:
-                    val = os.environ.get(var, None)
-                    if val is not None:
-                        os.environ["FB_SAVED_" + var] = val
-                    saved_val = saved_env.get(var, None)
-                    if saved_val is not None:
-                        os.environ[var] = saved_val
+    def _setup_child_env() -> None:
+        proxy_dir = _extract_sitecustomize()
+        for var in var_names:
+            val = os.environ.get(var, None)
+            if val is not None:
+                os.environ["FB_SAVED_" + var] = val
+            saved_val = saved_env.get(var, None)
+            if saved_val is not None:
+                os.environ[var] = saved_val
 
-                # Ensure PYTHONPATH includes resolved sys.path dirs so the
-                # child interpreter finds sitecustomize.py during Py_Initialize.
-                # The extraction dir (if any) is prepended so the child finds
-                # the extracted sitecustomize.py first.
-                parts = []
-                if proxy_dir:
-                    parts.append(proxy_dir)
-                existing = os.environ.get("PYTHONPATH", "")
-                if existing:
-                    parts.append(existing)
-                parts.append(resolved_pythonpath)
-                os.environ["PYTHONPATH"] = os.path.pathsep.join(parts)
+        # Ensure PYTHONPATH includes resolved sys.path dirs so the
+        # child interpreter finds sitecustomize.py during Py_Initialize.
+        # The extraction dir (if any) is prepended so the child finds
+        # the extracted sitecustomize.py first.
+        parts = []
+        if proxy_dir:
+            parts.append(proxy_dir)
+        existing = os.environ.get("PYTHONPATH", "")
+        if existing:
+            parts.append(existing)
+        parts.append(resolved_pythonpath)
+        os.environ["PYTHONPATH"] = os.path.pathsep.join(parts)
 
-                return std_spawn(path, args, passfds)
-            finally:
-                __clear_env(apply_monkeypatching=False)
+    if sys.platform == "win32":
+        import multiprocessing.popen_spawn_win32 as popen_win32
 
-    mp_util.spawnv_passfds = spawnv_passfds
+        orig_init = popen_win32.Popen.__init__
+
+        def _patched_init(self, process_obj) -> None:
+            with lock:
+                try:
+                    _setup_child_env()
+                    orig_init(self, process_obj)
+                finally:
+                    __clear_env(apply_monkeypatching=False)
+
+        popen_win32.Popen.__init__ = _patched_init
+    else:
+        import multiprocessing.util as mp_util
+
+        std_spawn = mp_util.spawnv_passfds
+
+        # pyre-fixme[53]: Captured variable is not annotated.
+        # pyre-fixme[2]: Parameter must be annotated.
+        def spawnv_passfds(path, args, passfds) -> None | int:
+            with lock:
+                try:
+                    _setup_child_env()
+                    return std_spawn(path, args, passfds)
+                finally:
+                    __clear_env(apply_monkeypatching=False)
+
+        mp_util.spawnv_passfds = spawnv_passfds
 
 
 def _resolve_path_entries(path: list[str], dirs_only: bool = False) -> list[str]:
@@ -307,6 +326,24 @@ def __patch_resource_tracker_fork() -> None:
     os.register_at_fork(after_in_child=_reset_tracker_in_child)
 
 
+def __add_win_dll_directories() -> None:
+    """
+    Windows requires explicit os.add_dll_directory() calls for Python
+    extension modules to find their DLL dependencies.
+    """
+    if sys.platform != "win32":
+        return
+    dll_dirs = os.environ.get("FB_PAR_WIN_DLL_DIRS", "")
+    if not dll_dirs:
+        return
+    for d in dll_dirs.split(os.pathsep):
+        if d and os.path.isdir(d):
+            try:
+                os.add_dll_directory(d)
+            except OSError:
+                pass
+
+
 def __clear_env(
     apply_monkeypatching: bool = True,
 ) -> None:
@@ -355,6 +392,7 @@ def __clear_env(
             os.environ[var] = val
 
     if apply_monkeypatching:
+        __add_win_dll_directories()
         __patch_spawn(var_names, saved_env)
         __patch_spawn_preparation_data()
         __patch_ctypes(saved_env)

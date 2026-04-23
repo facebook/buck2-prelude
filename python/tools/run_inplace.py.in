@@ -125,13 +125,20 @@ def __run():
     # so that native libraries can be found by the dynamic linker or ctypes
     if sys.platform.startswith("win"):
         path = os.environ.get("PATH", "")
+        dll_dirs = []
         for native_libs_dir in {native_libs_dirs!r}:
             d = os.path.join({dirpath!r}, native_libs_dir)
             os.add_dll_directory(d)
+            dll_dirs.append(d)
             if path and not path.endswith(os.pathsep):
                 path += os.pathsep
             path += d
         setenv("PATH", path)
+        # Persist DLL directories for child processes. sitecustomize.py will
+        # read this and call os.add_dll_directory() in each child, since
+        # those calls are process-local and don't propagate across spawns.
+        if dll_dirs:
+            os.environ["FB_PAR_WIN_DLL_DIRS"] = os.pathsep.join(dll_dirs)
 
     from <MAIN_RUNNER_MODULE> import <MAIN_RUNNER_FUNCTION> as run_as_main
     run_as_main({main_module!r}, {main_function!r})
