@@ -399,7 +399,7 @@ def apple_bundle_impl(ctx: AnalysisContext) -> list[Provider]:
         sub_targets[DSYM_SUBTARGET] = [DefaultInfo(default_outputs = dsym_artifacts)]
 
     dsym_json_info = get_apple_dsym_info_json(binary_dsym_artifacts, dep_dsym_artifacts)
-    dsym_info = ctx.actions.write_json("dsym-info.json", dsym_json_info.json_object, pretty = True)
+    dsym_info = ctx.actions.write_json("dsym-info.json", dsym_json_info.json_object, pretty = True, has_content_based_path = False)
     sub_targets[DSYM_INFO_SUBTARGET] = [
         DefaultInfo(default_output = dsym_info, other_outputs = dsym_json_info.outputs),
     ]
@@ -419,7 +419,7 @@ def apple_bundle_impl(ctx: AnalysisContext) -> list[Provider]:
     all_selective_metadata = binary_selective_metadata + deps_selective_metadata
 
     extended_dsym_json_info = get_apple_dsym_info_json(binary_dsym_artifacts, dep_dsym_artifacts, all_selective_metadata)
-    extended_dsym_info = ctx.actions.write_json("extended-dsym-info.json", extended_dsym_json_info.json_object, pretty = True)
+    extended_dsym_info = ctx.actions.write_json("extended-dsym-info.json", extended_dsym_json_info.json_object, pretty = True, has_content_based_path = False)
     sub_targets[EXTENDED_DSYM_INFO_SUBTARGET] = [
         DefaultInfo(default_output = extended_dsym_info, other_outputs = extended_dsym_json_info.outputs),
     ]
@@ -449,7 +449,7 @@ def apple_bundle_impl(ctx: AnalysisContext) -> list[Provider]:
         "bundle": bundle,
         "dsym": dsym_json_info.json_object,
     }
-    bundle_and_dsym_info = ctx.actions.write_json("bundle-and-dsym-info.json", bundle_and_dsym_info_json)
+    bundle_and_dsym_info = ctx.actions.write_json("bundle-and-dsym-info.json", bundle_and_dsym_info_json, has_content_based_path = False)
     sub_targets["bundle-and-dsym-info"] = [
         DefaultInfo(
             default_output = bundle_and_dsym_info,

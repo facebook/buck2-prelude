@@ -194,7 +194,7 @@ def apple_test_impl(ctx: AnalysisContext) -> [list[Provider], Promise]:
             dep_dsym_artifacts.extend(debuggable_info.dsyms)
 
         dsym_json_info = get_apple_dsym_info_json([dsym_artifact], dep_dsym_artifacts)
-        dsym_info = ctx.actions.write_json("extended-dsym-info.json", dsym_json_info.json_object, pretty = True)
+        dsym_info = ctx.actions.write_json("extended-dsym-info.json", dsym_json_info.json_object, pretty = True, has_content_based_path = False)
         sub_targets[EXTENDED_DSYM_INFO_SUBTARGET] = [
             DefaultInfo(default_output = dsym_info, other_outputs = dsym_json_info.outputs),
         ]

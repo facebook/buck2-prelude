@@ -510,7 +510,7 @@ def merge_to_split_dex(
         for lib in pre_dexed_libs:
             if lib.dex:
                 lib_metadata[lib.identifier] = str(lib.dex.owner.raw_target())
-        lib_metadata_file = ctx.actions.write_json("pre_dexed_libs_metadata.json", lib_metadata)
+        lib_metadata_file = ctx.actions.write_json("pre_dexed_libs_metadata.json", lib_metadata, has_content_based_path = False)
 
         # Run the sort_pre_dexed_files tool to produce a dex plan.
         # This replaces _sort_pre_dexed_files() which previously ran inside the lambda,

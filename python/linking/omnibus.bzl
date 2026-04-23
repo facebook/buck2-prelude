@@ -110,16 +110,16 @@ def process_omnibus_linking(
             ),
         )
 
-        exclusion_roots = ctx.actions.write_json("omnibus/exclusion_roots.json", omnibus_libs.exclusion_roots)
+        exclusion_roots = ctx.actions.write_json("omnibus/exclusion_roots.json", omnibus_libs.exclusion_roots, has_content_based_path = False)
         extra["omnibus-exclusion-roots"] = [DefaultInfo(default_output = exclusion_roots)]
 
-        roots = ctx.actions.write_json("omnibus/roots.json", omnibus_libs.roots)
+        roots = ctx.actions.write_json("omnibus/roots.json", omnibus_libs.roots, has_content_based_path = False)
         extra["omnibus-roots"] = [DefaultInfo(default_output = roots)]
 
-        omnibus_excluded = ctx.actions.write_json("omnibus/excluded.json", omnibus_libs.excluded)
+        omnibus_excluded = ctx.actions.write_json("omnibus/excluded.json", omnibus_libs.excluded, has_content_based_path = False)
         extra["omnibus-excluded"] = [DefaultInfo(default_output = omnibus_excluded)]
 
-        omnibus_graph_json = ctx.actions.write_json("omnibus_graph.json", omnibus_graph)
+        omnibus_graph_json = ctx.actions.write_json("omnibus_graph.json", omnibus_graph, has_content_based_path = False)
         extra["linkable-graph"] = [DefaultInfo(default_output = omnibus_graph_json)]
 
     extra["omnibus"] = omnibus_providers

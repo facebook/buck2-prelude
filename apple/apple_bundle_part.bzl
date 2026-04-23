@@ -505,7 +505,7 @@ def _bundle_spec_json(ctx: AnalysisContext, parts: list[AppleBundlePart], codesi
                 part_spec["extra_codesign_paths"] = part.extra_codesign_paths
         specs.append(part_spec)
 
-    return ctx.actions.write_json("bundle_spec.json", specs, pretty = True)
+    return ctx.actions.write_json("bundle_spec.json", specs, pretty = True, has_content_based_path = False)
 
 def _get_codesign_type_from_attribs(ctx: AnalysisContext) -> [CodeSignType, None]:
     # Target-level attribute takes highest priority

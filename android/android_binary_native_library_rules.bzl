@@ -133,7 +133,7 @@ def get_android_binary_native_library_info(
         enhance_ctx.debug_output("linker_argsfiles", ctx.actions.symlinked_dir("linker_argsfiles", {}, has_content_based_path = False))
         enhance_ctx.debug_output("linker_commands", ctx.actions.write("linker_commands", []))
         enhance_ctx.debug_output("unstripped_native_libraries", ctx.actions.write("unstripped_native_libraries", []))
-        enhance_ctx.debug_output("unstripped_native_libraries_json", ctx.actions.write_json("unstripped_native_libraries_json", {}))
+        enhance_ctx.debug_output("unstripped_native_libraries_json", ctx.actions.write_json("unstripped_native_libraries_json", {}, has_content_based_path = False))
         enhance_ctx.debug_output("unstripped_native_libraries_files", ctx.actions.symlinked_dir("unstripped_native_libraries_files", {}, has_content_based_path = False))
         return AndroidBinaryNativeLibsInfo(
             prebuilt_native_library_dirs = [],
@@ -233,7 +233,7 @@ def get_android_binary_native_library_info(
             "linkable_graphs_by_platform": encode_linkable_graph_for_mergemap(linkable_nodes_by_platform),
             "native_library_merge_sequence": native_library_merge_sequence,
             "native_library_merge_sequence_blocklist": native_library_merge_sequence_blocklist or [],
-        })
+        }, has_content_based_path = False)
 
         if not "early" in getattr(ctx.attrs, "gatorade_phases", []):
             mergemap_cmd = cmd_args(ctx.attrs._android_toolchain[AndroidToolchainInfo].mergemap_tool)
@@ -321,7 +321,7 @@ def get_android_binary_native_library_info(
                                 break
                         if merge_result:
                             merge_map[str(target)] = merge_result
-                merge_map = ctx.actions.write_json("merge.map", merge_map_by_platform, pretty = True)
+                merge_map = ctx.actions.write_json("merge.map", merge_map_by_platform, pretty = True, has_content_based_path = False)
                 native_library_merge_debug_outputs["merge_map_output"] = merge_map
             else:
                 fail("unreachable")
@@ -352,7 +352,7 @@ def get_android_binary_native_library_info(
                         merged_shared_lib_targets[target] = soname
                 merged_shared_lib_targets_by_platform[platform] = merged_shared_lib_targets
 
-            debug_data_json = ctx.actions.write_json("native_merge_debug.json", debug_info_by_platform, pretty = True)
+            debug_data_json = ctx.actions.write_json("native_merge_debug.json", debug_info_by_platform, pretty = True, has_content_based_path = False)
             native_library_merge_debug_outputs["native_merge_debug.json"] = debug_data_json
 
             shared_object_targets_lines = ""
@@ -1723,6 +1723,7 @@ def _create_all_relinkable_links(
                     "{}/{}/link.graph".format(platform, soname),
                     link_graphs_by_platform[platform][lib.label],
                     pretty = True,
+                    has_content_based_path = False,
                 )
                 debug_outputs["{}/{}/link.graph".format(platform, soname)] = link_graph
 

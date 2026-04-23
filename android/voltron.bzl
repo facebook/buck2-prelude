@@ -164,13 +164,13 @@ def _get_base_cmd_and_output(
                 if deps_info.for_primary_apk:
                     primary_apk_deps.add(deps_info.name)
 
-    target_graph_file = actions.write_json("target_graph.json", deps_map)
+    target_graph_file = actions.write_json("target_graph.json", deps_map, has_content_based_path = False)
     application_module_configs_map = {
         module_name: [seed.get(AndroidPackageableInfo).target_label for seed in seeds if seed.get(AndroidPackageableInfo)]
         for module_name, seeds in application_module_configs.items()
     }
-    application_module_configs_file = actions.write_json("application_module_configs.json", application_module_configs_map)
-    application_module_dependencies_file = actions.write_json("application_module_dependencies.json", application_module_dependencies or {})
+    application_module_configs_file = actions.write_json("application_module_configs.json", application_module_configs_map, has_content_based_path = False)
+    application_module_dependencies_file = actions.write_json("application_module_dependencies.json", application_module_dependencies or {}, has_content_based_path = False)
     output = actions.declare_output("apk_module_metadata.txt", has_content_based_path = False)
 
     cmd = cmd_args([

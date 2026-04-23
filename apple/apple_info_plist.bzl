@@ -80,7 +80,7 @@ def _plist_substitutions_as_json_file(ctx: AnalysisContext) -> Artifact | None:
     if not info_plist_substitutions:
         return None
 
-    substitutions_json = ctx.actions.write_json("plist_substitutions.json", info_plist_substitutions)
+    substitutions_json = ctx.actions.write_json("plist_substitutions.json", info_plist_substitutions, has_content_based_path = False)
     return substitutions_json
 
 def process_plist(ctx: AnalysisContext, input: Artifact, output: OutputArtifact, override_input: Artifact | None = None, additional_keys: Artifact | None = None, override_keys: Artifact | None = None, action_id: [str, None] = None):
@@ -101,7 +101,7 @@ def process_plist(ctx: AnalysisContext, input: Artifact, output: OutputArtifact,
 
 def _additional_keys_as_json_file(ctx: AnalysisContext) -> Artifact:
     additional_keys = _info_plist_additional_keys(ctx)
-    return ctx.actions.write_json("plist_additional.json", additional_keys)
+    return ctx.actions.write_json("plist_additional.json", additional_keys, has_content_based_path = False)
 
 def _info_plist_additional_keys(ctx: AnalysisContext) -> dict[str, typing.Any]:
     sdk_name = get_apple_sdk_name(ctx)
@@ -153,7 +153,7 @@ def _extra_mac_info_plist_keys(sdk_metadata: AppleSdkMetadata, extension: str) -
 
 def _override_keys_as_json_file(ctx: AnalysisContext) -> Artifact:
     override_keys = _info_plist_override_keys(ctx)
-    return ctx.actions.write_json("plist_override.json", override_keys)
+    return ctx.actions.write_json("plist_override.json", override_keys, has_content_based_path = False)
 
 def _info_plist_override_keys(ctx: AnalysisContext) -> dict[str, typing.Any]:
     sdk_name = get_apple_sdk_name(ctx)
@@ -195,7 +195,7 @@ def apple_info_plist_impl(ctx: AnalysisContext) -> list[Provider]:
 
     # Add mutations if provided
     if ctx.attrs.mutations:
-        mutations_file = ctx.actions.write_json("mutations.json", ctx.attrs.mutations)
+        mutations_file = ctx.actions.write_json("mutations.json", ctx.attrs.mutations, has_content_based_path = False)
         command.add("--mutations")
         command.add(mutations_file)
         for mutation in ctx.attrs.mutations:

@@ -115,7 +115,7 @@ def apple_selective_debugging_impl(ctx: AnalysisContext) -> list[Provider]:
     targets_json_file = None
     cmd = cmd_args(scrubber)
     if json_type == _SelectiveDebuggingJsonType("targets"):
-        targets_json_file = ctx.attrs.targets_json_file or ctx.actions.write_json("targets.json", {"targets": []})
+        targets_json_file = ctx.attrs.targets_json_file or ctx.actions.write_json("targets.json", {"targets": []}, has_content_based_path = False)
 
         # If a targets json file is not provided, write an empty json file:
         cmd.add("--targets-file")
@@ -127,7 +127,7 @@ def apple_selective_debugging_impl(ctx: AnalysisContext) -> list[Provider]:
             "include_build_target_patterns": ctx.attrs.include_build_target_patterns,
             "include_regular_expressions": ctx.attrs.include_regular_expressions,
         }
-        spec_file = ctx.actions.write_json("selective_debugging_spec.json", json_data)
+        spec_file = ctx.actions.write_json("selective_debugging_spec.json", json_data, has_content_based_path = False)
         cmd.add("--spec-file")
         cmd.add(spec_file)
     else:
@@ -252,6 +252,7 @@ def apple_selective_debugging_impl(ctx: AnalysisContext) -> list[Provider]:
                 "selective_metadata_with_spec.json",
                 _generate_metadata_json_object(is_any_selected_target_linked),
                 pretty = True,
+                has_content_based_path = False,
             )
         elif json_type == _SelectiveDebuggingJsonType("targets"):
             def generate_metadata_output(dynamic_ctx: AnalysisContext, artifacts, outputs):

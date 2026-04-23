@@ -234,7 +234,7 @@ def _add_executable_subtargets(
     exe.sub_targets.update({
         "dbg-source-db": [dbg_source_db],
         "library-info": [library_info],
-        "main": [DefaultInfo(default_output = ctx.actions.write_json("main.json", main))],
+        "main": [DefaultInfo(default_output = ctx.actions.write_json("main.json", main, has_content_based_path = False))],
         "source-db-no-deps": [source_db_no_deps, create_python_source_db_info(library_info.manifests)],
     })
 

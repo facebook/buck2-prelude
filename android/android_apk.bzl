@@ -250,7 +250,7 @@ def get_install_info(
 
 def generate_install_config(ctx: AnalysisContext, apex_mode: bool) -> Artifact:
     data = get_install_config(apex_mode)
-    return ctx.actions.write_json("install_android_options.json", data)
+    return ctx.actions.write_json("install_android_options.json", data, has_content_based_path = False)
 
 def get_install_config(apex_mode: bool) -> dict[str, typing.Any]:
     # TODO: read from toolchains

@@ -64,7 +64,7 @@ def xplugins_get_debug_artifacts_subtargets(actions: AnalysisActions, info: XPlu
                 "path": filename,
             })
 
-    manifest_file = actions.write_json("manifest.json", manifest, pretty = True)
+    manifest_file = actions.write_json("manifest.json", manifest, pretty = True, has_content_based_path = False)
     dir_contents["MANIFEST.json"] = manifest_file
 
     directory = actions.copied_dir(

@@ -57,6 +57,7 @@ def _create_batched_type_check(
         "type_check_config{}.json".format(file_suffix),
         input_config,
         with_inputs = True,
+        has_content_based_path = False,
     )
     output_file = ctx.actions.declare_output("type_check_result{}.json".format(file_suffix), has_content_based_path = False)
     cmd = cmd_args(
@@ -172,10 +173,11 @@ def create_per_target_type_check(
         sharding_enabled: bool | None = None) -> DefaultInfo:
     if not typing_enabled:
         # Use empty dict to signal that no type checking was performed.
-        output_file = ctx.actions.write_json("type_check_result.json", {})
+        output_file = ctx.actions.write_json("type_check_result.json", {}, has_content_based_path = False)
         sharded_output_file = ctx.actions.write_json(
             "sharded_type_check_result.json",
             {},
+            has_content_based_path = False,
         )
         return DefaultInfo(
             default_output = output_file,

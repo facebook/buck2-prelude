@@ -259,14 +259,14 @@ def _maybe_filter_resources(
     ))
     filter_resources_cmd.add([
         "--in-res-dir-to-out-res-dir-map",
-        ctx.actions.write_json("in_res_dir_to_out_res_dir_map", {"res_dir_map": {res: out_res.as_output() for (res, out_res) in res_to_out_res_dir.items()}}),
+        ctx.actions.write_json("in_res_dir_to_out_res_dir_map", {"res_dir_map": {res: out_res.as_output() for (res, out_res) in res_to_out_res_dir.items()}}, has_content_based_path = False),
     ])
 
     if is_voltron_language_pack_enabled:
         filter_resources_cmd.add(cmd_args(hidden = [out_res.as_output() for out_res in voltron_res_to_out_res_dir.values()]))
         filter_resources_cmd.add([
             "--voltron-in-res-dir-to-out-res-dir-map",
-            ctx.actions.write_json("voltron_in_res_dir_to_out_res_dir_map", {"res_dir_map": {voltron_res: out_res.as_output() for (voltron_res, out_res) in voltron_res_to_out_res_dir.items()}}),
+            ctx.actions.write_json("voltron_in_res_dir_to_out_res_dir_map", {"res_dir_map": {voltron_res: out_res.as_output() for (voltron_res, out_res) in voltron_res_to_out_res_dir.items()}}, has_content_based_path = False),
         ])
 
     if resources_filter:
@@ -303,7 +303,7 @@ def _maybe_filter_resources(
         allowlisted_locales = {resource.res: resource.allowlisted_locales for resource in resources if resource.allowlisted_locales}
         filter_resources_cmd.add([
             "--allowlisted-locales",
-            ctx.actions.write_json("allowlisted_locales", allowlisted_locales),
+            ctx.actions.write_json("allowlisted_locales", allowlisted_locales, has_content_based_path = False),
         ])
 
     if needs_resource_filtering_for_locales:
@@ -634,7 +634,7 @@ def _merge_assets(
             if is_bundle_build:
                 merge_assets_cmd.add(["--module-assets-apks-dir", outputs[module_assets_apks_dir].as_output()])
 
-            assets_dirs_file = ctx.actions.write_json("assets_dirs.json", module_to_assets_dirs)
+            assets_dirs_file = ctx.actions.write_json("assets_dirs.json", module_to_assets_dirs, has_content_based_path = False)
             merge_assets_cmd.add(["--assets-dirs", assets_dirs_file])
             merge_assets_cmd.add(cmd_args(hidden = flatten(module_to_assets_dirs.values())))
 
@@ -655,7 +655,7 @@ def _merge_assets(
         assets_dirs = [resource_info.assets for resource_info in asset_resource_infos]
         if cxx_resources:
             assets_dirs.extend([cxx_resources])
-        assets_dirs_file = ctx.actions.write_json("assets_dirs.json", {ROOT_MODULE: assets_dirs})
+        assets_dirs_file = ctx.actions.write_json("assets_dirs.json", {ROOT_MODULE: assets_dirs}, has_content_based_path = False)
         merge_assets_cmd.add(["--assets-dirs", assets_dirs_file])
         merge_assets_cmd.add(cmd_args(hidden = assets_dirs))
 

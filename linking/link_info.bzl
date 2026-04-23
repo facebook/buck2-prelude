@@ -1085,6 +1085,6 @@ def make_link_command_debug_output_json_info(actions: AnalysisActions, debug_out
     # Explicitly drop all inputs by using `with_inputs = False`, we don't want
     # to materialize all inputs to the link actions (which includes all object files
     # and possibly other shared libraries).
-    json_output = actions.write_json("linker.command", json_info, with_inputs = False)
+    json_output = actions.write_json("linker.command", json_info, with_inputs = False, has_content_based_path = False)
     json_output_with_artifacts = json_output.with_associated_artifacts(associated_artifacts)
     return json_output_with_artifacts

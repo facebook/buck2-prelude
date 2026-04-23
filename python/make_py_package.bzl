@@ -302,6 +302,7 @@ def make_py_package(
             ["__par__/__startup_function_loader__.py", startup_functions_loader, "prelude//python:make_py_package.bzl"],
         ],
         with_inputs = True,
+        has_content_based_path = False,
     )
     generated_files.append((startup_functions_loader, "__par__/__startup_function_loader__.py"))
 
@@ -1319,7 +1320,7 @@ def _generate_manifest_module(
     if manifest_module_entries == None:
         return None
     module = ctx.actions.declare_output("manifest/__manifest__.py", has_content_based_path = False)
-    entries_json = ctx.actions.write_json("manifest/entries.json", manifest_module_entries)
+    entries_json = ctx.actions.write_json("manifest/entries.json", manifest_module_entries, has_content_based_path = False)
     src_manifests_path = ctx.actions.write(
         "__module_manifests.txt",
         src_manifests,
@@ -1343,6 +1344,7 @@ def _generate_manifest_module(
             ["__manifest__.json", json_entries_output, "prelude//python:make_py_package.bzl"],
         ],
         with_inputs = True,
+        has_content_based_path = False,
     )
 
     return ManifestModule(manifest = src_manifest, artifacts = [json_entries_output, module])
