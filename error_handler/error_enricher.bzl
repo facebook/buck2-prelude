@@ -42,8 +42,11 @@ def enrich_errors(
         category_prefix: str = "") -> list[ActionSubError]:
     for error in errors:
         message = error.message if error.message else ""
+        path = error.file if error.file else ""
 
         for enricher in enrichers:
+            if enricher.file_matcher and enricher.file_matcher not in path:
+                continue
             if not match_error(enricher.matcher, message):
                 continue
 
