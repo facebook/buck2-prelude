@@ -85,7 +85,10 @@ def _solution_for_file(ctx, file, project_universe):
     return result
 
 def _find_project_and_solve(ctx, target, project_universe = []):
-    prefix = target.label.package.split("/", 1)[0]
+    if target.label.package.startswith("users/"):
+        prefix = "/".join(target.label.package.split("/")[:3])
+    else:
+        prefix = target.label.package.split("/", 1)[0]
     local_universe = _find_project_universe(ctx, target.label.cell, prefix)
     if local_universe:
         project_universe.extend(local_universe)
