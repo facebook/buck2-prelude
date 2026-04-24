@@ -29,6 +29,9 @@ from apple.tools.code_signing.codesign_bundle import (
     SigningContextWithProfileSelection,
     write_empty_codesign_manifest,
 )
+from apple.tools.code_signing.provisioning_profile_metadata import (
+    ProvisioningProfileMetadata,
+)
 from apple.tools.re_compatibility_utils.writable import make_dir_recursively_writable
 
 from .action_metadata import action_metadata_if_present
@@ -487,21 +490,22 @@ def _build_signing_info_json(
 
     if selection_profile_context:
         selected_profile_info = selection_profile_context.selected_profile_info
-        profile_metadata = selected_profile_info.profile
+        profile_metadata: ProvisioningProfileMetadata = selected_profile_info.profile
+        if profile_metadata.provisioned_devices is not None:
+            provisioned_devices = "list"
+        elif profile_metadata.provisions_all_devices:
+            provisioned_devices = "all"
+        else:
+            provisioned_devices = "none"
         signing_info["provisioning_profile"] = {
             "uuid": profile_metadata.uuid,
             "file_name": profile_metadata.file_path.name,
+            "provisioned_devices": provisioned_devices,
         }
         signing_info["signing_certificate"] = {
             "fingerprint": selected_profile_info.identity.fingerprint,
             "subject_common_name": selected_profile_info.identity.subject_common_name,
         }
-        if profile_metadata.provisioned_devices is not None:
-            signing_info["provisioned_devices"] = "list"
-        elif profile_metadata.provisions_all_devices:
-            signing_info["provisioned_devices"] = "all"
-        else:
-            signing_info["provisioned_devices"] = "none"
 
     return signing_info
 
