@@ -7579,6 +7579,56 @@ public class StubJarTest {
   }
 
   @Test
+  public void kotlinExcludesFilePrivateClasses() throws IOException {
+    if (!isValidForKotlin()) {
+      return;
+    }
+
+    if (testingMode.equals(MODE_SOURCE_BASED)) {
+      // Source-only-abi already excludes file-private classes via its own mechanism.
+      return;
+    }
+
+    // A file-private class in Kotlin (declared with `private` at the file level) is compiled
+    // to package-private in bytecode. The class-abi filter should detect this via Kotlin metadata
+    // and exclude it, matching source-only-abi behavior.
+    tester = new Tester(Language.KOTLIN);
+    tester
+        .setSourceFile(
+            "A.kt",
+            "package com.example.buck",
+            "open class A {",
+            "  fun publicMethod(): String = \"hello\"",
+            "}",
+            "private class FilePrivateHelper {",
+            "  fun helperMethod(): Int = 42",
+            "}")
+        .addExpectedStub("com/example/buck/A")
+        .createAndCheckStubJar();
+  }
+
+  @Test
+  public void kotlinExcludesFilePrivateClassButKeepsPublicFromSameFile() throws IOException {
+    if (!isValidForKotlin()) {
+      return;
+    }
+
+    if (testingMode.equals(MODE_SOURCE_BASED)) {
+      return;
+    }
+
+    // Verify that when a file contains both public and private classes, only the public
+    // classes are included in the stub jar and the file-private classes are excluded.
+    tester = new Tester(Language.KOTLIN);
+    tester
+        .setSourceFile(
+            "A.kt", "package com.example.buck", "open class A", "open class B", "private class C")
+        .addExpectedStub("com/example/buck/A")
+        .addExpectedStub("com/example/buck/B")
+        .createAndCheckStubJar();
+  }
+
+  @Test
   public void doNotStripClassSuffixIfItDoesNotExist() {
     assertEquals("A.aut", StubJar.pathWithoutClassSuffix(Paths.get("A.aut")));
   }
