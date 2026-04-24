@@ -965,7 +965,12 @@ def _stub_library(
         ctx: AnalysisContext,
         name: str,
         extra_ldflags: list[typing.Any] = [],
-        anonymous: bool = False) -> LinkInfos:
+        anonymous: bool = False,
+        link_libraries_locally: bool = False) -> LinkInfos:
+    # When link_libraries_locally is active, explicitly request remote execution
+    # for stub libraries to avoid I/O contention from hundreds of trivial local
+    # links. Otherwise, use "any" to let Buck2 choose (default behavior).
+    stub_execution_preference = LinkExecutionPreference("remote") if link_libraries_locally else LinkExecutionPreference("any")
     link_result = cxx_link_shared_library(
         ctx = ctx,
         output = name + ".stub",
@@ -974,7 +979,7 @@ def _stub_library(
             links = [LinkArgs(flags = extra_ldflags)],
             identifier = name,
             category_suffix = "stub_library",
-            link_execution_preference = LinkExecutionPreference("any"),
+            link_execution_preference = stub_execution_preference,
         ),
         anonymous = anonymous,
     )
@@ -1092,6 +1097,7 @@ def create_link_groups(
     # Generate stubs first, so that subsequent links can link against them.
     link_group_shared_links = {}
     specs = []
+    linker_info = get_cxx_toolchain_info(ctx).linker_info
     for link_group_spec in link_group_specs:
         if should_discard_group(link_group_spec.group):
             # Don't create a link group for deps that we want to drop
@@ -1105,6 +1111,7 @@ def create_link_groups(
                 name = link_group_spec.name,
                 extra_ldflags = linker_flags,
                 anonymous = anonymous,
+                link_libraries_locally = linker_info.link_libraries_locally or False,
             )
 
     targets_consumed_by_link_groups = {}

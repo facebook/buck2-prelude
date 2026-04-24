@@ -658,7 +658,7 @@ def _build_cxx_link_shared_library_options(
         extra_args.extend(get_shared_library_name_linker_flags(linker_type, name, shared_library_flags))
 
     link_execution_preference = opts.link_execution_preference
-    if linker_info.link_libraries_locally:
+    if linker_info.link_libraries_locally and link_execution_preference == LinkExecutionPreference("any"):
         link_execution_preference = LinkExecutionPreference("local")
 
     (import_library, import_library_args) = get_import_library(
