@@ -473,7 +473,7 @@ def _main() -> None:
 def _build_signing_info_json(
     args: argparse.Namespace,
     selected_identity: Optional[str],
-    selection_profile_context: Optional[object],
+    selection_profile_context: Optional[SigningContextWithProfileSelection],
 ) -> dict:
     if not args.codesign:
         return {}
