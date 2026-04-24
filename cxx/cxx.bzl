@@ -1030,6 +1030,7 @@ def cxx_test_impl(ctx: AnalysisContext) -> list[Provider]:
             ),
             use_project_relative_paths = re_executor != None,
             network_access = getattr(ctx.attrs, "network_access", None),
+            supports_test_execution_caching = ctx.attrs.supports_test_execution_caching,
         ),
     ))
     if output.validation_specs:
