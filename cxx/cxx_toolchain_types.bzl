@@ -176,6 +176,7 @@ DistLtoToolsInfo = provider(fields = dict(
 
 CxxInternalTools = provider(fields = dict(
     check_nonempty_output = RunInfo,
+    clang_tidy_wrapper = RunInfo,
     concatenate_diagnostics = RunInfo,
     dep_file_processor = RunInfo,
     dist_lto = DistLtoToolsInfo,

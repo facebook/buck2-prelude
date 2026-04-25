@@ -355,13 +355,29 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
         for compile_cmd, out in zip(compile_cmd_output.src_compile_cmds, cxx_outs)
         if out.diagnostics != None
     }
+    clang_tidy_diagnostics = {
+        compile_cmd.src.short_path + ".clang-tidy": out.clang_tidy_diagnostics
+        for compile_cmd, out in zip(compile_cmd_output.src_compile_cmds, cxx_outs)
+        if out.clang_tidy_diagnostics != None
+    }
     all_diagnostics = None
     if len(diagnostics) > 0:
         sub_targets["check"], all_diagnostics = check_sub_target(
             ctx,
             diagnostics,
             error_handler = impl_params.error_handler,
+            extra_sub_targets = clang_tidy_diagnostics,
         )
+    if len(clang_tidy_diagnostics) > 0:
+        check_all_diagnostics = dict(diagnostics)
+        check_all_diagnostics.update(clang_tidy_diagnostics)
+        check_all_subtarget_result = check_sub_target(
+            ctx,
+            check_all_diagnostics,
+            error_handler = impl_params.error_handler,
+            output_name = "all_diagnostics.txt",
+        )
+        sub_targets["check-all"] = check_all_subtarget_result[0]
 
     # Compilation DB.
     comp_db = create_compilation_database(ctx, compile_cmd_output.src_compile_cmds, "compilation-database")

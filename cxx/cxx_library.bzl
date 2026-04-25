@@ -340,6 +340,8 @@ _CxxLibraryCompileOutput = record(
     index_stores = field(list[Artifact]),
     # diagnostics produced by a typecheck-only build (-fsyntax-only)
     diagnostics = field(dict[str, Artifact]),
+    # diagnostics produced by clang-tidy
+    clang_tidy_diagnostics = field(dict[str, Artifact]),
 )
 
 # The output of compiling all the source files in the library, containing
@@ -633,6 +635,7 @@ def cxx_library_parameterized(ctx: AnalysisContext, impl_params: CxxRuleConstruc
 
     # Collect source diagnostics; defer check_sub_target until after header-unit diagnostics
     input_diagnostics = {}
+    input_clang_tidy_diagnostics = {}
     if impl_params.generate_sub_targets.objects:
         objects_sub_targets = compiled_srcs.pic.objects_sub_targets
         if compiled_srcs.non_pic:
@@ -646,6 +649,7 @@ def cxx_library_parameterized(ctx: AnalysisContext, impl_params: CxxRuleConstruc
                 input_diagnostics = dict(input_diagnostics)
                 if contains_extra_diagnostics:
                     input_diagnostics.update(impl_params.extra_diagnostics)
+        input_clang_tidy_diagnostics = compiled_srcs.pic.clang_tidy_diagnostics
 
     # Compilation DB.
     if impl_params.generate_sub_targets.compilation_database:
@@ -948,8 +952,8 @@ def cxx_library_parameterized(ctx: AnalysisContext, impl_params: CxxRuleConstruc
                 ),
             ]
 
-    # Build top-level [check]: source diagnostics + header unit diagnostics
-    # only when export_header_unit is set (the header unit is active).
+    # Build [check]: syntax diagnostics + header unit diagnostics in default output.
+    # Clang-tidy diagnostics are accessible as per-file sub_targets only.
     if impl_params.export_header_unit:
         input_diagnostics.update(header_unit_diagnostics)
     if len(input_diagnostics) > 0:
@@ -957,19 +961,23 @@ def cxx_library_parameterized(ctx: AnalysisContext, impl_params: CxxRuleConstruc
             ctx,
             input_diagnostics,
             error_handler = impl_params.error_handler,
+            extra_sub_targets = input_clang_tidy_diagnostics,
         )
 
-    # Build [check-all]: always includes source + header unit diagnostics,
-    # regardless of export_header_unit.
+    # Build [check-all]: syntax + clang-tidy + header unit diagnostics
+    # (always includes header-unit diagnostics regardless of export_header_unit).
+    check_all_diagnostics = dict(input_diagnostics)
+    check_all_diagnostics.update(input_clang_tidy_diagnostics)
     if header_unit_diagnostics:
-        check_all_diagnostics = dict(input_diagnostics)
         check_all_diagnostics.update(header_unit_diagnostics)
-        sub_targets["check-all"], _ = check_sub_target(
+    if len(check_all_diagnostics) > len(input_diagnostics):
+        check_all_subtarget_result = check_sub_target(
             ctx,
             check_all_diagnostics,
             error_handler = impl_params.error_handler,
             output_name = "all_diagnostics.txt",
         )
+        sub_targets["check-all"] = check_all_subtarget_result[0]
 
     propagated_preprocessor = cxx_merge_cpreprocessors(
         ctx.actions,
@@ -1416,6 +1424,11 @@ def _get_library_compile_output(
         for compile_cmd, out in zip(src_compile_cmds, outs)
         if out.diagnostics != None
     }
+    clang_tidy_diagnostics = {
+        compile_cmd.src.short_path + ".clang-tidy": out.clang_tidy_diagnostics
+        for compile_cmd, out in zip(src_compile_cmds, outs)
+        if out.clang_tidy_diagnostics != None
+    }
 
     return _CxxLibraryCompileOutput(
         objects = objects,
@@ -1431,6 +1444,7 @@ def _get_library_compile_output(
         objects_sub_targets = objects_sub_targets,
         index_stores = index_stores,
         diagnostics = diagnostics,
+        clang_tidy_diagnostics = clang_tidy_diagnostics,
     )
 
 _CxxSharedLibraryResult = record(

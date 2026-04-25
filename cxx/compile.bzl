@@ -388,12 +388,19 @@ def _prepare_cxx_compilation(
 
     # Diagnostics
     diagnostics = None
+    clang_tidy_diagnostics = None
     if compiler_type == "clang" and provide_syntax_only:
         diagnostics = actions.declare_output(
             "__diagnostics__",
             "{}.diag.txt".format(short_path),
             has_content_based_path = False,
         )
+        if toolchain.binary_utilities_info.custom_tools.get("clang-tidy"):
+            clang_tidy_diagnostics = actions.declare_output(
+                "__diagnostics__",
+                "{}.clang-tidy.txt".format(short_path),
+                has_content_based_path = False,
+            )
 
     # Declare index store upfront using factory.declare() if available
     index_store = None
@@ -517,6 +524,7 @@ def _prepare_cxx_compilation(
         index_store = index_store,
         assembly = assembly,
         diagnostics = diagnostics,
+        clang_tidy_diagnostics = clang_tidy_diagnostics,
         preproc = preproc,
         dist_cuda = cuda_dist_output,
         pch_object = pch_object,
@@ -559,6 +567,7 @@ def _compile_single_cxx(
         gcno_file: OutputArtifact | None,
         assembly: OutputArtifact | None,
         diagnostics: OutputArtifact | None,
+        clang_tidy_diagnostics: OutputArtifact | None,
         preproc: OutputArtifact,
         index_store: OutputArtifact | None,
         dist_cuda: (OutputArtifact, OutputArtifact, OutputArtifact) | None,
@@ -797,6 +806,26 @@ def _compile_single_cxx(
             error_handler = src_compile_cmd.error_handler,
         )
 
+    if clang_tidy_diagnostics:
+        clang_tidy_tool = toolchain.binary_utilities_info.custom_tools["clang-tidy"]
+        actions.run(
+            [
+                toolchain.internal_tools.clang_tidy_wrapper,
+                cmd_args(clang_tidy_diagnostics, format = "--output={}"),
+                cmd_args(clang_tidy_tool, format = "--clang-tidy={}"),
+                cmd_args(src_compile_cmd.src, format = "--source={}"),
+                "--",
+                src_compile_cmd.cxx_compile_cmd.base_compile_cmd,
+                src_compile_cmd.cxx_compile_cmd.argsfile.cmd_form,
+                src_compile_cmd.args,
+            ],
+            category = "clang_tidy",
+            identifier = short_path,
+            allow_cache_upload = src_compile_cmd.cxx_compile_cmd.allow_cache_upload,
+            allow_dep_file_cache_upload = False,
+            error_handler = src_compile_cmd.error_handler,
+        )
+
     # Generate pre-processed sources
     preproc_cmd = _get_base_compile_cmd(
         bitcode_args = bitcode_args,
@@ -878,6 +907,7 @@ def _cxx_dynamic_compile(
         gcno_file: list[OutputArtifact | None],
         assembly: list[OutputArtifact | None],
         diagnostics: list[OutputArtifact | None],
+        clang_tidy_diagnostics: list[OutputArtifact | None],
         preproc: list[OutputArtifact],
         index_store: list[OutputArtifact | None],
         dist_cuda: list[None | (OutputArtifact, OutputArtifact, OutputArtifact)],
@@ -933,6 +963,7 @@ def _cxx_dynamic_compile(
             gcno_file = gcno_file[i],
             assembly = assembly[i],
             diagnostics = diagnostics[i],
+            clang_tidy_diagnostics = clang_tidy_diagnostics[i],
             preproc = preproc[i],
             index_store = index_store[i],
             dist_cuda = dist_cuda[i],
@@ -951,6 +982,7 @@ _dynamic_compile_rule = dynamic_actions(
         "bitcode_args": dynattrs.list(dynattrs.value(str)),
         "clang_llvm_statistics": dynattrs.list(dynattrs.option(dynattrs.output())),
         "clang_remarks": dynattrs.list(dynattrs.option(dynattrs.output())),
+        "clang_tidy_diagnostics": dynattrs.list(dynattrs.option(dynattrs.output())),
         "clang_trace": dynattrs.list(dynattrs.option(dynattrs.output())),
         "compile_pch": dynattrs.option(dynattrs.value(CxxPrecompiledHeader)),
         "cuda_compile_style": dynattrs.option(dynattrs.value(CudaCompileStyle)),
@@ -1021,6 +1053,7 @@ def compile_cxx(
     gcno_file_outputs = []
     assembly_outputs = []
     diagnostics_outputs = []
+    clang_tidy_diagnostics_outputs = []
     preproc_outputs = []
     index_store_outputs = []
     dist_cuda_outputs = []
@@ -1054,6 +1087,7 @@ def compile_cxx(
         gcno_file_outputs.append(map_val(as_output, declared.gcno_file))
         assembly_outputs.append(map_val(as_output, declared.assembly))
         diagnostics_outputs.append(map_val(as_output, declared.diagnostics))
+        clang_tidy_diagnostics_outputs.append(map_val(as_output, declared.clang_tidy_diagnostics))
         preproc_outputs.append(declared.preproc.as_output())
         index_store_outputs.append(map_val(as_output, declared.index_store))
         dist_cuda_outputs.append(map_val(lambda d: (d.nvcc_dag.as_output(), d.nvcc_env.as_output(), d.hostcc_argsfile.as_output()), declared.dist_cuda))
@@ -1067,6 +1101,7 @@ def compile_cxx(
         bitcode_args = bitcode_args,
         clang_llvm_statistics = clang_llvm_statistics_outputs,
         clang_remarks = clang_remarks_outputs,
+        clang_tidy_diagnostics = clang_tidy_diagnostics_outputs,
         clang_trace = clang_trace_outputs,
         compile_pch = compile_pch,
         cuda_compile_style = cuda_compile_style,

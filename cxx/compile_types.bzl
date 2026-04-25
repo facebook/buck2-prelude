@@ -197,6 +197,7 @@ CxxCompileOutput = record(
     index_store = field(Artifact | None, None),
     assembly = field(Artifact | None, None),
     diagnostics = field(Artifact | None, None),
+    clang_tidy_diagnostics = field(Artifact | None, None),
     preproc = field(Artifact | None, None),
     dist_cuda = field(CudaDistributedCompileOutput | None, None),
     pch_object = field(Artifact | None, None),
