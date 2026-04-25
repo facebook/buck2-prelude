@@ -148,6 +148,11 @@ rust_toolchain_attrs = {
     "rust_error_handler": provider_field(typing.Any, default = None),
     # LLVM remarks filter (e.g., "all", "inline") - used with -Cremark flag
     "remarks": provider_field(str | None, default = None),
+    # PGO instrumentation: directory for -Cprofile-generate=<dir>.
+    # Skipped for profiler_builtins to avoid circular dependency.
+    "pgo_generate_dir": provider_field(str | None, default = None),
+    # PGO optimization: profile for -Cprofile-use=<path>.
+    "pgo_profile": provider_field(Artifact | None, default = None),
     # Sanitizer to enable via -Zsanitizer=<value> (e.g., "address", "thread", "memory", "leak", "cfi", "hwaddress")
     # See https://doc.rust-lang.org/beta/unstable-book/compiler-flags/sanitizer.html
     "sanitizer": provider_field(RustSanitizer | None, default = None),

@@ -1223,6 +1223,8 @@ def _compute_common_args(
         compile_ctx.sysroot_args,
         ["-Cpanic=abort", "-Zpanic-abort-tests=yes"] if toolchain_info.panic_runtime == PanicRuntime("abort") else [],
         ["-Zsanitizer={}".format(toolchain_info.sanitizer.value)] if toolchain_info.sanitizer else [],
+        ["-Cprofile-generate={}".format(toolchain_info.pgo_generate_dir), "-Zno-profiler-runtime"] if toolchain_info.pgo_generate_dir and toolchain_info.explicit_sysroot_deps and toolchain_info.explicit_sysroot_deps.core else [],
+        [cmd_args(toolchain_info.pgo_profile, format = "-Cprofile-use={}")] if toolchain_info.pgo_profile and toolchain_info.explicit_sysroot_deps and toolchain_info.explicit_sysroot_deps.core else [],
         _rustc_flags(toolchain_info.rustc_flags, toolchain_info),
         # `rustc_check_flags` is specifically interpreted as flags that are used
         # only on the metadata-fast graph.
