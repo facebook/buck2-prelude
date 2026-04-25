@@ -79,6 +79,21 @@ def _build_js_files(
         if ctx.attrs.extra_json:
             job_args["extraData"] = cmd_args(ctx.attrs.extra_json, delimiter = "")
 
+        if ctx.attrs.extra_babel_plugins:
+            babel_plugin_configs = []
+            for plugin_value in ctx.attrs.extra_babel_plugins:
+                if type(plugin_value) == "tuple":
+                    plugin_dep, plugin_args_json = plugin_value
+                else:
+                    plugin_dep = plugin_value
+                    plugin_args_json = None
+                plugin_artifact = plugin_dep[DefaultInfo].default_outputs[0]
+                config = {"modulePath": plugin_artifact}
+                if plugin_args_json != None:
+                    config["pluginArgs"] = cmd_args(plugin_args_json, delimiter = "")
+                babel_plugin_configs.append(config)
+            job_args["extraBabelPlugins"] = babel_plugin_configs
+
         command_args_file = ctx.actions.write_json(
             "{}_command_args".format(identifier),
             job_args,
