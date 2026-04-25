@@ -86,6 +86,10 @@ extra_attributes = {
         ),
     },
     "js_library": {
+        "extra_babel_plugins": attrs.list(
+            attrs.one_of(attrs.dep(), attrs.tuple(attrs.dep(), attrs.arg(default = "{}"))),
+            default = [],
+        ),
         "worker": attrs.exec_dep(),
         "_asset_dest_path_resolver": attrs.option(
             attrs.string(),
