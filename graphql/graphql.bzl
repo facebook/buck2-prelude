@@ -60,7 +60,8 @@ def graphql_providers(ctx: AnalysisContext) -> list[Provider]:
     if len(providers) > 1:
         fail("Multiple GraphQLInfo providers found in deps of {}".format(ctx.label.raw_target()))
 
-    output_sets = graphql_codegen_sets(deps) + graphql_codegen_sets(cxx_attr_exported_deps(ctx))
+    all_deps = deps + cxx_attr_exported_deps(ctx) + getattr(ctx.attrs, "runtime_deps", [])
+    output_sets = graphql_codegen_sets(all_deps)
     if output_sets:
         providers.append(
             GraphQLCodegenInput(

@@ -10,6 +10,7 @@ load("@prelude//:attrs_validators.bzl", "get_attrs_validation_specs")
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//:validation_deps.bzl", "get_validation_deps_outputs")
 load("@prelude//android:android_providers.bzl", "merge_android_packageable_info")
+load("@prelude//graphql:graphql.bzl", "graphql_providers")
 load(
     "@prelude//java:java_providers.bzl",
     "ClasspathSnapshotGranularity",
@@ -597,7 +598,7 @@ def java_library_impl(ctx: AnalysisContext) -> list[Provider]:
         validation_deps_outputs = get_validation_deps_outputs(ctx),
     )
 
-    return to_list(java_providers) + [android_packageable_info] + [LabelInfo(labels = ctx.attrs.labels)]
+    return to_list(java_providers) + [android_packageable_info] + [LabelInfo(labels = ctx.attrs.labels)] + graphql_providers(ctx)
 
 def build_java_library(
         ctx: AnalysisContext,
