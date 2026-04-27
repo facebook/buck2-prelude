@@ -404,6 +404,7 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
     # Type check
     type_checker = python_toolchain.type_checker
+    pyre_validation_spec = None
     if type_checker != None:
         type_check_info = create_per_target_type_check(
             ctx,
@@ -420,9 +421,7 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
         # Build-time type check validation (separate action for sole-output constraint)
         if ctx.attrs.typing and ctx.attrs.typing_validation:
             validation_output = create_type_check_validation(ctx, type_checker, type_check_info.default_outputs[0])
-            validation_specs = get_attrs_validation_specs(ctx)
-            validation_specs.append(ValidationSpec(name = "pyre", validation_result = validation_output))
-            providers.append(ValidationInfo(validations = validation_specs))
+            pyre_validation_spec = ValidationSpec(name = "pyre", validation_result = validation_output)
 
     providers.append(DefaultInfo(sub_targets = sub_targets))
 
@@ -462,5 +461,12 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
         label = ctx.label,
         deps = raw_deps,
     )))
+
+    # Attrs validators (combined with optional pyre type-check validation spec).
+    attr_validation_specs = get_attrs_validation_specs(ctx)
+    if pyre_validation_spec != None:
+        attr_validation_specs.append(pyre_validation_spec)
+    if attr_validation_specs:
+        providers.append(ValidationInfo(validations = attr_validation_specs))
 
     return providers

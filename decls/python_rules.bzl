@@ -6,6 +6,7 @@
 # of this source tree. You may select, at your option, one of the
 # above-listed licenses.
 
+load("@prelude//:attrs_validators.bzl", "validation_common")
 load("@prelude//cxx:cuda.bzl", "CudaCompileStyle")
 load("@prelude//cxx:headers.bzl", "CPrecompiledHeaderInfo")
 load("@prelude//cxx:link_groups_types.bzl", "LINK_GROUP_MAP_ATTR")
@@ -453,7 +454,8 @@ python_binary = prelude_rule(
         buck.contacts_arg() |
         buck.allow_cache_upload_arg() |
         _typing_arg() |
-        _python_binary_attrs()
+        _python_binary_attrs() |
+        validation_common.attrs_validators_arg()
     ),
     cfg = constraint_overrides.python_transition,
 )
@@ -517,7 +519,8 @@ python_library = prelude_rule(
         } |
         buck.licenses_arg() |
         buck.contacts_arg() |
-        _typing_arg()
+        _typing_arg() |
+        validation_common.attrs_validators_arg()
     ),
 )
 
@@ -623,7 +626,8 @@ python_test = prelude_rule(
         buck.contacts_arg() |
         _typing_arg() |
         test_common.attributes() |
-        _python_test_attrs()
+        _python_test_attrs() |
+        validation_common.attrs_validators_arg()
     ),
     cfg = constraint_overrides.python_transition,
 )
