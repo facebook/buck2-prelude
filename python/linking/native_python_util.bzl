@@ -376,7 +376,7 @@ def suffix_symbols(
     for obj in objects:
         base, name = paths.split_extension(obj.short_path)
         updated_name = "_".join([base, suffix, name])
-        artifact = ctx.actions.declare_output(updated_name, has_content_based_path = False)
+        artifact = ctx.actions.declare_output(updated_name, has_content_based_path = True)
 
         script_env = {
             "OBJCOPY": objcopy,
