@@ -249,44 +249,6 @@ public class DaemonKotlincToJarStepFactory extends BaseCompileToJarStepFactory<K
               moduleName,
               kotlinCDAnalytics);
 
-      // Avoid running Kotlin source-only builds twice when KSP split invocation happens.
-      // If KSP1 processors has invoked previously, we should have sufficient source-only ABI
-      // generated. Source-only frameworks reads KSP generated sources during compiler analysis
-      // stage and generates ABI output.
-      // If standalone KSP2 processors has invoked previously, we should still run the main K1
-      // KotlinC step for generating the abi
-      if (invokingRule.isSourceOnlyAbi()
-          && kspInvocationStatus == KspStepsBuilder.KSPInvocationStatus.KSP1_INVOKED) {
-        steps.addAll(postKotlinCompilationSteps.build());
-
-        ResolvedJavacOptions resolvedJavacOptions = extraParams.getResolvedJavacOptions();
-        if (isKaptSupportedForCurrentKotlinLanguageVersion(extraParams.getLanguageVersion())
-            && extraParams.getAnnotationProcessingTool() == AnnotationProcessingTool.KAPT) {
-          // Most of the time, KotlinC have ran annotation processing,
-          // so only run "java on mix" processors (very uncommon) on Javac
-          resolvedJavacOptions =
-              resolvedJavacOptions.withJavaAnnotationProcessorParams(
-                  getRunsOnJavaOnlyProcessors(resolvedJavacOptions));
-        }
-
-        JavacStepsBuilder.prepareJavaCompilationIfNeeded(
-            invokingRule,
-            buildCellRootPath,
-            steps,
-            buckOut,
-            compilerOutputPathsValue,
-            parameters,
-            resolvedJavac,
-            resolvedJavacOptions,
-            parameters.getClasspathEntries(),
-            extraParams.getExtraClassPaths(),
-            ImmutableList.of(kotlinOutputDirectory, outputDirectory),
-            javacSourceBuilder,
-            abiJarParameters);
-
-        return;
-      }
-
       KotlinCStepsBuilder.prepareKotlinCompilation(
           buckOut,
           buildCellRootPath,

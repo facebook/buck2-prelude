@@ -345,31 +345,6 @@ public class KotlincStep implements IsolatedStep {
       builder.add(
           "plugin:com.facebook.k2.jvm.abi.gen:outputDir="
               + ruleCellRoot.resolve(outputDirectory).toString());
-    } else {
-      if (resolvedKosabiPluginOptionPath.containsKey(
-          KosabiConfig.PROPERTY_KOSABI_JVM_ABI_GEN_PLUGIN)) {
-        AbsPath jvmAbiPlugin =
-            resolvedKosabiPluginOptionPath.get(KosabiConfig.PROPERTY_KOSABI_JVM_ABI_GEN_PLUGIN);
-        builder.add(X_PLUGIN_ARG + jvmAbiPlugin);
-        builder.add(PLUGIN);
-        builder.add("plugin:com.facebook.jvm.abi.gen:outputDir=" + outputPaths.getClassesDir());
-        builder.add(PLUGIN);
-        builder.add("plugin:com.facebook.jvm.abi.gen:earlyTermination=true");
-        // Kosabi can only works with legacy jvm abi gen which use AnalysisHandlerExtension
-        builder.add(PLUGIN);
-        builder.add("plugin:com.facebook.jvm.abi.gen:useLegacyAbiGen=true");
-        // Enable Mixed compilation if KspAnnotationProcessors are supported
-        if (kosabiShouldEnableMixedCompilation) {
-          builder.add(PLUGIN);
-          builder.add("plugin:com.facebook.jvm.abi.gen:enableMixedCompilation=true");
-        }
-      }
-      if (resolvedKosabiPluginOptionPath.containsKey(
-          KosabiConfig.PROPERTY_KOSABI_SOURCE_MODIFIER_PLUGIN)) {
-        AbsPath sourceModifierPlugin =
-            resolvedKosabiPluginOptionPath.get(KosabiConfig.PROPERTY_KOSABI_SOURCE_MODIFIER_PLUGIN);
-        builder.add(X_PLUGIN_ARG + sourceModifierPlugin);
-      }
     }
 
     addClasspath(builder, this.sourceOnlyAbiClasspath);
