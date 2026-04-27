@@ -28,7 +28,7 @@ def _shared_library_interface(
         )
     args = cmd_args(linker_info.mk_shlib_intf[RunInfo])
     args.add(shared_lib)
-    output = ctx.actions.declare_output(output, has_content_based_path = True)
+    output = ctx.actions.declare_output(output, has_content_based_path = False)
     args.add(output.as_output())
     ctx.actions.run(
         args,
@@ -80,7 +80,6 @@ def shared_library_interface(
                 identifier = shared_lib.short_path,
             ),
         ).artifact("shared_library_interface")
-        shared_lib_interface_artifact = ctx.actions.assert_has_content_based_path(shared_lib_interface_artifact)
         return ctx.actions.assert_short_path(shared_lib_interface_artifact, short_path = output)
     else:
         return _shared_library_interface(
