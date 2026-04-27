@@ -412,6 +412,7 @@ def cxx_link_into(
         force_full_hybrid_if_capable = action_execution_properties.full_hybrid,
         allow_cache_upload = opts.allow_cache_upload or enable_late_build_info_stamping,
         error_handler = opts.error_handler,
+        eager_materialization_enabled = True,
     )
 
     external_debug_info = link_external_debug_info(
