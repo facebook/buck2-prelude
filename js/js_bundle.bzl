@@ -39,6 +39,7 @@ def _build_dependencies_file(
         "{}_dep_command_args".format(transform_profile),
         job_args,
         with_inputs = True,
+        has_content_based_path = False,
     )
 
     run_worker_commands(
@@ -88,6 +89,7 @@ def _build_js_bundle(
         "{}_bundle_command_args".format(base_dir),
         job_args,
         with_inputs = True,
+        has_content_based_path = False,
     )
 
     run_worker_commands(

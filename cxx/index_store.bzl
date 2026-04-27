@@ -64,7 +64,7 @@ def merge_index_store(
         txt_args.add(index_stores.project_as_args("args"))
 
     argsfile_path = merge_output_dir_name + ".files.txt"
-    argsfile = actions.write(argsfile_path, txt_args)
+    argsfile = actions.write(argsfile_path, txt_args, has_content_based_path = False)
     argsfile = cmd_args(argsfile, format = "@{}", hidden = txt_args)
 
     cmd.add(["--sources"])

@@ -469,7 +469,7 @@ def prepare_final_jar(
     if not merged_jar:
         merged_jar = declare_prefixed_output(actions, actions_identifier, "merged.jar", uses_content_based_paths)
     files_to_merge = [output_paths.jar, additional_compiled_srcs]
-    files_to_merge_file = actions.write(declare_prefixed_name("files_to_merge.txt", actions_identifier), files_to_merge)
+    files_to_merge_file = actions.write(declare_prefixed_name("files_to_merge.txt", actions_identifier), files_to_merge, has_content_based_path = False)
     actions.run(
         cmd_args([
             jar_builder,

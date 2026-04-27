@@ -748,7 +748,7 @@ def get_filtered_targets(labels_to_links_map: dict[Label, LinkGroupLinkInfo]):
     return statically_linked_targets
 
 def get_link_group_map_json(ctx: AnalysisContext, targets: list[TargetLabel]) -> DefaultInfo:
-    json_map = ctx.actions.write_json(LINK_GROUP_MAP_DATABASE_FILENAME, sorted(targets), pretty = True)
+    json_map = ctx.actions.write_json(LINK_GROUP_MAP_DATABASE_FILENAME, sorted(targets), pretty = True, has_content_based_path = False)
     return DefaultInfo(default_output = json_map)
 
 def _find_all_relevant_roots(

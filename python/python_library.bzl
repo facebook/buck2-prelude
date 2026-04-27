@@ -382,6 +382,7 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
                     runtime_lib_paths = [],
                     libs = [],
                 ),
+                has_content_based_path = False,
             ),
         ),
         deps = raw_deps,

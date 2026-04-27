@@ -68,6 +68,7 @@ def _do_build_run_info(
         is_executable = True,
         with_inputs = True,
         allow_args = True,
+        has_content_based_path = False,
     )
 
     return RunInfo(shell_script)

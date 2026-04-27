@@ -146,6 +146,7 @@ def prebuilt_python_library_impl(ctx: AnalysisContext) -> list[Provider]:
                         py_lib_paths = ["lib/python"],
                         runtime_lib_paths = [],
                     ),
+                    has_content_based_path = False,
                 ),
             ),
             deps = ctx.attrs.deps,

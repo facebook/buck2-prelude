@@ -82,6 +82,7 @@ def _reduce_analysis_artifacts(
         "{}_reducer_args.json".format(key),
         label_to_artifacts,
         with_inputs = True,
+        has_content_based_path = False,
     )
 
     output = ctx.actions.declare_output("{}.json".format(key), has_content_based_path = False)

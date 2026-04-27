@@ -160,7 +160,7 @@ def _merged_deps_file(
     name = "{}-private".format(name) if is_private else name
 
     merged_file = ctx.actions.declare_output(_DEP_FILES_DIR, "{}.merged.dep".format(name), has_content_based_path = False)
-    deps_files_json = ctx.actions.write_json(merged_file.short_path + ".json", deps_files, with_inputs = True)
+    deps_files_json = ctx.actions.write_json(merged_file.short_path + ".json", deps_files, with_inputs = True, has_content_based_path = False)
 
     cmd = cmd_args(toolchain.dependency_merger, merged_file.as_output(), deps_files_json)
     if previous_merged_file:
@@ -204,7 +204,7 @@ def _generate_beam_artifacts(
 
     # dep files
     deps_files = _get_deps_files(ctx, toolchain, src_artifacts)
-    dep_info_file = ctx.actions.write_json(_DEP_INFO_FILE, build_environment.header_deps_files, with_inputs = True)
+    dep_info_file = ctx.actions.write_json(_DEP_INFO_FILE, build_environment.header_deps_files, with_inputs = True, has_content_based_path = False)
 
     small_build_environment = SmallBuildEnvironment(
         includes = build_environment.includes,
@@ -297,7 +297,7 @@ def _build_erl(
             cmd_args(outputs[output].as_output(), parent = 1, format = "-o{}"),
             hermetic_src,
         )
-        mapping_file = ctx.actions.write_json(_dep_mapping_name(src), mapping)
+        mapping_file = ctx.actions.write_json(_dep_mapping_name(src), mapping, has_content_based_path = False)
         _run_with_env(
             ctx,
             toolchain,

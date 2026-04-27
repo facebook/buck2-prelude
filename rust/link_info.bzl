@@ -743,6 +743,7 @@ def run_action_shlib_symlink_tree(
         "shared_library_info.json",
         shared_library_info.set.project_as_json("symlink_tree"),
         with_inputs = True,
+        has_content_based_path = False,
     )
 
     actions.run(

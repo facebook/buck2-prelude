@@ -33,7 +33,7 @@ def _write_manifest(
     """
     Serialize the given source manifest entries to a JSON file.
     """
-    return ctx.actions.write_json(name + ".manifest", entries)
+    return ctx.actions.write_json(name + ".manifest", entries, has_content_based_path = False)
 
 def create_manifest_for_entries(
         ctx: AnalysisContext,

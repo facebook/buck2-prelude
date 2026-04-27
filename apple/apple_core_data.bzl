@@ -68,6 +68,7 @@ def compile_apple_core_data(ctx: AnalysisContext, specs: list[AppleCoreDataSpec]
             cmd_args(output, format = 'mkdir -p {} && cp -r "$TMPDIR"/ {}'),
         ],
         allow_args = True,
+        has_content_based_path = False,
     )
     combined_command = cmd_args(["/bin/sh", wrapper_script], hidden = tool_commands + [output.as_output()])
     processing_options = get_bundle_resource_processing_options(ctx)

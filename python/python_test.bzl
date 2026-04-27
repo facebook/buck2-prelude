@@ -33,7 +33,7 @@ def _write_test_modules_list(
         module = root.replace("/", ".")
         contents += "    \"{}\",\n".format(module)
     contents += "]\n"
-    return name, ctx.actions.write(name, contents)
+    return name, ctx.actions.write(name, contents, has_content_based_path = False)
 
 def python_test_executable(ctx: AnalysisContext) -> list[Provider] | Promise:
     main_module = value_or(ctx.attrs.main_module, "__test_main__")

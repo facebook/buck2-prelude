@@ -146,7 +146,7 @@ def apple_selective_debugging_impl(ctx: AnalysisContext) -> list[Provider]:
         #
         # See `_maybe_scrub_binary()` in apple_bundle.bzl
         if json_type != _SelectiveDebuggingJsonType("targets"):
-            return inner_ctx.actions.write(output_name, sorted(set(package_names)))
+            return inner_ctx.actions.write(output_name, sorted(set(package_names)), has_content_based_path = False)
 
         def scrub_selected_debug_paths_action(dynamic_ctx: AnalysisContext, artifacts, outputs):
             packages = [
@@ -192,6 +192,7 @@ def apple_selective_debugging_impl(ctx: AnalysisContext) -> list[Provider]:
             additional_labels_json = inner_ctx.actions.write_json(
                 inner_ctx.attrs.name + ".additional_labels.json",
                 {"targets": [label.raw_target() for label in focused_targets_labels]},
+                has_content_based_path = False,
             )
             inner_cmd.add(["--persisted-targets-file", additional_labels_json])
         inner_ctx.actions.run(

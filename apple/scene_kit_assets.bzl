@@ -63,6 +63,7 @@ def compile_scene_kit_assets(ctx: AnalysisContext, specs: list[SceneKitAssetsSpe
             cmd_args(output, format = 'mkdir -p {} && cp -r "$TMPDIR"/ {}'),
         ],
         allow_args = True,
+        has_content_based_path = False,
     )
     combined_command = cmd_args(["/bin/sh", wrapper_script], hidden = copy_scene_kit_assets_cmds + [output.as_output()])
     processing_options = get_bundle_resource_processing_options(ctx)

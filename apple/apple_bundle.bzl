@@ -630,4 +630,4 @@ def generate_install_data(
     if populate_rule_specific_attributes_func:
         data.update(populate_rule_specific_attributes_func(ctx, **kwargs))
 
-    return ctx.actions.write_json(_INSTALL_DATA_FILE_NAME, data)
+    return ctx.actions.write_json(_INSTALL_DATA_FILE_NAME, data, has_content_based_path = False)

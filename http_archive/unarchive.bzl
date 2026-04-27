@@ -159,6 +159,7 @@ def unarchive(
             )],
             is_executable = True,
             allow_args = True,
+            has_content_based_path = False,
         )
         ctx.actions.run(
             cmd_args(interpreter + [tar_script, contents.as_output()], hidden = [archive]),
@@ -200,6 +201,7 @@ def unarchive(
         ],
         is_executable = True,
         allow_args = True,
+        has_content_based_path = False,
     )
 
     ctx.actions.run(

@@ -312,7 +312,7 @@ def _create_symbols_file_from_script(
     link args.
     """
 
-    all_symbol_files = actions.write(name + ".symbols", symbol_files)
+    all_symbol_files = actions.write(name + ".symbols", symbol_files, has_content_based_path = False)
     all_symbol_files = cmd_args(all_symbol_files, hidden = symbol_files)
     output = actions.declare_output(name, has_content_based_path = True)
     cmd = [

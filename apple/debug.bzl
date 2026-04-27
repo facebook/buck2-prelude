@@ -98,7 +98,7 @@ def get_aggregated_debug_info(ctx: AnalysisContext, debug_infos: list[AppleDebug
 
     sub_targets[DEBUGINFO_DB_SUBTARGET] = [
         DefaultInfo(
-            default_output = ctx.actions.write_json(DEBUGINFO_DB_SUBTARGET, debug_info_map),
+            default_output = ctx.actions.write_json(DEBUGINFO_DB_SUBTARGET, debug_info_map, has_content_based_path = False),
         ),
     ]
     return AggregatedAppleDebugInfo(

@@ -96,6 +96,7 @@ def _process_manifest(ctx, kind, info_tset, link_group_info):
         unfiltered_argsfile = ctx.actions.write(
             "unfiltered_{}_usage_info.argsfile".format(kind),
             manifests,
+            has_content_based_path = False,
         )
     else:
         unfiltered_argsfile = argsfile

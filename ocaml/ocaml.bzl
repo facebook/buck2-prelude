@@ -163,6 +163,7 @@ def _mk_script(ctx: AnalysisContext, file: str, args: list[typing.Any], env: dic
         lines,
         is_executable = True,
         allow_args = True,
+        has_content_based_path = False,
     )
     return cmd_args(script, hidden = args + env.values())
 
@@ -207,7 +208,7 @@ def _mk_ld(ctx: AnalysisContext, link_args: list[typing.Any], ld_sh_filename: ty
     argsfile_name = ld_sh_filename.removesuffix(".sh") + "_args.txt"
     all_link_args = cmd_args(linker_flags)
     all_link_args.add(link_args)
-    argsfile, _ = ctx.actions.write(argsfile_name, all_link_args, allow_args = True, with_inputs = True)
+    argsfile, _ = ctx.actions.write(argsfile_name, all_link_args, allow_args = True, with_inputs = True, has_content_based_path = False)
 
     argsfile_ref = cmd_args(argsfile, format = "@{}", hidden = all_link_args)
     return _mk_script(ctx, ld_sh_filename, [linker, argsfile_ref], {})
@@ -323,7 +324,7 @@ def _preprocess(ctx: AnalysisContext, srcs: list[Artifact], build_mode: BuildMod
 
             # We don't actually need the file `prefix`. It's a device
             # we use to get the `-b` flag argument.
-            prefix = ctx.actions.write(name, "")
+            prefix = ctx.actions.write(name, "", has_content_based_path = False)
             parser = ctx.actions.declare_output(name + ".ml", has_content_based_path = False)
             parser_sig = ctx.actions.declare_output(name + ".mli", has_content_based_path = False)
             result.extend((parser_sig, parser))
@@ -370,6 +371,7 @@ def _depends(ctx: AnalysisContext, srcs: list[Artifact], build_mode: BuildMode) 
         ["#!/usr/bin/env bash", cmd_args([dep_cmdline, ">", dep_output], delimiter = " ")],
         is_executable = True,
         allow_args = True,
+        has_content_based_path = False,
     )
     ctx.actions.run(cmd_args(dep_sh, hidden = [dep_output.as_output(), dep_cmdline]), category = "ocamldep_" + build_mode.value)
     return dep_output

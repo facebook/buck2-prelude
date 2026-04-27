@@ -293,6 +293,7 @@ def _compute_cxx_executable_info(
         pyinit_argsfile = ctx.actions.write(
             "__pyinit_undefined_symbols__.argsfile",
             cmd_args(["-u" + sym for sym in pyinit_symbols]),
+            has_content_based_path = False,
         )
         extra_binary_link_flags.append(cmd_args(pyinit_argsfile, format = "@{}"))
 

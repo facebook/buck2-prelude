@@ -1311,6 +1311,7 @@ def load_startup_functions():
                 "name": ctx.attrs.name,
             },
         ),
+        has_content_based_path = False,
     )
     return src_startup_functions_path
 

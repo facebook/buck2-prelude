@@ -332,6 +332,7 @@ def _rust_binary_common(
                 ],
                 "rpathtree": ["{}:{}[rpath-tree]".format(ctx.label.path, ctx.label.name)] if executable_shlib_args.shared_libs_symlink_tree else [],
             },
+            has_content_based_path = False,
         ),
         sub_targets = {
             soname: [DefaultInfo(
@@ -364,6 +365,7 @@ def _rust_binary_common(
             default_output = ctx.actions.write_json(
                 name + LINK_GROUP_MAPPINGS_FILENAME_SUFFIX,
                 readable_mappings,
+                has_content_based_path = False,
             ),
         )]
 

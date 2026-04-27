@@ -61,6 +61,7 @@ def apple_universal_executable_impl(ctx: AnalysisContext) -> list[Provider]:
         "debuginfo.artifacts",
         debug_info,
         with_inputs = True,
+        has_content_based_path = False,
     )
     sub_targets[DEBUGINFO_SUBTARGET] = [DefaultInfo(default_output = debug_info_artifacts_manifest)]
 

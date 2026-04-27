@@ -443,6 +443,7 @@ def cxx_gnu_dist_link(
             index_meta_file = ctx.actions.write(
                 output.short_path + ".thinlto.meta",
                 index_meta,
+                has_content_based_path = False,
             )
 
             def dict_to_cmd_args(d: dict) -> cmd_args:
@@ -503,7 +504,7 @@ def cxx_gnu_dist_link(
         # However, buck2 disallows `dynamic_output` with a empty input list. We also can't call our `plan` function
         # directly, since it uses `ctx.outputs` to bind its outputs. Instead of doing Starlark hacks to work around
         # the lack of `ctx.outputs`, we declare an empty file as a dynamic input.
-        plan_inputs.append(ctx.actions.write(output.short_path + ".plan_hack.txt", ""))
+        plan_inputs.append(ctx.actions.write(output.short_path + ".plan_hack.txt", "", has_content_based_path = False))
         plan_outputs.extend([link_plan.as_output(), index_argsfile_out.as_output(), final_link_index.as_output(), pre_flags_argsfile.as_output(), linkables_argsfile.as_output(), post_flags_argsfile.as_output()])
         ctx.actions.dynamic_output(dynamic = plan_inputs, inputs = [], outputs = plan_outputs, f = plan)
 

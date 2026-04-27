@@ -66,6 +66,7 @@ def create_relocatable_resources_info(
     packaged_resources_json = ctx.actions.write_json(
         name + ".resources_pkg.json",
         packaged_resource_name_to_json,
+        has_content_based_path = False,
     )
 
     return (packaged_resources_json, resources_dir)
@@ -105,4 +106,4 @@ def create_resource_db(
         name: cmd_args(resource.default_output, delimiter = "", relative_to = (binary, 1))
         for (name, resource) in resources.items()
     }
-    return ctx.actions.write_json(name, db)
+    return ctx.actions.write_json(name, db, has_content_based_path = False)

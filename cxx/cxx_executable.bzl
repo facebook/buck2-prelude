@@ -591,6 +591,7 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
                     default_output = ctx.actions.write_json(
                         ctx.label.name + ".link-groups-info.libs.{}.json".format(name),
                         lib,
+                        has_content_based_path = False,
                     ),
                 ),
             ]
@@ -598,12 +599,14 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
             default_output = ctx.actions.write_json(
                 ctx.label.name + ".link-groups-info.json",
                 link_groups_debug_info,
+                has_content_based_path = False,
             ),
             sub_targets = {
                 "bin": [DefaultInfo(
                     default_output = ctx.actions.write_json(
                         ctx.label.name + ".link-groups-info.bin.json",
                         link_groups_binary_debug_info,
+                        has_content_based_path = False,
                     ),
                 )],
                 "shared-libraries": [DefaultInfo(sub_targets = link_groups_libs_sub_targets)],
@@ -798,6 +801,7 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
             default_output = ctx.actions.write_json(
                 binary.output.basename + LINK_GROUP_MAPPINGS_FILENAME_SUFFIX,
                 readable_mappings,
+                has_content_based_path = False,
             ),
         )]
 
@@ -808,6 +812,7 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
                 {
                     "binary_node_count": len(linkable_graph_node_map),
                 },
+                has_content_based_path = False,
             ),
         )]
 
@@ -822,6 +827,7 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
                 default_output = ctx.actions.write_json(
                     output_json_file,
                     {group: readable_mappings[group]},
+                    has_content_based_path = False,
                 ),
             )]
         if group in link_group_linker_map_data:
@@ -847,6 +853,7 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
                 ],
                 "rpathtree": ["{}:{}[rpath-tree]".format(ctx.label.path, ctx.label.name)] if shared_libs_symlink_tree else [],
             },
+            has_content_based_path = False,
         ),
         sub_targets = shared_libraries_sub_targets,
     )]

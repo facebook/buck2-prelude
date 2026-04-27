@@ -126,6 +126,7 @@ def _create_sharded_type_check(
             input_file_name,
             input_config,
             with_inputs = True,
+            has_content_based_path = False,
         )
         output_file = ctx.actions.declare_output(output_file_name, has_content_based_path = False)
         output_files.append(output_file)

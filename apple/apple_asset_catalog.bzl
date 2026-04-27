@@ -130,6 +130,7 @@ def _get_actool_command(ctx: AnalysisContext, info: AppleAssetCatalogSpec, catal
             cmd_args(catalog_output, format = 'mkdir -p {} && cp -r "$TMPDIR"/ {}'),
         ],
         allow_args = True,
+        has_content_based_path = False,
     )
     command = cmd_args(["/bin/sh", wrapper_script], hidden = [actool_command, catalog_output])
     return command

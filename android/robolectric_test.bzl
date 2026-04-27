@@ -58,6 +58,7 @@ def robolectric_test_impl(ctx: AnalysisContext) -> list[Provider]:
             cmd_args(["android_resource_apk", resources_info.primary_resources_apk], delimiter = "=", replace_regex = ("\\\\\\b", "\\\\")),
             cmd_args(["android_merged_manifest", resources_info.manifest], delimiter = "=", replace_regex = ("\\\\\\b", "\\\\")),
         ],
+        has_content_based_path = False,
     )
 
     # Robolectric looks for a file named /com/android/tools/test_config.properties on the classpath

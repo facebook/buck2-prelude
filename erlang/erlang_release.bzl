@@ -116,6 +116,7 @@ def _build_boot_scripts(
     spec_file = ctx.actions.write_json(
         paths.join(erlang_build.utils.BUILD_DIR, "bootscripts", "applications_json"),
         data,
+        has_content_based_path = False,
     )
 
     for script_name, builder in ctx.attrs.bootscript_builders.items():
@@ -191,7 +192,7 @@ def _build_default_boot_scripts(
         "version": ctx.attrs.version,
     }
 
-    spec_file = ctx.actions.write_json(paths.join(erlang_build.utils.BUILD_DIR, "boot_script_spec.json"), data, with_inputs = True)
+    spec_file = ctx.actions.write_json(paths.join(erlang_build.utils.BUILD_DIR, "boot_script_spec.json"), data, with_inputs = True, has_content_based_path = False)
 
     scripts_dir = ctx.actions.declare_output(erlang_build.utils.BUILD_DIR, "scripts", dir = True, has_content_based_path = False)
 
@@ -296,6 +297,7 @@ def _build_release_variables(ctx: AnalysisContext, toolchain: Toolchain) -> dict
             "REL_NAME": release_name,
             "REL_VSN": ctx.attrs.version,
         },
+        has_content_based_path = False,
     )
 
     erlang_build.utils.run_with_env(
@@ -350,6 +352,7 @@ def _build_start_erl_data(
     start_erl_data = ctx.actions.write(
         paths.join(erlang_build.utils.BUILD_DIR, "start_erl.data"),
         content,
+        has_content_based_path = False,
     )
 
     return {"releases/start_erl.data": start_erl_data}

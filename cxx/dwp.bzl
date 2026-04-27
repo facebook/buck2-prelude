@@ -46,6 +46,7 @@ def run_dwp_action(
             ),
             referenced_objects,
             allow_args = True,
+            has_content_based_path = False,
         )
         args.add(cmd_args(argsfile, format = "@{}", hidden = referenced_objects))
 
