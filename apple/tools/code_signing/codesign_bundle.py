@@ -594,20 +594,26 @@ def _read_provisioning_profiles(
     ]
 
 
+def read_provisioning_profile_using_plist_marker(path: Path) -> Optional[bytes]:
+    # Provisioning profiles have a plist embedded in them that we can extract directly.
+    # This is much faster than calling an external command like openssl.
+    with open(path, "rb") as f:
+        content = f.read()
+    start_index = content.find(b"<plist")
+    end_index = content.find(b"</plist>", start_index) + len(b"</plist>")
+    if start_index >= 0 and end_index >= 0:
+        return content[start_index:end_index]
+    return None
+
+
 def _provisioning_profile_from_file_path(
     path: Path,
     read_provisioning_profile_command_factory: IReadProvisioningProfileCommandFactory,
     should_use_fast_provisioning_profile_parsing: bool,
 ) -> ProvisioningProfileMetadata:
     if should_use_fast_provisioning_profile_parsing:
-        # Provisioning profiles have a plist embedded in them that we can extract directly.
-        # This is much faster than calling an external command like openssl.
-        with open(path, "rb") as f:
-            content = f.read()
-        start_index = content.find(b"<plist")
-        end_index = content.find(b"</plist>", start_index) + len(b"</plist>")
-        if start_index >= 0 and end_index >= 0:
-            plist_data = content[start_index:end_index]
+        plist_data = read_provisioning_profile_using_plist_marker(path)
+        if plist_data is not None:
             return ProvisioningProfileMetadata.from_provisioning_profile_file_content(
                 path, plist_data
             )
