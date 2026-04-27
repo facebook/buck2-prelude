@@ -122,19 +122,21 @@ _top_level_refs = {
 
 _attrs = ["cgo_enabled", "build_tags"]
 
+_coverage_mode_refs = {
+    "coverage_mode_atomic": "prelude//go/constraints:coverage_mode[atomic]",
+    "coverage_mode_count": "prelude//go/constraints:coverage_mode[count]",
+    "coverage_mode_set": "prelude//go/constraints:coverage_mode[set]",
+}
+
 go_binary_transition = transition(
-    impl = _chain_transitions(_top_level_transitions),
-    refs = _top_level_refs,
-    attrs = _attrs,
+    impl = _chain_transitions(_top_level_transitions + [_coverage_mode_transition]),
+    refs = _top_level_refs | _coverage_mode_refs,
+    attrs = _attrs + ["coverage_mode"],
 )
 
 go_test_transition = transition(
     impl = _chain_transitions(_top_level_transitions + [_coverage_mode_transition]),
-    refs = _top_level_refs | {
-        "coverage_mode_atomic": "prelude//go/constraints:coverage_mode[atomic]",
-        "coverage_mode_count": "prelude//go/constraints:coverage_mode[count]",
-        "coverage_mode_set": "prelude//go/constraints:coverage_mode[set]",
-    },
+    refs = _top_level_refs | _coverage_mode_refs,
     attrs = _attrs + ["coverage_mode"],
 )
 

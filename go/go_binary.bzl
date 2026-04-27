@@ -21,6 +21,7 @@ load(
 )
 load(":cgo_builder.bzl", "get_cgo_build_context")
 load(":compile.bzl", "GoTestInfo")
+load(":coverage.bzl", "GoCoverageMode")
 load(":link.bzl", "GoBuildMode", "link")
 load(":package_builder.bzl", "GoBuildConfig", "GoSourceInputs", "declare_package_build")
 load(":packages.bzl", "go_attr_pkg_name")
@@ -30,6 +31,7 @@ def go_binary_impl(ctx: AnalysisContext) -> list[Provider]:
     cxx_toolchain_available = CxxToolchainInfo in ctx.attrs._cxx_toolchain
     pkg_import_path = go_attr_pkg_name(ctx)
     cgo_enabled = evaluate_cgo_enabled(cxx_toolchain_available, ctx.attrs.cgo_enabled)
+    coverage_mode = GoCoverageMode(ctx.attrs._coverage_mode) if ctx.attrs._coverage_mode else None
     cgo_build_context = get_cgo_build_context(ctx)
 
     lib, pkg_info, _ = declare_package_build(
@@ -46,6 +48,8 @@ def go_binary_impl(ctx: AnalysisContext) -> list[Provider]:
             compiler_flags = ctx.attrs.compiler_flags,
             build_tags = ctx.attrs._build_tags,
             cgo_enabled = cgo_enabled,
+            coverage_enabled = ctx.attrs.coverage_enabled,
+            coverage_mode = coverage_mode,
         ),
         deps = ctx.attrs.deps,
     )

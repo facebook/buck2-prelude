@@ -84,6 +84,13 @@ go_binary = prelude_rule(
         go_common.cgo_enabled_arg() |
         go_common.build_tags_arg() |
         go_common.coverage_enabled_arg() |
+        {
+            "coverage_mode": attrs.option(attrs.enum(GoTestCoverStepMode), default = None, doc = """
+                Coverage instrumentation mode for the binary. When set, the binary is built with
+                coverage instrumentation. Set GOCOVERDIR to a directory path when running the binary
+                to collect coverage data. Modes: set, count, atomic
+            """),
+        } |
         cxx_common.headers_arg() |
         cxx_common.header_namespace_arg() |
         go_common.cxx_preprocessor_flags_arg() |
