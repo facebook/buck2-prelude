@@ -97,6 +97,8 @@ def create_jar_artifact_kotlincd(
     )
 
     expect(abi_generation_mode != AbiGenerationMode("source"), "abi_generation_mode: source is not supported in kotlincd")
+    if abi_generation_mode == AbiGenerationMode("source_only") and language_version < "2.0":
+        fail("source_only ABI generation is not supported with K1 (language_version {}). Either upgrade to K2 (language_version >= 2.0) or use abi_generation_mode = \"class\".".format(language_version))
     actual_abi_generation_mode = abi_generation_mode or AbiGenerationMode("class") if srcs else AbiGenerationMode("none")
     uses_content_based_paths = uses_content_based_paths or kotlin_toolchain.allow_experimental_content_based_path_hashing
 
