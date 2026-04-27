@@ -454,6 +454,7 @@ def cxx_link_into(
             # just pass in the full link line and extract all inputs from that,
             # which is a bit of an overspecification.
             referenced_objects = [dwp_inputs],
+            action_execution_properties = action_execution_properties,
         )
 
     if is_result_executable:

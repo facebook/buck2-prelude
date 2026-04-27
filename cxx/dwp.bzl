@@ -7,6 +7,7 @@
 # above-listed licenses.
 
 load("@prelude//cxx:cxx_toolchain_types.bzl", "CxxToolchainInfo")
+load("@prelude//utils:actions.bzl", "ActionExecutionAttributes")
 load("@prelude//utils:arglike.bzl", "ArgLike")  # @unused Used as a type
 load(":debug.bzl", "SplitDebugMode")
 
@@ -23,7 +24,7 @@ def run_dwp_action(
         category_suffix: [str, None],
         referenced_objects: [ArgLike, list[Artifact]],
         dwp_output: Artifact,
-        local_only: bool,
+        action_execution_properties: ActionExecutionAttributes = ActionExecutionAttributes(),
         from_exe = True):
     dwp = toolchain.binary_utilities_info.dwp
 
@@ -56,7 +57,10 @@ def run_dwp_action(
         args,
         category = category,
         identifier = identifier,
-        local_only = local_only,
+        prefer_local = action_execution_properties.prefer_local,
+        prefer_remote = action_execution_properties.prefer_remote,
+        local_only = action_execution_properties.local_only,
+        force_full_hybrid_if_capable = action_execution_properties.full_hybrid,
     )
 
 def dwp(
@@ -76,7 +80,7 @@ def dwp(
         # overspecification.
         referenced_objects: [ArgLike, list[Artifact]],
         name_suffix: str = "",
-        local_only: bool = False,
+        action_execution_properties: ActionExecutionAttributes = ActionExecutionAttributes(),
         from_exe = True) -> Artifact:
     # gdb/lldb expect to find a file named $file.dwp next to $file.
     output = ctx.actions.declare_output(obj.short_path + name_suffix + ".dwp", has_content_based_path = False)
@@ -88,7 +92,7 @@ def dwp(
         category_suffix,
         referenced_objects,
         output,
-        local_only = local_only,
+        action_execution_properties = action_execution_properties,
         from_exe = from_exe,
     )
     return output

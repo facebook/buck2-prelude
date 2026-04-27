@@ -45,6 +45,7 @@ load(
 )
 load("@prelude//linking:stamp_build_info.bzl", "cxx_stamp_build_info", "stamp_build_info")
 load("@prelude//linking:strip.bzl", "strip_object")
+load("@prelude//utils:actions.bzl", "ActionExecutionAttributes")
 load("@prelude//utils:lazy.bzl", "lazy")
 
 _BitcodeLinkData = record(
@@ -796,7 +797,7 @@ def cxx_gnu_dist_link(
                 dwp_output = outputs[dwp_output],
                 # distributed thinlto link actions are ran locally, run llvm-dwp locally as well to
                 # ensure all dwo source files are available
-                local_only = True,
+                action_execution_properties = ActionExecutionAttributes(local_only = True),
             )
 
         ctx.actions.dynamic_output(
