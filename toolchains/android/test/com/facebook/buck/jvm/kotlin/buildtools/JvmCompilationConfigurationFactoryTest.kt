@@ -206,20 +206,6 @@ internal class JvmCompilationConfigurationFactoryTest {
   }
 
   @Test
-  fun `when classpath has removals, non-incremental mode is forced`() {
-    jvmCompilationConfigurationFactory.create(
-        createFakeIncrementalKotlincMode(
-            classpathChanges = ClasspathChanges.HasRemovals(ImmutableList.of())
-        )
-    )
-
-    verify(classpathSnapshotBasedIncrementalJvmCompilationConfiguration)
-        .forceNonIncrementalMode(true)
-    verify(classpathSnapshotBasedIncrementalJvmCompilationConfiguration, never())
-        .assureNoClasspathSnapshotsChanges(true)
-  }
-
-  @Test
   fun `when classpath has additions or modifications only, non-incremental mode is not forced`() {
     jvmCompilationConfigurationFactory.create(
         createFakeIncrementalKotlincMode(

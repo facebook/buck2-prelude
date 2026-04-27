@@ -543,7 +543,6 @@ def build_kotlin_library(
                 incremental = ctx.attrs.incremental,
                 uses_content_based_paths = ctx.attrs.uses_content_based_paths_for_kotlincd,
                 bootclasspath_snapshot_entries = bootclasspath_jar_snapshots_for_kotlinc,
-                skip_classpath_removal_rebuild = getattr(ctx.attrs, "skip_classpath_removal_rebuild", False),
                 track_files_which_skipped_compilation = kotlin_toolchain.track_files_which_skipped_compilation,
                 **common_kotlincd_kwargs
             )

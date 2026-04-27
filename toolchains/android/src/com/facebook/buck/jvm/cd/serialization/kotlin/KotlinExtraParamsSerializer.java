@@ -89,7 +89,6 @@ public class KotlinExtraParamsSerializer {
         kotlinExtraParams.getLanguageVersion(),
         kotlinExtraParams.getShouldKosabiJvmAbiGenUseK2(),
         AbsPathSerializer.deserialize(kotlinExtraParams.getKotlinClassesDir()),
-        kotlinExtraParams.getSkipClasspathRemovalRebuild(),
         Optional.of(kotlinExtraParams.getJavaBinary()).filter(s -> !s.isEmpty()));
   }
 }

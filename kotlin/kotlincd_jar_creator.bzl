@@ -86,7 +86,6 @@ def create_jar_artifact_kotlincd(
         optional_dirs: list[OutputArtifact] = [],
         jar_postprocessor: [RunInfo, None] = None,
         debug_port: [int, None] = None,
-        skip_classpath_removal_rebuild: bool = False,
         enable_depfiles: [bool, None] = True,
         track_files_which_skipped_compilation: bool = False) -> (JavaCompileOutputs, Artifact, dict[str, Artifact]):
     resources_map = get_resources_map(
@@ -195,7 +194,6 @@ def create_jar_artifact_kotlincd(
         language_version = language_version,
         kotlin_classes = kotlin_classes,
         is_building_android_binary = is_building_android_binary,
-        skip_classpath_removal_rebuild = skip_classpath_removal_rebuild,
     )
 
     library_command_builder = command_builder(
@@ -325,8 +323,7 @@ def _encode_kotlin_extra_params(
         incremental_state_dir: Artifact | None,
         language_version: str,
         kotlin_classes: Artifact,
-        is_building_android_binary: bool = False,
-        skip_classpath_removal_rebuild: bool = False):
+        is_building_android_binary: bool = False):
     kosabiPluginOptionsMap = {}
     is_source_only_abi = actual_abi_generation_mode == AbiGenerationMode("source_only")
 
@@ -365,7 +362,6 @@ def _encode_kotlin_extra_params(
         languageVersion = language_version,
         shouldKosabiJvmAbiGenUseK2 = True,
         kotlinClassesDir = kotlin_classes.as_output(),
-        skipClasspathRemovalRebuild = skip_classpath_removal_rebuild,
         # Only provide javaBinary for JVM targets; Android targets resolve JDK types from android.jar
         javaBinary = cmd_args(java_toolchain.java[RunInfo], delimiter = " ") if not is_building_android_binary else "",
     )
@@ -622,6 +618,5 @@ def _create_incremental_config(actions: AnalysisActions, actions_identifier: [st
         should_use_jvm_abi_gen = kotlin_build_command.buildCommand.kotlinExtraParams.shouldUseJvmAbiGen,
         extra_kotlinc_arguments = kotlin_build_command.buildCommand.kotlinExtraParams.extraKotlincArguments,
         kotlin_version = kotlin_version,
-        skip_classpath_removal_rebuild = kotlin_build_command.buildCommand.kotlinExtraParams.skipClasspathRemovalRebuild,
     )
     return actions.write_json(incremental_meta_data_output, incremental_meta_data, with_inputs = True)
