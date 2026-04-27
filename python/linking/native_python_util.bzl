@@ -301,9 +301,9 @@ def _write_syms_file(
     Take a list of objects and append a suffix to all  defined symbols.
     """
     nm = cxx_toolchain.binary_utilities_info.nm
-    symbols_file = ctx.actions.declare_output(name, has_content_based_path = False)
+    symbols_file = ctx.actions.declare_output(name, has_content_based_path = True)
 
-    objects_argsfile = ctx.actions.write(name + ".py_objects_argsfile", objects)
+    objects_argsfile = ctx.actions.write(name + ".py_objects_argsfile", objects, has_content_based_path = True)
     objects_args = cmd_args(objects_argsfile, hidden = objects)
 
     script_env = {
