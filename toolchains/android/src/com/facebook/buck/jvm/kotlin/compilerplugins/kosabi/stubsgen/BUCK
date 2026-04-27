@@ -84,30 +84,6 @@ buck_kotlin_library(
     ],
 )
 
-buck_kotlin_library(
-    name = "sourcemodifier-plugin",
-    srcs = glob(
-        [
-            "plugin/source_modifier/**/*.kt",
-            "plugin/model/*.kt",
-        ],
-    ),
-    labels = ["codegen_rule"],
-    provided_deps = [
-        "prelude//toolchains/android/third-party:kotlin-compiler",
-    ],
-    resources = glob(["plugin/source_modifier/resources/**"]),
-    resources_root = "plugin/source_modifier/resources",
-    tests = [
-        "fbsource//fbandroid/javatests/com/facebook/kotlin/compilerplugins/kosabi/integrationtest:integration-test",
-        "fbsource//fbandroid/javatests/com/facebook/kotlin/compilerplugins/kosabi/stubsgen:stubsgen",
-    ],
-    visibility = [
-        "PUBLIC",
-    ],
-    exported_deps = [":kosabi-common"],
-)
-
 buck_java_binary(
     name = "stubsgen",
     visibility = ["PUBLIC"],
@@ -118,10 +94,4 @@ buck_java_binary(
     name = "stubsgen_k2",
     visibility = ["PUBLIC"],
     deps = [":stubsgen-k2-plugin"],
-)
-
-buck_java_binary(
-    name = "kosabi-sourcemodifier",
-    visibility = ["PUBLIC"],
-    deps = [":sourcemodifier-plugin"],
 )

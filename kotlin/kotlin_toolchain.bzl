@@ -22,7 +22,6 @@ KotlinToolchainInfo = provider(
         "kosabi_applicability_plugin": provider_field(typing.Any, default = None),
         "kosabi_jvm_abi_gen_k2_plugin": provider_field(typing.Any, default = None),
         "kosabi_jvm_abi_gen_plugin": provider_field(typing.Any, default = None),
-        "kosabi_source_modifier_plugin": provider_field(typing.Any, default = None),
         "kosabi_stubs_gen_k2_plugin": provider_field(typing.Any, default = None),
         "kosabi_stubs_gen_plugin": provider_field(typing.Any, default = None),
         "kotlin_error_handler": provider_field(typing.Any, default = None),
