@@ -33,7 +33,9 @@ cxx_internal_tools = rule(
         "check_nonempty_output": attrs.default_only(
             attrs.dep(providers = [RunInfo], default = "prelude//cxx/tools:check_nonempty_output"),
         ),
-        "clang_tidy_wrapper": attrs.dep(providers = [RunInfo], default = "fbcode//tools/build/buck/wrappers:clang_tidy_wrapper"),
+        "clang_tidy_wrapper": attrs.default_only(
+            attrs.dep(providers = [RunInfo], default = "prelude//cxx/tools:clang_tidy_wrapper"),
+        ),
         "concatenate_diagnostics": attrs.dep(providers = [RunInfo], default = "prelude//cxx/tools:concatenate_diagnostics"),
         "dep_file_processor": attrs.dep(providers = [RunInfo], default = "prelude//cxx/tools:dep_file_processor"),
         "dist_lto": attrs.dep(providers = [DistLtoToolsInfo], default = "prelude//cxx/dist_lto/tools:dist_lto_tools"),

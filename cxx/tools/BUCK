@@ -83,6 +83,12 @@ prelude.python_bootstrap_binary(
 )
 
 prelude.python_bootstrap_binary(
+    name = "clang_tidy_wrapper",
+    main = "clang_tidy_wrapper.py",
+    visibility = ["PUBLIC"],
+)
+
+prelude.python_bootstrap_binary(
     name = "concatenate_diagnostics",
     main = "concatenate_diagnostics.py",
     visibility = ["PUBLIC"],
@@ -117,6 +123,7 @@ prelude.python_library(
     name = "scripts-typing",
     srcs = [
         "check_nonempty_output.py",
+        "clang_tidy_wrapper.py",
         "concatenate_diagnostics.py",
         "dep_file_processor.py",
         "dep_file_utils.py",
