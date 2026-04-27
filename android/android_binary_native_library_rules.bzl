@@ -212,6 +212,8 @@ def get_android_binary_native_library_info(
         # We serialize info about the linkable graph and the apk module mapping and pass that to an
         # external subcommand to apply a merge sequence algorithm and return us the merge mapping.
         for platform, deps in deps_by_platform.items():
+            if platform == CPU_FILTER_FOR_PRIMARY_PLATFORM and platform not in ctx.attrs.cpu_filters and len(ctx.attrs.cpu_filters) != 0:
+                continue
             linkable_graph = create_linkable_graph(ctx, deps = deps)
             graph_node_map = get_linkable_graph_node_map_func(linkable_graph)()
             linkables_debug = ctx.actions.write("linkables." + platform, list(graph_node_map.keys()), has_content_based_path = False)
