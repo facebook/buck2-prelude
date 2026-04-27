@@ -43,7 +43,6 @@ public class FilterResourcesExecutableMain {
       ImmutableList.of(GlobPatternMatcher.of("**/.DS_Store"));
 
   @Option(name = "--in-res-dir-to-out-res-dir-map", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String inResDirToOutResDirMapPath;
 
   @Option(name = "--voltron-in-res-dir-to-out-res-dir-map")
@@ -106,6 +105,7 @@ public class FilterResourcesExecutableMain {
             ObjectMappers.createParser(Paths.get(inResDirToOutResDirMapPath)),
             new TypeReference<Map<String, ImmutableBiMap<Path, Path>>>() {});
     ImmutableBiMap<Path, Path> inResDirToOutResDirMap =
+        // NULLSAFE_FIXME[Nullable Dereference]
         Objects.requireNonNull(rawMap.get("res_dir_map"));
     ImmutableSet<ResourceFilters.Density> targetDensitiesSet =
         targetDensities != null
@@ -146,6 +146,7 @@ public class FilterResourcesExecutableMain {
             packagedLocales,
             enableStringsAsAssetsFiltering,
             notFilteredStringDirs,
+            // NULLSAFE_FIXME[Parameter Not Nullable]
             allowlistedLocalesDirs);
 
     timed(
@@ -164,9 +165,11 @@ public class FilterResourcesExecutableMain {
           () -> {
             Map<String, ImmutableBiMap<Path, Path>> rawVoltronMap =
                 ObjectMappers.READER.readValue(
+                    // NULLSAFE_FIXME[Parameter Not Nullable]
                     ObjectMappers.createParser(Paths.get(voltronInResDirToOutResDirMapPath)),
                     new TypeReference<Map<String, ImmutableBiMap<Path, Path>>>() {});
             ImmutableBiMap<Path, Path> voltronInResDirToOutResDirMap =
+                // NULLSAFE_FIXME[Nullable Dereference]
                 Objects.requireNonNull(rawVoltronMap.get("res_dir_map"));
 
             FilteredDirectoryCopier.copyDirsParallel(
@@ -188,11 +191,13 @@ public class FilterResourcesExecutableMain {
             ImmutableList.Builder<String> postFilterResourcesCmdList = ImmutableList.builder();
             postFilterResourcesCmdList
                 .addAll(
+                    // NULLSAFE_FIXME[Nullable Dereference]
                     Arrays.stream(postFilterResourcesCmd.split("\\s+"))
                         .collect(Collectors.toList()))
                 .add(inResDirToOutResDirMapPath)
                 .add(postFilterResourcesCmdOverrideSymbols);
             Process postFilterResourcesProcess =
+                // NULLSAFE_FIXME[Not Vetted Third-Party]
                 new ProcessBuilder().command(postFilterResourcesCmdList.build()).start();
             try {
               int exitCode = postFilterResourcesProcess.waitFor();
@@ -217,6 +222,7 @@ public class FilterResourcesExecutableMain {
           "Writing string files list",
           () -> {
             Files.write(
+                // NULLSAFE_FIXME[Parameter Not Nullable]
                 Paths.get(stringFilesListOutput),
                 (Iterable<String>)
                     GetStringsFiles.getFilesAsStream(
