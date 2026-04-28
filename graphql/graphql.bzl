@@ -48,11 +48,20 @@ GraphQLCodegenInput = provider(
     },
 )
 
+GraphQLMobileConfigInput = provider(
+    fields = {
+        "artifacts": provider_field(ArtifactTSet),
+    },
+)
+
 def _graphql_info_provider(label: Label, deps: list[Dependency]) -> list[Provider]:
     return [dep[GraphQLInfo] for dep in deps if GraphQLInfo in dep and dep[GraphQLInfo].target == label]
 
 def graphql_codegen_sets(deps: list[Dependency]) -> list[ArtifactTSet]:
     return [dep[GraphQLCodegenInput].artifacts for dep in deps if GraphQLCodegenInput in dep]
+
+def graphql_mobileconfig_sets(deps: list[Dependency]) -> list[ArtifactTSet]:
+    return [dep[GraphQLMobileConfigInput].artifacts for dep in deps if GraphQLMobileConfigInput in dep]
 
 def graphql_providers(ctx: AnalysisContext) -> list[Provider]:
     deps = cxx_attr_deps(ctx)
@@ -66,6 +75,14 @@ def graphql_providers(ctx: AnalysisContext) -> list[Provider]:
         providers.append(
             GraphQLCodegenInput(
                 artifacts = make_artifact_tset(actions = ctx.actions, children = output_sets),
+            ),
+        )
+
+    mobileconfig_sets = graphql_mobileconfig_sets(all_deps)
+    if mobileconfig_sets:
+        providers.append(
+            GraphQLMobileConfigInput(
+                artifacts = make_artifact_tset(actions = ctx.actions, children = mobileconfig_sets),
             ),
         )
 
