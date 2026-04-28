@@ -1,3 +1,4 @@
+load("@fbsource//tools/build_defs:testpilot_defs.bzl", "tpx_labels")
 load("@prelude//toolchains/android/tools:build_rules.bzl", "buck_kotlin_test", "standard_java_test")
 load("@prelude//utils:source_listing.bzl", "source_listing")
 
@@ -7,7 +8,7 @@ source_listing()
 
 standard_java_test(
     name = "testrunner",
-    labels = ["long_running"],
+    labels = [tpx_labels.long_running],
     run_test_separately = True,
     with_test_data = True,
     deps = [
