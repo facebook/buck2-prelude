@@ -164,7 +164,7 @@ def _main(bxl_ctx):
 
                 toolchain_dep_dict[cxx_toolchain_label] = (cxx_toolchain, cxx_toolchain_target_node)
 
-        attrs_outfile = actions.write_json(get_project_file_path(dep.label, ".attrs.json"), attrs, pretty = True)
+        attrs_outfile = actions.write_json(get_project_file_path(dep.label, ".attrs.json"), attrs, pretty = True, has_content_based_path = False)
         attrs_artifact_dict[dep.label] = attrs_outfile
 
         # Create the output artifacts. Contents will be written into these in the lambda function

@@ -125,7 +125,7 @@ def _main(bxl_ctx):
     actions = bxl_ctx.bxl_actions().actions
     attrs = get_attrs(target_node, bxl_ctx)
     toolchain = get_cxx_toolchain(target_node, bxl_ctx)
-    attrs_outfile = actions.write_json(get_project_file_path(target_node.label, ".json"), attrs)
+    attrs_outfile = actions.write_json(get_project_file_path(target_node.label, ".json"), attrs, has_content_based_path = False)
     filters_artifact = actions.declare_output(get_project_file_path(target_node.label, ".vcxproj.filters"), has_content_based_path = False)
 
     def f(ctx, artifacts, outputs, attrs_outfile = attrs_outfile, filters_artifact = filters_artifact, target = target_node, cli_args = bxl_ctx.cli_args, buck_root = bxl_ctx.root()):

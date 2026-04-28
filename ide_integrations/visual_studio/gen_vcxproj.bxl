@@ -152,7 +152,7 @@ def _main(bxl_ctx):
     target_node = bxl_ctx.configured_targets(target_label, modifiers = bxl_ctx.modifiers)
     actions = bxl_ctx.bxl_actions().actions
     attrs = get_attrs(target_node, bxl_ctx)
-    attrs_outfile = actions.write_json(get_project_file_path(target_node.label, ".json"), attrs)
+    attrs_outfile = actions.write_json(get_project_file_path(target_node.label, ".json"), attrs, has_content_based_path = False)
     vcxproj_artifact = actions.declare_output(get_project_file_path(target_node.label, ".vcxproj"), has_content_based_path = False)
 
     dynamic = [attrs_outfile]
