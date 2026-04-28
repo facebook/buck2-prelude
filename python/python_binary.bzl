@@ -56,7 +56,7 @@ load(
     "EntryPointKind",
 )
 load(":internal_tools.bzl", "PythonInternalToolsInfo")
-load(":lazy_imports.bzl", "run_lazy_imports_analyzer")
+load(":lazy_imports.bzl", "run_lazy_imports_analyzer", "run_lazy_imports_cached_analysis", "run_lazy_imports_library_analyzer")
 load(":make_py_package.bzl", "PexModules", "PexProviders", "make_py_package")
 load(
     ":manifest.bzl",
@@ -64,7 +64,7 @@ load(
     "create_manifest_for_extensions",
     "create_manifest_for_source_map",
 )
-load(":python.bzl", "PythonLibraryInfo", "manifests_to_interface")
+load(":python.bzl", "LazyImportsCacheInfo", "PythonLibraryInfo", "manifests_to_interface")
 load(
     ":python_library.bzl",
     "create_python_library_info",
@@ -293,10 +293,38 @@ def _compute_pex_providers(
 
     extra_artifacts["dbg-db.json"] = dbg_source_db_output
 
-    # Run lazy import analysis using the existing dbg-db.json only if the attribute is enabled
+    # Run lazy import analysis if the attribute is enabled.
+    # Prefer the cache-based path (analyze_binary from per-library caches) when
+    # the toolchain provides the analyzer. Fall back to the monolithic path
+    # (analyze against dbg-db.json) for backward compatibility.
     if getattr(ctx.attrs, "lazy_imports_analyzer", None):
         lazy_import_analysis_output = ctx.actions.declare_output("safer_lazy_imports/lazy-import-analysis.json", has_content_based_path = False)
-        run_lazy_imports_analyzer(ctx, dbg_source_db.other_outputs, lazy_import_analysis_output, dbg_source_db_output)
+        dep_caches = [
+            dep[LazyImportsCacheInfo].cache
+            for dep in ctx.attrs.deps
+            if LazyImportsCacheInfo in dep
+        ]
+        if dep_caches and python_toolchain.lazy_imports_analyzer != None:
+            # This first call pulls in the hidden __par__ modules
+            binary_lib_cache = ctx.actions.declare_output("safer_lazy_imports/binary-library-cache.bin")
+            run_lazy_imports_library_analyzer(
+                ctx,
+                python_toolchain.lazy_imports_analyzer,
+                binary_lib_cache,
+                source_db_no_deps,
+                dep_caches,
+            )
+
+            # This call builds the Lifeguard output file
+            run_lazy_imports_cached_analysis(
+                ctx,
+                python_toolchain.lazy_imports_analyzer,
+                lazy_import_analysis_output,
+                dep_caches + [binary_lib_cache],
+            )
+        else:
+            warning("Lifeguard is running in full analysis mode and not leveraging caches")
+            run_lazy_imports_analyzer(ctx, dbg_source_db.other_outputs, lazy_import_analysis_output, dbg_source_db_output)
         extra_artifacts["safer_lazy_imports/lazy-import-analysis.json"] = lazy_import_analysis_output
 
     extra_artifacts["sitecustomize.py"] = python_internal_tools.default_sitecustomize

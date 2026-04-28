@@ -136,7 +136,10 @@ PythonLibraryManifestsTSet = transitive_set(
     },
 )
 
-# Information about a python library and its dependencies.
+LazyImportsCacheInfo = provider(fields = {
+    "cache": provider_field(Artifact),
+})
+
 PythonLibraryInfo = provider(fields = {
     # Shared libraries coming from cxx_python_extension targets
     "extension_shared_libraries": provider_field(SharedLibraryInfo),

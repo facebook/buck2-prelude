@@ -31,3 +31,55 @@ def run_lazy_imports_analyzer(
     )
 
     return DefaultInfo(default_output = output)
+
+def run_lazy_imports_library_analyzer(
+        ctx: AnalysisContext,
+        analyzer: RunInfo,
+        output: Artifact,
+        source_db: DefaultInfo,
+        dep_caches: list[Artifact]) -> DefaultInfo:
+    """
+    Run analyze_library: analyze this library's own srcs and merge in
+    cached outputs from its dependencies.
+    """
+    python_toolchain = ctx.attrs._python_toolchain[PythonToolchainInfo]
+    cmd = cmd_args(analyzer, hidden = source_db.other_outputs)
+    cmd.add("analyze-library")
+    cmd.add(source_db.default_outputs[0])  # <DB_PATH>
+    cmd.add(output.as_output())  # <CACHE_OUTPUT_PATH>
+    for cache in dep_caches:
+        cmd.add("--dep-cache")
+        cmd.add(cache)
+
+    ctx.actions.run(
+        cmd,
+        category = "py_lazy_import_library_analysis",
+        error_handler = python_toolchain.python_error_handler,
+    )
+
+    return DefaultInfo(default_output = output)
+
+def run_lazy_imports_cached_analysis(
+        ctx: AnalysisContext,
+        analyzer: RunInfo,
+        output: Artifact,
+        dep_caches: list[Artifact]) -> DefaultInfo:
+    """
+    Run analyze_binary: assemble the final Lifeguard .json from cached
+    library outputs. No per-file analysis happens here.
+    """
+    python_toolchain = ctx.attrs._python_toolchain[PythonToolchainInfo]
+    cmd = cmd_args(analyzer)
+    cmd.add("analyze-binary")
+    cmd.add(output.as_output())  # <OUTPUT_PATH>
+    for cache in dep_caches:
+        cmd.add("--cache")
+        cmd.add(cache)
+
+    ctx.actions.run(
+        cmd,
+        category = "py_lazy_import_binary_analysis",
+        error_handler = python_toolchain.python_error_handler,
+    )
+
+    return DefaultInfo(default_output = output)

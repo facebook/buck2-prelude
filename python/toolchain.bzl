@@ -79,6 +79,7 @@ PythonToolchainInfo = provider(
         # Prefix to use when running a Python test/executable.
         "run_prefix": provider_field(ArgLike, default = []),
         "python_error_handler": provider_field(typing.Callable | None, default = None),
+        "lazy_imports_analyzer": provider_field(RunInfo | None, default = None),
         "manifest_module_entries": provider_field(dict[str, list[str] | dict[str, typing.Any]] | None, default = None),
         "preload_deps": provider_field(list[Dependency], default = []),
     },
