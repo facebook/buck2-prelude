@@ -372,6 +372,7 @@ def generate_rustdoc_test(
         "{}/__{}_linker_args.txt".format(common_args.subdir, common_args.tempfile),
         link_args_output.link_args,
         allow_args = True,
+        has_content_based_path = False,
     )
 
     if compile_ctx.exec_is_windows:
@@ -618,6 +619,7 @@ def rust_compile(
                     "{}/__{}_dwo_paths.txt".format(subdir, tempfile),
                     external_debug_infos,
                     allow_args = True,
+                    has_content_based_path = False,
                 )
                 separate_debug_info_args = cmd_args(
                     "--rewrite-content-based-dwo-paths",
@@ -630,6 +632,7 @@ def rust_compile(
             "{}/__{}_linker_args.txt".format(subdir, tempfile),
             cmd_args(link_args_output.link_args, separate_debug_info_args),
             allow_args = True,
+            has_content_based_path = False,
         )
         linker_argsfile = cmd_args(
             linker_argsfile,

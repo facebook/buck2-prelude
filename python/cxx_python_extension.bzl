@@ -215,7 +215,7 @@ def cxx_python_extension_impl(ctx: AnalysisContext) -> list[Provider]:
         if base_module != "":
             lines = ["# auto generated stub for {}\n".format(ctx.label.raw_target())]
             stub_name = module_name + ".empty_stub"
-            extension_artifacts.update(qualify_srcs(ctx.label, ctx.attrs.base_module, {stub_name: ctx.actions.write(stub_name, lines)}))
+            extension_artifacts.update(qualify_srcs(ctx.label, ctx.attrs.base_module, {stub_name: ctx.actions.write(stub_name, lines, has_content_based_path = False)}))
 
         python_module_names[base_module.replace("/", ".") + module_name] = pyinit_symbol
 

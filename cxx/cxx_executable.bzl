@@ -948,6 +948,7 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
         "debuginfo.artifacts",
         external_debug_info_artifacts,
         with_inputs = True,
+        has_content_based_path = False,
     )
     sub_targets["debuginfo"] = [DefaultInfo(
         default_output = materialize_external_debug_info,

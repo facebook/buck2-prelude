@@ -356,6 +356,7 @@ def cxx_link_into(
             output.short_path + ".split_debug_paths",
             project_artifacts(ctx.actions, links_to_rewrite),
             allow_args = True,
+            has_content_based_path = False,
         )
         separate_debug_info_args = cmd_args(
             "--rewrite-content-based-dwo-paths",

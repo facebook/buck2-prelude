@@ -237,6 +237,7 @@ def _http_archive_impl(ctx: AnalysisContext) -> list[Provider]:
         ],
         is_executable = True,
         allow_args = True,
+        has_content_based_path = False,
     )
     ctx.actions.run(
         cmd_args(["/bin/sh", script], hidden = [archive, output.as_output()]),

@@ -511,6 +511,7 @@ def apple_library_rule_constructor_params_and_swift_providers(ctx: AnalysisConte
         "swift-sources.txt",
         [s.file for s in swift_srcs],
         with_inputs = True,
+        has_content_based_path = False,
     )
     subtargets["swift-sources"] = [DefaultInfo(default_output = swift_sources_list)]
 
@@ -649,6 +650,7 @@ def _get_link_style_sub_targets_and_providers(
             "debuginfo.artifacts",
             debug_info,
             with_inputs = True,
+            has_content_based_path = False,
         )
         subtargets = {
             DSYM_SUBTARGET: [DefaultInfo(default_output = dsym_artifact)],

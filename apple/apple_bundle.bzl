@@ -287,7 +287,7 @@ def _get_all_agg_debug_info(ctx: AnalysisContext, binary_output: AppleBundleBina
 
 def _maybe_scrub_selected_debug_paths_file(ctx: AnalysisContext, package_names: list[str]) -> Artifact:
     if not ctx.attrs.selective_debugging:
-        return ctx.actions.write(SELECTED_DEBUG_PATH_FILE_NAME, sorted(set(package_names)))
+        return ctx.actions.write(SELECTED_DEBUG_PATH_FILE_NAME, sorted(set(package_names)), has_content_based_path = False)
 
     selective_debugging_info = ctx.attrs.selective_debugging[AppleSelectiveDebuggingInfo]
     return selective_debugging_info.scrub_selected_debug_paths_file(ctx, package_names, SELECTED_DEBUG_PATH_FILE_NAME)

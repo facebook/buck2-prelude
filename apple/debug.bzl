@@ -85,6 +85,7 @@ def get_aggregated_debug_info(ctx: AnalysisContext, debug_infos: list[AppleDebug
                 tsets = debug_info_tset,
             ),
             with_inputs = True,
+            has_content_based_path = False,
         )),
     ]
 

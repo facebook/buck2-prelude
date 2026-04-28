@@ -42,6 +42,7 @@ def _get_analysis_input_artifacts(ctx, artifacts: ArtifactTSet) -> dict[Label, l
                 "artifacts-{}.txt".format(identifier),
                 info.artifacts,
                 with_inputs = True,
+                has_content_based_path = False,
             )
             results.setdefault(info.label, []).append(
                 _AnalysisInput(argsfile = argsfile, identifier = identifier),
