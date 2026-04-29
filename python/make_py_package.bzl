@@ -206,15 +206,16 @@ def _srcs(srcs: list[typing.Any], format = "{}") -> cmd_args:
 def _fail_at_build_time(
         ctx: AnalysisContext,
         python_internal_tools: PythonInternalToolsInfo,
-        msg: str) -> PexProviders:
-    error_message = ctx.actions.write("__error_message", msg, has_content_based_path = False)
-    dummy_output = ctx.actions.declare_output("__dummy_output", has_content_based_path = False)
+        msg: str,
+        suffix: str) -> PexProviders:
+    error_message = ctx.actions.write("__error_message{}".format(suffix), msg, has_content_based_path = False)
+    dummy_output = ctx.actions.declare_output("__dummy_output{}".format(suffix), has_content_based_path = False)
     cmd = cmd_args([
         python_internal_tools.fail_with_message,
         error_message,
         dummy_output.as_output(),
     ])
-    ctx.actions.run(cmd, category = "par", identifier = "failure")
+    ctx.actions.run(cmd, category = "par", identifier = "failure{}".format(suffix))
     return PexProviders(
         default_output = dummy_output,
         other_outputs = [],
@@ -230,7 +231,7 @@ def _fail(
         suffix: str,
         msg: str) -> PexProviders:
     if suffix:
-        return _fail_at_build_time(ctx, python_internal_tools, msg)
+        return _fail_at_build_time(ctx, python_internal_tools, msg, suffix)
 
     # suffix is empty, which means this is the default subtarget. All failures must
     # occur at analysis time
@@ -490,14 +491,12 @@ def _make_py_package_impl(
     runtime_files = []
     sub_targets = {}
     hidden_resources = []
-    if pex_modules.manifests.has_hidden_resources(standalone):
-        if standalone:
-            # constructing this error message is expensive, only do it when we abort analysis
-            error_msg = "standalone builds don't support hidden resources" if output_suffix else _hidden_resources_error_message(ctx.label, pex_modules.manifests.hidden_resources(standalone))
-
-            return _fail(ctx, python_internal_tools, output_suffix, error_msg)
-        else:
-            hidden_resources = pex_modules.manifests.hidden_resources(standalone)
+    if standalone:
+        err = _check_hidden_resources(ctx, pex_modules, package_style, output_suffix)
+        if err:
+            return _fail(ctx, python_internal_tools, output_suffix, err)
+    elif pex_modules.manifests.has_hidden_resources(False):
+        hidden_resources = pex_modules.manifests.hidden_resources(False)
 
     pyc_mode = PycInvalidationMode("checked_hash") if inplace else PycInvalidationMode("unchecked_hash")
 
@@ -1142,9 +1141,31 @@ def _pex_modules_args(
 
     return cmd_args(cmd, hidden = hidden)
 
-def _hidden_resources_error_message(current_target: Label, hidden_resources: list[ArgLike] | None) -> str:
+def _check_hidden_resources(
+        ctx: AnalysisContext,
+        pex_modules: PexModules,
+        package_style: PackageStyle,
+        output_suffix: str) -> str | None:
     """
-    Friendlier error message about putting non-python resources into standalone bins
+    Return an error message if pex_modules has hidden resources (which standalone
+    and outplace can't package), else None. Only call for unsupported styles.
+    """
+    standalone = package_style == PackageStyle("standalone")
+    if not pex_modules.manifests.has_hidden_resources(standalone):
+        return None
+
+    # constructing the full error message is expensive, only do it when we abort analysis
+    if output_suffix:
+        return "{} builds don't support hidden resources".format(package_style.value)
+    return _hidden_resources_error_message(
+        ctx.label,
+        pex_modules.manifests.hidden_resources(standalone),
+        package_style.value,
+    )
+
+def _hidden_resources_error_message(current_target: Label, hidden_resources: list[ArgLike] | None, style_name: str) -> str:
+    """
+    Friendlier error message about putting non-python resources into standalone/outplace bins
     """
     owner_to_artifacts = {}
 
@@ -1160,7 +1181,7 @@ def _hidden_resources_error_message(current_target: Label, hidden_resources: lis
                     owner_to_artifacts.setdefault(r.owner, []).append(r.short_path)
 
     msg = (
-        "Cannot package hidden srcs/resources in a standalone python_binary. " +
+        "Cannot package hidden srcs/resources in a {} python_binary. ".format(style_name) +
         'Eliminate resources in non-Python dependencies of this python binary, set `package_style = "inplace"` on ' +
         str(current_target.raw_target()) + ", " +
         'use `strip_mode="full"` or turn off Split DWARF `-c fbcode.split-dwarf=false` on C++ binary resources.\n'
