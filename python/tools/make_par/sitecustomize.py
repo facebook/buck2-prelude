@@ -107,8 +107,6 @@ def __install_path_propagating_finder() -> None:
             self.expanded_par_tree = expanded_par_tree
             self._propagated: set[str] = set()
 
-        # pyre-fixme[3]: Return type must be annotated.
-        # pyre-fixme[2]: Parameter must be annotated.
         def find_spec(self, fullname, path=None, target=None):
             if "." not in fullname:
                 return None
