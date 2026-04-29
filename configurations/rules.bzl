@@ -62,8 +62,21 @@ def constraint_value_impl(ctx):
 def constraint_impl(ctx):
     # Validate values are unique and non-empty
     values = ctx.attrs.values
-    if len(values) <= 1:
-        fail("constraint() rule must have at least two values: one for the default and at least one alternative to provide constraint choices. Example: values = ['disable', 'enable']")
+
+    min_values = 1 if ctx.attrs.allow_trivial_constraint else 2
+    if len(values) < min_values:
+        if ctx.attrs.allow_trivial_constraint:
+            fail("constraint() rule must have at least one value.")
+        else:
+            fail(
+                "constraint() rule must have at least two values. " +
+                "A single-value constraint has no selectivity: it can't express a choice between alternatives " +
+                "(e.g., 'linux' vs 'macos', 'enabled' vs 'disabled'), which is the whole point of a constraint. " +
+                "If you don't need to select between alternatives, you likely don't need a constraint at all.\n\n" +
+                "Set allow_trivial_constraint = True only if your constraint legitimately has just one value " +
+                "most of the time and may temporarily gain alternatives (e.g., versioned packages " +
+                "that pick up an extra value during an upgrade and drop it once the upgrade lands).",
+            )
 
     # Reserved keywords that cannot be used as values
     # - 'default': Reserved for aliasing to the actual default value (e.g., :os[default] -> :os[none])

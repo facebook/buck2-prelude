@@ -395,6 +395,16 @@ constraint = prelude_rule(
             "default": attrs.string(
                 doc = "Default value (must be one of the `values`).",
             ),
+            "allow_trivial_constraint": attrs.bool(
+                default = False,
+                doc = """
+                    If True, allow this constraint to declare only one value.
+                    Intended for constraints that have just a default value most of the time and may
+                    temporarily gain additional values (e.g., versioned packages that pick up an extra
+                    value during an upgrade and drop it once the upgrade lands).
+                    Default is False, which requires at least two values.
+                """,
+            ),
             "execution_modifier": attrs.bool(default = False),
             # Dependency on the exec platform marker constraint.
             # Modifiers with execution_modifier=False will be wrapped in a conditional modifier
@@ -431,6 +441,7 @@ exec_platform_marker_constraint = prelude_rule(
             "default": attrs.string(
                 doc = "Default value (must be one of the `values`).",
             ),
+            "allow_trivial_constraint": attrs.bool(default = False),
         }
     ),
 )
