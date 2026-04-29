@@ -154,7 +154,7 @@ def _linker(
         # For "binary" rules, add C++ toolchain binary-specific linker flags.
         # TODO(agallagher): This feels a bit wrong -- it might be better to have
         # the Rust toolchain have it's own `binary_linker_flags` instead of
-        # implicltly using the one from the C++ toolchain.
+        # implicitly using the one from the C++ toolchain.
         linker_info.binary_linker_flags if binary else [],
         ctx.attrs._rust_toolchain[RustToolchainInfo].linker_flags,
         ctx.attrs.linker_flags,

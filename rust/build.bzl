@@ -912,7 +912,7 @@ def symlinked_dirs(
     transitive_dependency_dirs.add(transitive_dependency_dir)
 
     return cmd_args(
-        # Reference the directory Artifact (not the dirs file), so all of its childern are included.
+        # Reference the directory Artifact (not the dirs file), so all of its children are included.
         transitive_dependency_dir,
         format = "@{}/dirs",
         hidden = transitive_deps.project_as_args("artifacts_args"),

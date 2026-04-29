@@ -230,7 +230,7 @@ RustLinkInfo = provider(
         # static library that bundles all transitive Rust deps, including `:A` (and similarly for
         # the DSO case).
         #
-        # With `advanced_unstable_linkin`, Rust libraries essentially behave just like C++
+        # With `advanced_unstable_linking`, Rust libraries essentially behave just like C++
         # libraries in the link graph, with the handling of transitive dependencies being the only
         # difference.
         "native_link_deps": RustNativeLinkDeps,
