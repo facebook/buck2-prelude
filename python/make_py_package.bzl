@@ -307,7 +307,7 @@ def make_py_package(
     )
     generated_files.append((startup_functions_loader, "__par__/__startup_function_loader__.py"))
 
-    manifest_module = _generate_manifest_module(ctx, manifest_module_entries, python_internal_tools, srcs)
+    manifest_module = _generate_manifest_module(ctx, manifest_module_entries, python_toolchain, python_internal_tools, srcs)
     if manifest_module:
         generated_files.append((manifest_module.artifacts[1], "__manifest__.py"))
         generated_files.append((manifest_module.artifacts[0], "__manifest__.json"))
@@ -1339,6 +1339,7 @@ def load_startup_functions():
 def _generate_manifest_module(
         ctx: AnalysisContext,
         manifest_module_entries: dict[str, typing.Any] | None,
+        python_toolchain: PythonToolchainInfo,
         python_internal_tools: PythonInternalToolsInfo,
         src_manifests: list[ArgLike]) -> ManifestModule | None:
     """
@@ -1357,13 +1358,23 @@ def _generate_manifest_module(
         src_manifests,
         has_content_based_path = False,
     )
-    cmd = cmd_args(
-        python_internal_tools.make_py_package_manifest_module,
-        ["--manifest-entries", entries_json],
-        ["--module-manifests", src_manifests_path],
-        ["--output", module.as_output()],
-        hidden = src_manifests,
-    )
+    if ctx.attrs.use_rust_make_par:
+        cmd = cmd_args(
+            python_toolchain.make_py_package_live[RunInfo],
+            "manifest-module",
+            ["--manifest-entries", entries_json],
+            ["--module-manifests", src_manifests_path],
+            ["--output", module.as_output()],
+            hidden = src_manifests,
+        )
+    else:
+        cmd = cmd_args(
+            python_internal_tools.make_py_package_manifest_module,
+            ["--manifest-entries", entries_json],
+            ["--module-manifests", src_manifests_path],
+            ["--output", module.as_output()],
+            hidden = src_manifests,
+        )
     ctx.actions.run(cmd, category = "par", identifier = "manifest-module")
 
     json_entries_output = ctx.actions.declare_output("manifest/__manifest__.json", has_content_based_path = False)
