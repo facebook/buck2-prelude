@@ -97,7 +97,6 @@ public class DefaultAndroidManifestReader implements AndroidManifestReader {
       NodeList nodes;
       nodes =
           Objects.requireNonNull(
-              // NULLSAFE_FIXME[Unvetted Third Party In Nullsafe]
               (NodeList) launchableActivitiesExpression.evaluate(doc, XPathConstants.NODESET));
 
       List<String> activities = new ArrayList<>();
@@ -115,7 +114,6 @@ public class DefaultAndroidManifestReader implements AndroidManifestReader {
   public String getPackage() {
     try {
       return Objects.requireNonNull(
-          // NULLSAFE_FIXME[Unvetted Third Party In Nullsafe]
           (String) packageExpression.evaluate(doc, XPathConstants.STRING));
     } catch (XPathExpressionException e) {
       throw new RuntimeException(e);
@@ -126,7 +124,6 @@ public class DefaultAndroidManifestReader implements AndroidManifestReader {
   public String getVersionCode() {
     try {
       return Objects.requireNonNull(
-          // NULLSAFE_FIXME[Unvetted Third Party In Nullsafe]
           (String) versionCodeExpression.evaluate(doc, XPathConstants.STRING));
     } catch (XPathExpressionException e) {
       throw new RuntimeException(e);
@@ -137,7 +134,6 @@ public class DefaultAndroidManifestReader implements AndroidManifestReader {
   public String getInstrumentationTestRunner() {
     try {
       return Objects.requireNonNull(
-          // NULLSAFE_FIXME[Unvetted Third Party In Nullsafe]
           (String) instrumentationTestRunnerExpression.evaluate(doc, XPathConstants.STRING));
     } catch (XPathExpressionException e) {
       throw new RuntimeException(e);
@@ -148,7 +144,6 @@ public class DefaultAndroidManifestReader implements AndroidManifestReader {
   public String getTargetPackage() {
     try {
       return Objects.requireNonNull(
-          // NULLSAFE_FIXME[Unvetted Third Party In Nullsafe]
           (String) targetPackageExpression.evaluate(doc, XPathConstants.STRING));
     } catch (XPathExpressionException e) {
       throw new RuntimeException(e);
