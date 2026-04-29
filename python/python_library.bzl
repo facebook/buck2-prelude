@@ -272,6 +272,10 @@ def py_resources(
                 # Package the binary's shared libs next to the binary
                 # (the path is stored in RPATH relative to the binary).
                 d[paths.join(paths.dirname(name), o.basename)] = o
+            elif (isinstance(o, Artifact) and o.basename.endswith("#link-tree")):
+                # HACK: heuristic to detect Python runtime directories from python_binary rules.
+                # Package the runtime directory next to the startup script
+                d[paths.join(paths.dirname(name), o.basename)] = o
             else:
                 hidden.append(o)
     manifest = create_manifest_for_source_map(ctx, "resources{}".format(suffix), d)
