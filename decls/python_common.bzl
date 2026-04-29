@@ -25,8 +25,8 @@ def _resources_arg():
         "resources": attrs.named_set(attrs.source(), sorted = True, default = [], doc = """
     Static files to be packaged along with the Python sources.
      These resources can be accessed at runtime using
-     the [pkg\\_resources](http://setuptools.readthedocs.io/en/latest/pkg_resources.html) module distributed
-     with Python's setuptools.
+     the [importlib.resources](https://docs.python.org/3/library/importlib.resources.html) module
+     from the Python standard library.
 """),
     }
 

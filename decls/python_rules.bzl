@@ -506,7 +506,12 @@ python_library = prelude_rule(
         third_party_common.create_third_party_build_root_attrs() |
         {
             "ignore_compile_errors": attrs.bool(default = False),
-            "resources": attrs.named_set(attrs.one_of(attrs.dep(), attrs.source(allow_directory = True)), sorted = True, default = []),
+            "resources": attrs.named_set(attrs.one_of(attrs.dep(), attrs.source(allow_directory = True)), sorted = True, default = [], doc = """
+                Static files to be packaged along with the Python sources.
+                 These resources can be accessed at runtime using
+                 the [importlib.resources](https://docs.python.org/3/library/importlib.resources.html) module
+                 from the Python standard library.
+            """),
             "type_stubs": attrs.named_set(attrs.source(), sorted = True, default = []),
             "versioned_resources": attrs.option(attrs.versioned(attrs.named_set(attrs.source(), sorted = True)), default = None),
             "versioned_srcs": attrs.option(attrs.versioned(attrs.named_set(attrs.source(), sorted = True)), default = None),
@@ -649,11 +654,73 @@ python_test_runner = prelude_rule(
     ),
 )
 
+python_bootstrap_binary = prelude_rule(
+    name = "python_bootstrap_binary",
+    docs = """
+        A `python_bootstrap_binary()` rule declares a Python binary intended
+        to be used in scripts that bootstrap other aspects of the Buck2
+        prelude. Python bootstrap binaries do not use the Python toolchain
+        and, as such, are highly restricted in what they can and can't do.
+        In particular, bootstrap binaries can only depend on
+        `python_bootstrap_library()` rules and the entry point must consist
+        of a single source file.
+    """,
+    examples = None,
+    further = None,
+    attrs = {},
+)
+
+python_bootstrap_library = prelude_rule(
+    name = "python_bootstrap_library",
+    docs = """
+        A `python_bootstrap_library()` rule groups together Python sources
+        that may be consumed by `python_bootstrap_binary()` targets or by
+        other `python_bootstrap_library()` rules. Bootstrap libraries do
+        not use the Python toolchain and may only be depended on by other
+        bootstrap libraries or bootstrap binaries.
+    """,
+    examples = None,
+    further = None,
+    attrs = {},
+)
+
+python_needed_coverage_test = prelude_rule(
+    name = "python_needed_coverage_test",
+    docs = """
+        A `python_needed_coverage_test()` rule wraps an existing
+        `python_test()` target so that it runs as a coverage-collecting
+        bundle and is checked against per-module coverage thresholds. It is
+        used to enforce that specific modules covered by the wrapped test
+        meet a minimum coverage ratio at test time.
+    """,
+    examples = None,
+    further = None,
+    attrs = {},
+)
+
+python_runtime_bundle = prelude_rule(
+    name = "python_runtime_bundle",
+    docs = """
+        A `python_runtime_bundle()` rule declares a bundled Python runtime
+        — a full install of Python including the interpreter, standard
+        library, headers, and optionally `libpython.so` and additional
+        shared libraries — that can be embedded in a PAR to produce a
+        fully hermetic distribution.
+    """,
+    examples = None,
+    further = None,
+    attrs = {},
+)
+
 python_rules = struct(
     cxx_python_extension = cxx_python_extension,
     prebuilt_python_library = prebuilt_python_library,
     python_binary = python_binary,
+    python_bootstrap_binary = python_bootstrap_binary,
+    python_bootstrap_library = python_bootstrap_library,
     python_library = python_library,
+    python_needed_coverage_test = python_needed_coverage_test,
+    python_runtime_bundle = python_runtime_bundle,
     python_test = python_test,
     python_test_runner = python_test_runner,
 )
