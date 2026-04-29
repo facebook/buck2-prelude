@@ -42,7 +42,6 @@ public class APKModuleMetadataUtil {
       Optional<ImmutableMultimap<APKModule, String>> moduleToClassesMap,
       Optional<ImmutableMultimap<APKModule, String>> apkModuleToNativeLibraryMap) {
     TreeMultimap<APKModule, String> orderedModuleToTargetsMap =
-        // NULLSAFE_FIXME[Unvetted Third Party In Nullsafe]
         TreeMultimap.create(Comparator.comparing(APKModule::getName), Ordering.natural());
     for (APKModule module : apkModuleGraph.getAPKModules()) {
       for (BuildTarget target : apkModuleGraph.getBuildTargets(module)) {
@@ -77,7 +76,6 @@ public class APKModuleMetadataUtil {
     // Add libraries metadata
     if (apkModuleToNativeLibraryMap.isPresent()) {
       TreeMultimap<APKModule, String> orderedModuleToLibrariesMap =
-          // NULLSAFE_FIXME[Unvetted Third Party In Nullsafe]
           TreeMultimap.create(Comparator.comparing(APKModule::getName), Ordering.natural());
       orderedModuleToLibrariesMap.putAll(apkModuleToNativeLibraryMap.get());
       metadataLines.add(APKModuleMetadataUtil.LIBRARIES_SECTION_HEADER);
@@ -90,7 +88,6 @@ public class APKModuleMetadataUtil {
   private static TreeMultimap<APKModule, String> sortModuleToStringsMultimap(
       ImmutableMultimap<APKModule, String> multimap) {
     TreeMultimap<APKModule, String> orderedMap =
-        // NULLSAFE_FIXME[Unvetted Third Party In Nullsafe]
         TreeMultimap.create(Comparator.comparing(APKModule::getName), Ordering.natural());
     orderedMap.putAll(multimap);
     return orderedMap;
