@@ -74,6 +74,63 @@ def __patch_ctypes(saved_env: dict[str, str]) -> None:
     ctypes_util.find_library = lambda name: _patched_find_library(name)
 
 
+_PATH_PROPAGATING_FINDER_SENTINEL: str = "_fb_par_path_propagating_finder_installed"
+
+
+def __install_path_propagating_finder() -> None:
+    """Install a meta-path finder that grafts the unpack tree onto package __path__.
+
+    Standalone PARs extract .so files (but not .py / .pyc / .pyo) into the
+    unpack dir at FB_PAR_RUNTIME_FILES / FB_PAR_UNZIP_LOCATION. For ext-bearing
+    packages, __init__.py lives only in the PAR zip while the .so lives only
+    in the unpack dir; zipimport cannot load .so from a zip. This finder
+    appends the matching unpack subdirectory to a parent package's __path__ on
+    first submodule import, so Python's standard PathFinder can resolve the
+    on-disk .so.
+
+    Runs in the parent (via __run_par_main__.py: `import sitecustomize`) AND
+    in spawn / forkserver / subprocess.run children (via __patch_spawn /
+    __patch_subprocess_run, which export PYTHONPATH so the child finds this
+    sitecustomize during Py_Initialize). Idempotent.
+    """
+    if any(getattr(f, _PATH_PROPAGATING_FINDER_SENTINEL, False) for f in sys.meta_path):
+        return
+
+    expanded_par_tree = os.environ.get("FB_PAR_RUNTIME_FILES") or os.environ.get(
+        "FB_PAR_UNZIP_LOCATION"
+    )
+    if not expanded_par_tree or not os.path.isdir(expanded_par_tree):
+        return
+
+    class PathPropagatingFinder:
+        def __init__(self, expanded_par_tree: str) -> None:
+            self.expanded_par_tree = expanded_par_tree
+            self._propagated: set[str] = set()
+
+        # pyre-fixme[3]: Return type must be annotated.
+        # pyre-fixme[2]: Parameter must be annotated.
+        def find_spec(self, fullname, path=None, target=None):
+            if "." not in fullname:
+                return None
+            parent_name = fullname.rsplit(".", 1)[0]
+            parent = sys.modules.get(parent_name)
+            if parent is None or not hasattr(parent, "__path__"):
+                return None
+            if parent_name in self._propagated:
+                return None
+            extracted_dir = os.path.join(
+                self.expanded_par_tree, parent_name.replace(".", os.sep)
+            )
+            if os.path.isdir(extracted_dir):
+                parent.__path__.append(extracted_dir)
+                self._propagated.add(parent_name)
+            return None
+
+    finder = PathPropagatingFinder(expanded_par_tree)
+    setattr(finder, _PATH_PROPAGATING_FINDER_SENTINEL, True)
+    sys.meta_path.insert(0, finder)
+
+
 _SITECUSTOMIZE_SUBDIR: str = "__par_sitecustomize_proxy__"
 
 
@@ -452,6 +509,7 @@ def __passthrough_exec_module() -> None:
         spec.loader.exec_module(mod)
 
 
+__install_path_propagating_finder()
 __clear_env()
 __startup__()
 __passthrough_exec_module()
