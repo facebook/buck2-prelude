@@ -35,15 +35,12 @@ import org.kohsuke.args4j.Option;
 public class MiniAaptExecutableMain {
 
   @Option(name = "--resource-paths", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String resourcePathsDir;
 
   @Option(name = "--dep-symbol-paths", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String depSymbolsPathsList;
 
   @Option(name = "--output-path", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String outputPath;
 
   public static void main(String[] args) throws IOException {
