@@ -35,26 +35,21 @@ public class AarBuilderExecutableMain {
       AbsPath.of(Paths.get(".").normalize().toAbsolutePath());
 
   @Option(name = "--output_path", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private Path outputPath;
 
   @Option(name = "--on_duplicate_entry", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private OnDuplicateEntry onDuplicateEntry;
 
   @Option(name = "--entries_file", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private Path entriesFile;
 
   @Option(name = "--hardcode_permissions_for_deterministic_output")
   private boolean hardcodePermissionsForDeterministicOutput;
 
   @Option(name = "--native_libs_file", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private Path nativeLibsFile;
 
   @Option(name = "--native_libs_assets_file", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private Path nativeLibsAssetsFile;
 
   @Option(name = "--proguard_config_file", required = false)
