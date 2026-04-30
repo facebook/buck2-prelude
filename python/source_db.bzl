@@ -32,7 +32,11 @@ def create_dbg_source_db(
 
     python_toolchain = ctx.attrs._python_toolchain[PythonToolchainInfo]
     python_internal_tools = ctx.attrs._python_internal_tools[PythonInternalToolsInfo]
-    cmd = cmd_args(python_internal_tools.make_source_db)
+    if ctx.attrs.use_rust_make_par:
+        cmd = cmd_args(python_toolchain.make_py_package_live[RunInfo])
+        cmd.add("source-db")
+    else:
+        cmd = cmd_args(python_internal_tools.make_source_db)
     cmd.add(cmd_args(output.as_output(), format = "--output={}"))
 
     # Pass manifests for rule's sources.
