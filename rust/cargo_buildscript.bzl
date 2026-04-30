@@ -167,7 +167,7 @@ def _make_cc_shim(ctx: AnalysisContext, name: str, cmd: cmd_args) -> cmd_args:
                 # Change directory to the script's location in buck-out, then up
                 # to the repo root.
                 'cd -- "$(dirname -- "$(realpath "${BASH_SOURCE[0]}")")"',
-                cmd_args(ctx.label.project_root, relative_to = script, parent = 1, format = "cd {}"),
+                cmd_args(ctx.label.project_root, relative_to = (script, 1), format = "cd {}"),
                 # Run from_any_dir.py.
                 cmd_args(
                     cmd_args(
@@ -202,7 +202,7 @@ def _make_cc_shim(ctx: AnalysisContext, name: str, cmd: cmd_args) -> cmd_args:
                 ] if name == "__ld_shim" else [],
                 "set cc_original_dir=%CD%",
                 'cd /d "%~dp0"',
-                cmd_args(ctx.label.project_root, relative_to = script, parent = 1, format = "cd {}"),
+                cmd_args(ctx.label.project_root, relative_to = (script, 1), format = "cd {}"),
                 cmd_args(
                     cmd_args(
                         cmd_args(internal_tools_info.from_any_dir, quote = "shell"),
