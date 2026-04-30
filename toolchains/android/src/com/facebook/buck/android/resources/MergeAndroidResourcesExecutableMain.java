@@ -34,15 +34,12 @@ import org.kohsuke.args4j.Option;
 @Nullsafe(Nullsafe.Mode.LOCAL)
 public class MergeAndroidResourcesExecutableMain {
   @Option(name = "--symbol-file-info", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String symbolFileInfo;
 
   @Option(name = "--output-dir", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String outputDirString;
 
   @Option(name = "--output-dir-zipped", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String outputDirZippedString;
 
   @Option(name = "--strings-output-dir")
