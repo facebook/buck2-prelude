@@ -37,15 +37,12 @@ import org.tukaani.xz.XZOutputStream;
 @Nullsafe(Nullsafe.Mode.LOCAL)
 public class SecondaryDexCompressionExecutableMain {
   @Option(name = "--secondary-dex-output-dir", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String secondaryDexOutputDirString;
 
   @Option(name = "--raw-secondary-dexes-dir", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String rawSecondaryDexesDir;
 
   @Option(name = "--module", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String module;
 
   @Nullable
@@ -53,11 +50,9 @@ public class SecondaryDexCompressionExecutableMain {
   private String moduleDepsPathString = null;
 
   @Option(name = "--canary-class-name", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String canaryClassName;
 
   @Option(name = "--compression", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String compression;
 
   @Option(name = "--xz-compression-level")
