@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import itertools
 import os
+import stat
 import sys
 import threading
 import warnings
@@ -102,6 +103,11 @@ def __install_path_propagating_finder() -> None:
     if not expanded_par_tree or not os.path.isdir(expanded_par_tree):
         return
 
+    _stat = os.stat
+    _S_ISDIR = stat.S_ISDIR
+    _join = os.path.join
+    _sep = os.sep
+
     class PathPropagatingFinder:
         def __init__(self, expanded_par_tree: str) -> None:
             self.expanded_par_tree = expanded_par_tree
@@ -116,10 +122,14 @@ def __install_path_propagating_finder() -> None:
                 return None
             if parent_name in self._propagated:
                 return None
-            extracted_dir = os.path.join(
-                self.expanded_par_tree, parent_name.replace(".", os.sep)
+            extracted_dir = _join(
+                self.expanded_par_tree, parent_name.replace(".", _sep)
             )
-            if os.path.isdir(extracted_dir):
+            try:
+                st = _stat(extracted_dir)
+            except (OSError, ValueError, TypeError):
+                return None
+            if _S_ISDIR(st.st_mode):
                 parent.__path__.append(extracted_dir)
                 self._propagated.add(parent_name)
             return None
