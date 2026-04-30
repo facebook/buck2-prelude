@@ -233,6 +233,7 @@ def _cxx_toolchain_override(ctx):
         clang_llvm_statistics = base_toolchain.clang_llvm_statistics,
         gcno_files = base_toolchain.gcno_files,
         clang_trace = base_toolchain.clang_trace,
+        clang_trace_granularity_us = base_toolchain.clang_trace_granularity_us,
         object_format = CxxObjectFormat(ctx.attrs.object_format) if ctx.attrs.object_format != None else base_toolchain.object_format,
         strip_flags_info = strip_flags_info,
         pic_behavior = PicBehavior(ctx.attrs.pic_behavior) if ctx.attrs.pic_behavior != None else base_toolchain.pic_behavior.value,

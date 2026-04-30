@@ -249,6 +249,8 @@ CxxToolchainInfo = provider(
         "clang_remarks": provider_field(typing.Any, default = None),
         # Produce a time profiler JSON report by calling clang with `-ftime-trace`.
         "clang_trace": provider_field(bool, default = False),
+        # Minimum duration in microseconds for emitted `-ftime-trace` events.
+        "clang_trace_granularity_us": provider_field(int | None, default = None),
         "compiler_flavor_flags": provider_field(typing.Any, default = {}),
         "cpp_dep_tracking_mode": provider_field(typing.Any, default = None),
         "cuda_compiler_info": provider_field(typing.Any, default = None),
@@ -326,6 +328,7 @@ def cxx_toolchain_infos(
         clang_llvm_statistics = False,
         gcno_files = None,
         clang_trace = False,
+        clang_trace_granularity_us = None,
         cpp_dep_tracking_mode = DepTrackingMode("none"),
         cuda_dep_tracking_mode = DepTrackingMode("none"),
         strip_flags_info = None,
@@ -380,6 +383,7 @@ def cxx_toolchain_infos(
         clang_remarks = clang_remarks,
         clang_llvm_statistics = clang_llvm_statistics,
         clang_trace = clang_trace,
+        clang_trace_granularity_us = clang_trace_granularity_us,
         cpp_dep_tracking_mode = cpp_dep_tracking_mode,
         cuda_compiler_info = cuda_compiler_info,
         cuda_dep_tracking_mode = cuda_dep_tracking_mode,

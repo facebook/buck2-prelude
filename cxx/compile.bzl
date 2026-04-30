@@ -689,6 +689,12 @@ def _compile_single_cxx(
 
     if clang_trace:
         cmd.add(["-ftime-trace"])
+        if toolchain.clang_trace_granularity_us != None:
+            cmd.add([
+                "-ftime-trace-granularity={}".format(
+                    toolchain.clang_trace_granularity_us,
+                ),
+            ])
         cmd.add(cmd_args(hidden = clang_trace))
 
     if gcno_file:
