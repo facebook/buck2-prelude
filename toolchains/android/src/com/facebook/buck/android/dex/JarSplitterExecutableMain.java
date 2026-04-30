@@ -40,11 +40,9 @@ public class JarSplitterExecutableMain {
   private static final String CLASS_NAME_SUFFIX = ".class";
 
   @Option(name = "--input-jar", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String inputJar;
 
   @Option(name = "--primary-dex-patterns", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String primaryDexPatterns;
 
   @Option(name = "--proguard-configuration-file")
@@ -56,11 +54,9 @@ public class JarSplitterExecutableMain {
   private String proguardMappingFileString = null;
 
   @Option(name = "--primary-dex-classes-jar", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String primaryDexClassesJar;
 
   @Option(name = "--secondary-dex-classes-jar", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String secondaryDexClassesJar;
 
   public static void main(String[] args) throws IOException {
