@@ -25,11 +25,9 @@ import org.kohsuke.args4j.Option;
 @Nullsafe(Nullsafe.Mode.LOCAL)
 public class ReplaceApplicationIdPlaceholdersExecutableMain {
   @Option(name = "--manifest", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String manifest;
 
   @Option(name = "--output", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String output;
 
   @Option(name = "--sanity-check-placeholders")
