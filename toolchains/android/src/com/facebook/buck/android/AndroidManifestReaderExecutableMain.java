@@ -24,7 +24,6 @@ import org.kohsuke.args4j.Option;
 public class AndroidManifestReaderExecutableMain {
 
   @Option(name = "--manifest-path", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String manifestPath;
 
   @Option(name = "--target-package-output")
