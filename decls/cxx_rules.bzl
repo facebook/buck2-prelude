@@ -948,7 +948,19 @@ cxx_test = prelude_rule(
 
 cxx_toolchain = prelude_rule(
     name = "cxx_toolchain",
-    docs = "",
+    docs = """
+        A `cxx_toolchain()` rule declares a complete C/C++ toolchain — a
+        set of compilers (C, C++, Objective-C, asm, CUDA, HIP, etc.),
+        preprocessors, linker, archiver, and binary utilities (`strip`,
+        `objcopy`, `dwp`, `nm`, etc.) — along with the flags and behavior
+        options that control how each tool is invoked.
+
+        Native rules (`cxx_binary()`, `cxx_library()`, `cxx_test()`,
+        `prebuilt_cxx_library()`, etc.) and rules in other languages that
+        ultimately link native code (e.g. `python_binary()`,
+        `rust_binary()`, `haskell_binary()`) consume a `cxx_toolchain()`
+        via a toolchain dependency to compile and link their outputs.
+    """,
     examples = None,
     further = None,
     attrs = (
@@ -1278,7 +1290,18 @@ prebuilt_cxx_library_group = prelude_rule(
 llvm_link_bitcode = prelude_rule(
     name = "llvm_link_bitcode",
     docs = """
-        A llvm\\_link\\_bitcode() rule builds a LLVM bitcode object from a given set LLVM bitcode inputs.
+        An `llvm_link_bitcode()` rule combines a set of LLVM bitcode
+        inputs into a single bitcode object using `llvm-link`.
+
+        LLVM bitcode is the intermediate representation produced by Clang
+        when compiling with `-emit-llvm`; merging multiple bitcode files
+        into one allows downstream rules to perform whole-program
+        optimization, link-time optimization (LTO), or other
+        bitcode-level analyses on the combined module.
+
+        Inputs can be other `llvm_link_bitcode()` outputs, raw `.bc` /
+        `.o` files containing bitcode, or `cxx_library()` rules producing
+        bitcode artifacts.
     """,
     examples = """
         ```
@@ -1303,6 +1326,22 @@ llvm_link_bitcode = prelude_rule(
     ),
 )
 
+transformation_spec = prelude_rule(
+    name = "transformation_spec",
+    docs = """
+        A `transformation_spec()` rule declares a list of transformation
+        rules that map targets (by `Label`, by build target pattern, or
+        by build graph pattern) to a `TransformationKind`
+        (`debug` or `optimized`). Other rules can reference a
+        `transformation_spec()` via a `transformation_spec` attribute to
+        decide, on a per-dependency basis, which transformation should be
+        applied when building that dependency.
+    """,
+    examples = None,
+    further = None,
+    attrs = {},
+)
+
 cxx_rules = struct(
     cxx_binary = cxx_binary,
     cxx_genrule = cxx_genrule,
@@ -1314,4 +1353,5 @@ cxx_rules = struct(
     prebuilt_cxx_library = prebuilt_cxx_library,
     prebuilt_cxx_library_group = prebuilt_cxx_library_group,
     llvm_link_bitcode = llvm_link_bitcode,
+    transformation_spec = transformation_spec,
 )
