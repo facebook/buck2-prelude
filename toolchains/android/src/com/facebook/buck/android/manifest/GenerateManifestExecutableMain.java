@@ -34,27 +34,21 @@ import org.kohsuke.args4j.Option;
 @Nullsafe(Nullsafe.Mode.LOCAL)
 public class GenerateManifestExecutableMain {
   @Option(name = "--skeleton-manifest", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String skeletonManifest;
 
   @Option(name = "--module-name", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String moduleName;
 
   @Option(name = "--library-manifests-list", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String libraryManifestsList;
 
   @Option(name = "--placeholder-entries-list", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String placeholderEntriesList;
 
   @Option(name = "--output", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String output;
 
   @Option(name = "--merge-report", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String mergeReport;
 
   @Option(name = "--preprocess-log", required = false)
