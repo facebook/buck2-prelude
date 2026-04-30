@@ -826,6 +826,8 @@ def _make_py_package_live(
         sub_targets["state"] = [DefaultInfo(default_output = state)]
 
         cmd.add(["--incremental"])
+        if getattr(ctx.attrs, "use_rust_make_par_optimizations", False):
+            cmd.add(["--use-rust-make-par-optimizations"])
         ctx.actions.run(
             cmd,
             metadata_env_var = "ACTION_METADATA",
