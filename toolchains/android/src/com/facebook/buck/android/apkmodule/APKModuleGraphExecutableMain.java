@@ -46,23 +46,18 @@ import org.kohsuke.args4j.Option;
 public class APKModuleGraphExecutableMain {
 
   @Option(name = "--root-target", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String rootTarget;
 
   @Option(name = "--target-graph", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String targetGraphPath;
 
   @Option(name = "--seed-config-map", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String seedConfigMapPath;
 
   @Option(name = "--app-module-dependencies-map", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String appModuleDependenciesPath;
 
   @Option(name = "--output", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String outputPath;
 
   @Option(name = "--always-in-main-apk-seeds")
