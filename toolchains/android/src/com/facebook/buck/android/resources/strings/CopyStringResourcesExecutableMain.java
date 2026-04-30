@@ -25,11 +25,9 @@ import org.kohsuke.args4j.Option;
 @Nullsafe(Nullsafe.Mode.LOCAL)
 public class CopyStringResourcesExecutableMain {
   @Option(name = "--res-dirs", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String resDirsFileString;
 
   @Option(name = "--output", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String outputPathString;
 
   @Option(name = "--is-voltron")
