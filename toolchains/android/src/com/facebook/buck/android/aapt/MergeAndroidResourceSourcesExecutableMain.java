@@ -27,11 +27,9 @@ import org.kohsuke.args4j.Option;
 public class MergeAndroidResourceSourcesExecutableMain {
 
   @Option(name = "--resource-paths", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String resourcePathsList;
 
   @Option(name = "--output", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private Path output;
 
   public static void main(String[] args) throws IOException {
