@@ -42,23 +42,18 @@ public class PackageStringsAsAssetsExecutableMain {
   private static final String STRING_ASSET_FILE_EXTENSION = ".fbstr";
 
   @Option(name = "--string-files-list", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String stringFilesList;
 
   @Option(name = "--r-dot-txt", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String rDotTxt;
 
   @Option(name = "--string-assets-dir", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String stringAssetsDir;
 
   @Option(name = "--string-assets-zip", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String stringAssetsZip;
 
   @Option(name = "--all-locales-string-assets-zip", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String allLocalesStringAssetsZip;
 
   @Option(name = "--locales")
