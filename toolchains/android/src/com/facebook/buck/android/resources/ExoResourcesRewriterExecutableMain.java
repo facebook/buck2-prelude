@@ -27,31 +27,24 @@ import org.kohsuke.args4j.Option;
 @Nullsafe(Nullsafe.Mode.LOCAL)
 public class ExoResourcesRewriterExecutableMain {
   @Option(name = "--original-r-dot-txt", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String originalRDotTxt;
 
   @Option(name = "--new-r-dot-txt", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String newRDotTxt;
 
   @Option(name = "--original-primary-apk-resources", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String originalPrimaryApkResources;
 
   @Option(name = "--new-primary-apk-resources", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String newPrimaryApkResources;
 
   @Option(name = "--exo-resources", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String exoResources;
 
   @Option(name = "--exo-resources-hash", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String exoResourcesHash;
 
   @Option(name = "--zipalign-tool", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String zipalignTool;
 
   @Option(name = "--optimized-processing", usage = "enable optimized resource processing")
