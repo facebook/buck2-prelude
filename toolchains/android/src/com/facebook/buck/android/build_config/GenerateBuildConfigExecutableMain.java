@@ -26,19 +26,15 @@ import org.kohsuke.args4j.Option;
 @Nullsafe(Nullsafe.Mode.LOCAL)
 public class GenerateBuildConfigExecutableMain {
   @Option(name = "--source", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String source;
 
   @Option(name = "--java-package", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String javaPackage;
 
   @Option(name = "--use-constant-expressions", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String useConstantExpressions;
 
   @Option(name = "--default-values-file", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String defaultValuesFile;
 
   @Option(name = "--values-file")
@@ -46,7 +42,6 @@ public class GenerateBuildConfigExecutableMain {
   private String valuesFile;
 
   @Option(name = "--output", required = true)
-  // NULLSAFE_FIXME[Field Not Initialized]
   private String output;
 
   public static void main(String[] args) throws IOException {
