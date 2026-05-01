@@ -299,12 +299,13 @@ def _compute_pex_providers(
     # (analyze against dbg-db.json) for backward compatibility.
     if getattr(ctx.attrs, "lazy_imports_analyzer", None):
         lazy_import_analysis_output = ctx.actions.declare_output("safer_lazy_imports/lazy-import-analysis.json", has_content_based_path = False)
-        dep_caches = [
-            dep[LazyImportsCacheInfo].cache
-            for dep in ctx.attrs.deps
-            if LazyImportsCacheInfo in dep
-        ]
-        if dep_caches and python_toolchain.lazy_imports_analyzer != None:
+        if getattr(ctx.attrs, "use_lifeguard_incremental", False) and python_toolchain.lazy_imports_analyzer != None:
+            dep_caches = [
+                dep[LazyImportsCacheInfo].cache
+                for dep in ctx.attrs.deps
+                if LazyImportsCacheInfo in dep
+            ]
+
             # This first call pulls in the hidden __par__ modules
             binary_lib_cache = ctx.actions.declare_output("safer_lazy_imports/binary-library-cache.bin")
             run_lazy_imports_library_analyzer(
@@ -323,7 +324,6 @@ def _compute_pex_providers(
                 dep_caches + [binary_lib_cache],
             )
         else:
-            warning("Lifeguard is running in full analysis mode and not leveraging caches")
             run_lazy_imports_analyzer(ctx, dbg_source_db.other_outputs, lazy_import_analysis_output, dbg_source_db_output)
         extra_artifacts["safer_lazy_imports/lazy-import-analysis.json"] = lazy_import_analysis_output
 

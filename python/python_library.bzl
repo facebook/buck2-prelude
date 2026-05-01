@@ -410,7 +410,7 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
     # Lazy imports library cache.
     lazy_imports_analyzer = python_toolchain.lazy_imports_analyzer
-    if lazy_imports_analyzer != None:
+    if lazy_imports_analyzer != None and getattr(ctx.attrs, "use_lifeguard_incremental", False):
         dep_caches = [
             dep[LazyImportsCacheInfo].cache
             for dep in raw_deps
