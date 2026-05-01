@@ -93,10 +93,6 @@ _GENRULE_LOCAL_LABELS = set([
     # makes it fail on RE.
     "upm_binary_gen",
 
-    # PHP isn't available in RE or in our repos so, for now, we run them locally
-    # (https://fb.workplace.com/groups/1042353022615812/posts/1849505965233843/).
-    "uses_php",
-
     # Uses the `libX11-devel` package which is not available on RE.
     "uses_x11",
 
