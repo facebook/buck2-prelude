@@ -116,6 +116,11 @@ _GENRULE_LOCAL_LABELS = set([
     # filesystem
     "writes_to_buck_out",
 
+    # Side effecting writes directly to local filesystem outside of buck-out
+    # Do not add or use in new rules, just for tagging existing rules for
+    # better categorization.
+    "writes_outside_buck_out",
+
     # Calculates and writes absolute paths in the local filesystem
     "uses_local_filesystem_abspaths",
 
