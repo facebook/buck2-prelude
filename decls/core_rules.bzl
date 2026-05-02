@@ -405,6 +405,18 @@ constraint = prelude_rule(
                     Default is False, which requires at least two values.
                 """,
             ),
+            "aliases": attrs.dict(
+                attrs.string(),
+                attrs.string(),
+                default = {},
+                doc = """
+                    Optional mapping of alias name -> declared value. Each alias becomes an additional
+                    subtarget that resolves to the same providers as the underlying value, letting users
+                    refer to a constraint value by a stable shorthand (e.g. `:version[1.4]`) that maps to
+                    a brittle underlying value (e.g. `1.4.5.xxx.67890`). Alias names must not collide with
+                    declared values or reserved keywords, and alias values must appear in `values`.
+                """,
+            ),
             "execution_modifier": attrs.bool(default = False),
             # Dependency on the exec platform marker constraint.
             # Modifiers with execution_modifier=False will be wrapped in a conditional modifier
@@ -442,6 +454,7 @@ exec_platform_marker_constraint = prelude_rule(
                 doc = "Default value (must be one of the `values`).",
             ),
             "allow_trivial_constraint": attrs.bool(default = False),
+            "aliases": attrs.dict(attrs.string(), attrs.string(), default = {}),
         }
     ),
 )

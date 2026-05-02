@@ -142,6 +142,18 @@ def constraint_impl(ctx):
     # Add 'default' subtarget that aliases to the actual default value
     sub_targets["default"] = sub_targets[default]
 
+    # Validate and register user-defined aliases.
+    # Each alias becomes an additional subtarget pointing to an existing value's providers,
+    aliases = ctx.attrs.aliases
+    for alias_name, alias_value in aliases.items():
+        if alias_name in reserved_keywords:
+            fail("alias '{}' is a reserved keyword and cannot be used as a constraint alias.".format(alias_name))
+        if alias_name in seen:
+            fail("alias '{}' conflicts with a declared constraint value.".format(alias_name))
+        if alias_value not in seen:
+            fail("alias '{}' targets value '{}' which is not declared in values: {}".format(alias_name, alias_value, values))
+        sub_targets[alias_name] = sub_targets[alias_value]
+
     return [
         DefaultInfo(sub_targets = sub_targets),
         constraint_setting,
