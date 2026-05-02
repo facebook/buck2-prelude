@@ -124,14 +124,6 @@ def genrule_impl(ctx: AnalysisContext) -> list[Provider]:
     # Buck2 clears the output directory before execution, and thus src/sh too.
     return process_genrule(ctx, ctx.attrs.out, ctx.attrs.outs)
 
-def _declare_output(ctx: AnalysisContext, path: str, content_based: bool) -> Artifact:
-    if path == ".":
-        return ctx.actions.declare_output(GENRULE_OUT_DIR, dir = True, has_content_based_path = content_based)
-    elif path.endswith("/"):
-        return ctx.actions.declare_output(GENRULE_OUT_DIR, path[:-1], dir = True, has_content_based_path = content_based)
-    else:
-        return ctx.actions.declare_output(GENRULE_OUT_DIR, path, has_content_based_path = content_based)
-
 def _project_output(out: Artifact, path: str) -> Artifact:
     if path == ".":
         return out
@@ -184,17 +176,27 @@ def process_genrule(
 
     content_based = getattr(ctx.attrs, "has_content_based_path", False)
 
-    # TODO(cjhopman): verify output paths are ".", "./", or forward-relative.
+    # `out_dir_artifact`: The base artifact into which all the outputs go
+    # `out_env`: The path we put into `$OUT`
+    # `out_prepare`: The directory to `mkdir` before calling the user's code
+    #
+    # There is no justification for the particular choice of semantics today other than that's how
+    # it always worked and changing it is very hard
+    out_dir_artifact = ctx.actions.declare_output(GENRULE_OUT_DIR, dir = True, has_content_based_path = content_based)
     if out_attr != None:
-        out_artifact = _declare_output(ctx, out_attr, content_based)
+        out_env = _project_output(out_dir_artifact, out_attr)
+        if out_attr == ".":
+            out_prepare = out_env.as_output()
+        else:
+            out_prepare = cmd_args(out_env.as_output(), parent = 1)
         named_outputs = {}
-        default_outputs = [out_artifact]
+        default_outputs = [out_env]
         expect(executable_outs == None, "`executable_outs` should not be set when `out` is set")
     elif outs_attr != None:
-        out_artifact = ctx.actions.declare_output(GENRULE_OUT_DIR, dir = True, has_content_based_path = content_based)
-
+        out_env = out_dir_artifact
+        out_prepare = out_dir_artifact.as_output()
         named_outputs = {
-            name: [_project_output(out_artifact, path) for path in outputs]
+            name: [_project_output(out_dir_artifact, path) for path in outputs]
             for (name, outputs) in outs_attr.items()
         }
 
@@ -204,12 +206,12 @@ def process_genrule(
                 expect(executable_out in outs_names, "Value in `executable_outs` {} is not in `outs`".format(executable_out))
 
         default_outputs = [
-            _project_output(out_artifact, path)
+            _project_output(out_dir_artifact, path)
             for path in (ctx.attrs.default_outs or [])
         ]
         if len(default_outputs) == 0:
             # We want building to force something to be built, so make sure it contains at least one artifact
-            default_outputs = [out_artifact]
+            default_outputs = [out_dir_artifact]
     else:
         fail("One of `out` or `outs` should be set. Got `%s`" % repr(ctx.attrs))
 
@@ -271,7 +273,7 @@ def process_genrule(
         srcs.add(cmd_args(srcs_artifact, format = path_sep.join([".", "{}", symlink.replace("/", path_sep)])))
     env_vars = {
         "GEN_DIR": "GEN_DIR_DEPRECATED",
-        "OUT": out_artifact.as_output(),
+        "OUT": out_env.as_output(),
         "SRCDIR": cmd_args(srcs_artifact, format = path_sep.join([".", "{}"])),
         "SRCS": srcs,
     } | {k: cmd_args(v) for k, v in getattr(ctx.attrs, "env", {}).items()}
@@ -302,20 +304,18 @@ def process_genrule(
 
     # Create required directories.
     if is_windows:
-        out = ".\\{}\\..\\..\\output_artifacts\\out" if content_based else ".\\{}\\..\\out"
         script = [
             cmd_args(
-                srcs_artifact,
-                format = "if not exist {0} mkdir {0}".format(out),
+                out_prepare,
+                format = "if not exist {} mkdir {}",
             ),
             cmd_args("if NOT \"%TEMP%\" == \"\" set \"TMP=%TEMP%\""),
         ]
         script_extension = "bat"
     else:
-        out = "./{}/../../output_artifacts/out" if content_based else "./{}/../out"
         script = [
             # Use a somewhat unique exit code so this can get retried on RE (T99656531).
-            cmd_args(srcs_artifact, format = "mkdir -p {} || exit 99".format(out)),
+            cmd_args(out_prepare, format = "mkdir -p {} || exit 99"),
             cmd_args("export TMP=${TMPDIR:-/tmp}"),
         ]
         script_extension = "sh"
@@ -421,7 +421,7 @@ def process_genrule(
         # As of 09/2021, all genrule types were legal snake case if their dashes and periods were replaced with underscores.
         category += "_" + ctx.attrs.type.replace("-", "_").replace(".", "_")
     ctx.actions.run(
-        cmd_args(script_args, hidden = [cmd, srcs_artifact, out_artifact.as_output()] + hidden),
+        cmd_args(script_args, hidden = [cmd, srcs_artifact, out_dir_artifact.as_output()] + hidden),
         env = env_vars,
         local_only = local_only,
         prefer_local = prefer_local,
