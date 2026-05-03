@@ -104,9 +104,12 @@ def create_jar_artifact_kotlincd(
     output_paths = define_output_paths(actions, actions_identifier, label, uses_content_based_paths)
     kotlin_classes = declare_prefixed_output(actions, actions_identifier, "__kotlin_classes__", uses_content_based_paths, dir = True)
 
+    # Only create class-abi inline for class-mode targets. For source_only targets,
+    # the fallback in cd_jar_creator_util.bzl (create_abi) handles class-abi generation
+    # for subtargets. This keeps the kotlincd action key config-invariant. See T264990210.
     should_create_class_abi = \
         not is_creating_subtarget and \
-        (actual_abi_generation_mode == AbiGenerationMode("class") or not is_building_android_binary) and \
+        actual_abi_generation_mode == AbiGenerationMode("class") and \
         kotlin_toolchain.jvm_abi_gen_plugin != None
     if should_create_class_abi:
         class_abi_jar = declare_prefixed_output(actions, actions_identifier, "class-abi.jar", uses_content_based_paths)
