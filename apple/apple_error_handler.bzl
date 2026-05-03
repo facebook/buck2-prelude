@@ -6,12 +6,13 @@
 # of this source tree. You may select, at your option, one of the
 # above-listed licenses.
 
-# @oss-disable[end= ]: load("@prelude//apple/meta_only:apple_extra_error_categories.bzl", "APPLE_CXX_FLAG_MESSAGES", "APPLE_CXX_STDERR_CATEGORIES", "APPLE_META_STDERR_ERROR_CATEGORIES", "SWIFT_CATEGORY_REMEDIATION", "SWIFT_STDERR_CATEGORIES")
+# @oss-disable[end= ]: load("@prelude//apple/meta_only:apple_extra_error_categories.bzl", "APPLE_CXX_FLAG_MESSAGES", "APPLE_CXX_MESSAGE_CATEGORIES", "APPLE_CXX_STDERR_CATEGORIES", "APPLE_META_STDERR_ERROR_CATEGORIES", "SWIFT_CATEGORY_REMEDIATION", "SWIFT_STDERR_CATEGORIES")
 load("@prelude//apple/swift:swift_toolchain.bzl", "get_swift_toolchain_info")
 load("@prelude//cxx:cxx_context.bzl", "get_cxx_toolchain_info")
 load("@prelude//error_handler:error_enricher_types.bzl", "ErrorEnricher")
 
 APPLE_CXX_FLAG_MESSAGES = {} # @oss-enable
+APPLE_CXX_MESSAGE_CATEGORIES = [] # @oss-enable
 APPLE_CXX_STDERR_CATEGORIES = [] # @oss-enable
 APPLE_META_STDERR_ERROR_CATEGORIES = [] # @oss-enable
 SWIFT_CATEGORY_REMEDIATION = {} # @oss-enable
@@ -126,6 +127,19 @@ def cxx_error_handler(ctx: ActionErrorCtx) -> list[ActionSubError]:
                 subcategory = error_flag.replace("-", "_")
                 remediation = APPLE_CXX_FLAG_MESSAGES.get(error_flag, None)
                 postfix = " [-W{}]".format(error_flag)
+
+            # Fall back to per-error message matching when no flag-based
+            # remediation matched, mirroring swift_error_handler.
+            if remediation == None:
+                custom_category = _category_match(
+                    message = error_json["message"],
+                    path = error_json["path"],
+                    categories = APPLE_CXX_MESSAGE_CATEGORIES,
+                )
+                if custom_category:
+                    subcategory = custom_category.category
+                    if custom_category.message:
+                        remediation = custom_category.message
 
             errors.append(
                 ctx.new_sub_error(
