@@ -11,8 +11,10 @@ load("@prelude//kotlin:kotlin_toolchain.bzl", "KotlinToolchainInfo", "KotlincPro
 
 def kotlincd_toolchain(
         name,
+        java_binary_for_kotlincd = None,
         visibility = None):
     _kotlin_toolchain_rule(
+        java_binary_for_kotlincd = java_binary_for_kotlincd,
         name = name,
         annotation_processing_jar = "prelude//toolchains/android/third-party:kotlin-annotation-processing-embeddable",
         class_loader_bootstrapper = "prelude//toolchains/android/src/com/facebook/buck/cli/bootstrapper:bootstrapper",
@@ -70,6 +72,7 @@ def _kotlin_toolchain_rule_impl(ctx):
             kotlin_version = ctx.attrs.kotlin_version,
             kotlin_home_libraries = ctx.attrs.kotlin_home_libraries,
             enable_incremental_compilation = ctx.attrs.enable_incremental_compilation or False,
+            java_binary_for_kotlincd = ctx.attrs.java_binary_for_kotlincd,
             ksp2_enable_incremental_processing = ctx.attrs.ksp2_enable_incremental_processing or False,
             kotlinc_protocol = ctx.attrs.kotlinc_protocol,
             kosabi_stubs_gen_k2_plugin = ctx.attrs.kosabi_stubs_gen_k2_plugin,
@@ -98,6 +101,7 @@ _kotlin_toolchain_rule = rule(
         "compile_kotlin": attrs.dep(providers = [RunInfo]),
         "dep_files": attrs.enum(["none", "per_class", "per_jar"], default = "none"),
         "enable_incremental_compilation": attrs.option(attrs.bool(), default = None),
+        "java_binary_for_kotlincd": attrs.option(attrs.dep(providers = [RunInfo]), default = None),
         "jvm_abi_gen_plugin": attrs.option(attrs.source(), default = None),
         "kapt_base64_encoder": attrs.dep(providers = [RunInfo]),
         "kosabi_applicability_plugin": attrs.option(attrs.source(), default = None),

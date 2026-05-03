@@ -17,6 +17,7 @@ KotlinToolchainInfo = provider(
         "compile_kotlin": provider_field(typing.Any, default = None),
         "dep_files": provider_field(typing.Any, default = None),
         "enable_incremental_compilation": provider_field(typing.Any, default = None),
+        "java_binary_for_kotlincd": provider_field(typing.Any, default = None),
         "jvm_abi_gen_plugin": provider_field(typing.Any, default = None),
         "kapt_base64_encoder": provider_field(typing.Any, default = None),
         "kosabi_applicability_plugin": provider_field(typing.Any, default = None),

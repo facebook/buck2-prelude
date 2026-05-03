@@ -179,7 +179,6 @@ def create_jar_artifact_kotlincd(
 
     kotlin_extra_params = _encode_kotlin_extra_params(
         kotlin_toolchain = kotlin_toolchain,
-        java_toolchain = java_toolchain,
         kotlin_compiler_plugins = kotlin_compiler_plugins,
         extra_kotlinc_arguments = extra_kotlinc_arguments,
         bootclasspath_entries = bootclasspath_entries,
@@ -193,7 +192,6 @@ def create_jar_artifact_kotlincd(
         incremental_state_dir = incremental_state_dir,
         language_version = language_version,
         kotlin_classes = kotlin_classes,
-        is_building_android_binary = is_building_android_binary,
     )
 
     library_command_builder = command_builder(
@@ -240,7 +238,6 @@ def create_jar_artifact_kotlincd(
         kotlin_extra_params_builder = partial(
             _encode_kotlin_extra_params,
             kotlin_toolchain = kotlin_toolchain,
-            java_toolchain = java_toolchain,
             kotlin_compiler_plugins = kotlin_compiler_plugins,
             extra_kotlinc_arguments = extra_kotlinc_arguments,
             bootclasspath_entries = bootclasspath_entries,
@@ -253,7 +250,6 @@ def create_jar_artifact_kotlincd(
             should_ksp2_run_incrementally = False,
             incremental_state_dir = None,
             language_version = language_version,
-            is_building_android_binary = is_building_android_binary,
         )
 
         # kotlincd does not support source abi
@@ -309,7 +305,6 @@ def create_jar_artifact_kotlincd(
 
 def _encode_kotlin_extra_params(
         kotlin_toolchain: KotlinToolchainInfo,
-        java_toolchain: JavaToolchainInfo,
         kotlin_compiler_plugins: list[(Dependency, dict[str, [str, cmd_args]])],
         extra_kotlinc_arguments: list,
         bootclasspath_entries: list[Artifact],
@@ -322,8 +317,7 @@ def _encode_kotlin_extra_params(
         should_ksp2_run_incrementally: bool,
         incremental_state_dir: Artifact | None,
         language_version: str,
-        kotlin_classes: Artifact,
-        is_building_android_binary: bool = False):
+        kotlin_classes: Artifact):
     kosabiPluginOptionsMap = {}
     is_source_only_abi = actual_abi_generation_mode == AbiGenerationMode("source_only")
 
@@ -362,8 +356,7 @@ def _encode_kotlin_extra_params(
         languageVersion = language_version,
         shouldKosabiJvmAbiGenUseK2 = True,
         kotlinClassesDir = kotlin_classes.as_output(),
-        # Only provide javaBinary for JVM targets; Android targets resolve JDK types from android.jar
-        javaBinary = cmd_args(java_toolchain.java[RunInfo], delimiter = " ") if not is_building_android_binary else "",
+        javaBinary = cmd_args(kotlin_toolchain.java_binary_for_kotlincd[RunInfo], delimiter = " ") if kotlin_toolchain.java_binary_for_kotlincd else "",
     )
 
 def _command_builder(
