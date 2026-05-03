@@ -52,6 +52,8 @@ def enrich_errors(
 
             error.category = category_prefix + enricher.category
             _apply_subcategory_remediation(error, enricher, message)
+            if not error.remediation and enricher.message:
+                error.remediation = enricher.message
             break
 
     return errors
