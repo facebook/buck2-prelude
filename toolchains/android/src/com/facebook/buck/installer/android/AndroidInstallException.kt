@@ -56,9 +56,14 @@ class AndroidInstallException(val installError: InstallError) :
         exceptionMessage: String?,
     ): AndroidInstallException {
       val errorMessage = exceptionMessage?.let { "\n" + it } ?: ""
-      return AndroidInstallException(
-          InstallError("$message.$errorMessage", AndroidInstallErrorTag.ADB_COMMAND_FAILED)
-      )
+      val fullMessage = "$message.$errorMessage"
+      val tag =
+          if (fullMessage.contains("No space left on device")) {
+            AndroidInstallErrorTag.NO_SPACE_LEFT_ON_DEVICE
+          } else {
+            AndroidInstallErrorTag.ADB_COMMAND_FAILED
+          }
+      return AndroidInstallException(InstallError(fullMessage, tag))
     }
   }
 }
