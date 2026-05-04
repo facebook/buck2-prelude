@@ -20,11 +20,15 @@ def _get_rustc_cfg_impl(ctx: AnalysisContext) -> list[Provider]:
         cmd_args("--sysroot="),  # We do not need a sysroot here, and not all platforms we support have one available (e.g. mips64-unknown-linux-gnuabi64)
     ]
 
+    uses_custom_target = toolchain_info.rust_target_path != None
+
     if toolchain_info.rustc_target_triple:
         cmd.append(cmd_args("--target=", toolchain_info.rustc_target_triple, delimiter = ""))
+        if uses_custom_target:
+            cmd.append("-Zunstable-options")
 
     env = {}
-    if ctx.attrs.enable_nightly_cfgs:
+    if ctx.attrs.enable_nightly_cfgs or uses_custom_target:
         env["RUSTC_BOOTSTRAP"] = "1"
 
     if toolchain_info.rust_target_path != None:

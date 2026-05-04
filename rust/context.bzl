@@ -181,8 +181,11 @@ def _clippy_wrapper(
         toolchain_info: RustToolchainInfo) -> cmd_args:
     clippy_driver = cmd_args(toolchain_info.clippy_driver)
     rustc_print_sysroot = cmd_args(toolchain_info.compiler, "--print=sysroot", delimiter = " ")
+    uses_custom_target = toolchain_info.rust_target_path != None
     if toolchain_info.rustc_target_triple:
         rustc_print_sysroot.add("--target={}".format(toolchain_info.rustc_target_triple))
+        if uses_custom_target:
+            rustc_print_sysroot.add("-Zunstable-options")
 
     skip_setting_sysroot = toolchain_info.explicit_sysroot_deps != None or toolchain_info.sysroot_path != None
 
@@ -192,6 +195,13 @@ def _clippy_wrapper(
             [
                 "@echo off",
                 "set __CLIPPY_INTERNAL_TESTS=true",
+            ] + ([
+                "set RUSTC_BOOTSTRAP=1",
+                cmd_args(
+                    toolchain_info.rust_target_path[DefaultInfo].default_outputs[0],
+                    format = "set RUST_TARGET_PATH={}",
+                ),
+            ] if uses_custom_target else []) + [
             ] + [
                 cmd_args(rustc_print_sysroot, format = 'FOR /F "tokens=* USEBACKQ" %%F IN (`{}`) DO (set SYSROOT=%%F)') if not skip_setting_sysroot else "",
                 cmd_args(clippy_driver, format = "{} %*"),
@@ -206,7 +216,13 @@ def _clippy_wrapper(
                 "#!/usr/bin/env bash",
                 # Force clippy to be clippy: https://github.com/rust-lang/rust-clippy/blob/e405c68b3c1265daa9a091ed9b4b5c5a38c0c0ba/src/driver.rs#L334
                 "export __CLIPPY_INTERNAL_TESTS=true",
-            ] + (
+            ] + ([
+                "export RUSTC_BOOTSTRAP=1",
+                cmd_args(
+                    toolchain_info.rust_target_path[DefaultInfo].default_outputs[0],
+                    format = "export RUST_TARGET_PATH={}",
+                ),
+            ] if uses_custom_target else []) + (
                 [] if skip_setting_sysroot else [cmd_args(rustc_print_sysroot, format = "export SYSROOT=$({})")]
             ) + [
                 cmd_args(clippy_driver, format = "{} \"$@\"\n"),
