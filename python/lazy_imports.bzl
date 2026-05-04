@@ -36,20 +36,16 @@ def run_lazy_imports_library_analyzer(
         ctx: AnalysisContext,
         analyzer: RunInfo,
         output: Artifact,
-        source_db: DefaultInfo,
-        dep_caches: list[Artifact]) -> DefaultInfo:
+        source_db: DefaultInfo) -> DefaultInfo:
     """
-    Run analyze_library: analyze this library's own srcs and merge in
-    cached outputs from its dependencies.
+    Run analyze_library: analyze this library's own srcs and produce
+    a cache file. Cross-library resolution is deferred to analyze-binary.
     """
     python_toolchain = ctx.attrs._python_toolchain[PythonToolchainInfo]
     cmd = cmd_args(analyzer, hidden = source_db.other_outputs)
     cmd.add("analyze-library")
     cmd.add(source_db.default_outputs[0])  # <DB_PATH>
     cmd.add(output.as_output())  # <CACHE_OUTPUT_PATH>
-    for cache in dep_caches:
-        cmd.add("--dep-cache")
-        cmd.add(cache)
 
     ctx.actions.run(
         cmd,

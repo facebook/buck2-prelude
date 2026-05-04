@@ -313,7 +313,6 @@ def _compute_pex_providers(
                 python_toolchain.lazy_imports_analyzer,
                 binary_lib_cache,
                 source_db_no_deps,
-                dep_caches,
             )
 
             # This call builds the Lifeguard output file

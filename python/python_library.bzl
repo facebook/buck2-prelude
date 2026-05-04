@@ -411,18 +411,12 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
     # Lazy imports library cache.
     lazy_imports_analyzer = python_toolchain.lazy_imports_analyzer
     if lazy_imports_analyzer != None and getattr(ctx.attrs, "use_lifeguard_incremental", False):
-        dep_caches = [
-            dep[LazyImportsCacheInfo].cache
-            for dep in raw_deps
-            if LazyImportsCacheInfo in dep
-        ]
         cache_output = ctx.actions.declare_output("safer_lazy_imports/library-cache.bin")
         run_lazy_imports_library_analyzer(
             ctx,
             lazy_imports_analyzer,
             cache_output,
             source_db_no_deps,
-            dep_caches,
         )
         providers.append(LazyImportsCacheInfo(cache = cache_output))
         sub_targets["lazy-import-cache"] = [DefaultInfo(default_output = cache_output)]
