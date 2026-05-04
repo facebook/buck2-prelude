@@ -30,57 +30,34 @@ PythonLibraryManifests = record(
     extensions = field([dict[str, LinkedObject], None]),
 )
 
-def _bytecode_artifacts(invalidation_mode: PycInvalidationMode) -> typing.Callable[[PycInvalidationMode], list[ArgLike]]:
+def _bytecode_artifacts(invalidation_mode: PycInvalidationMode) -> typing.Callable[[PythonLibraryManifests], list[ArgLike]]:
     return lambda value: [] if value.bytecode == None else (
         [a for a, _ in value.bytecode[invalidation_mode].artifacts]
     )
 
-def _bytecode_manifests(invalidation_mode: PycInvalidationMode) -> typing.Callable[[PycInvalidationMode], list[None] | Artifact]:
+def _bytecode_manifests(invalidation_mode: PycInvalidationMode) -> typing.Callable[[PythonLibraryManifests], list[None] | Artifact]:
     return lambda value: [] if value.bytecode == None else (
         value.bytecode[invalidation_mode].manifest
     )
 
-def _hidden_resources(value: PythonLibraryManifests) -> list[ArgLike]:
-    if value.default_resources == None:
-        return []
-    return value.default_resources[1]
+def _hidden_resources_for(field_name: str) -> typing.Callable[[PythonLibraryManifests], list[ArgLike]]:
+    return lambda value: [] if getattr(value, field_name) == None else getattr(value, field_name)[1]
 
-def _has_hidden_resources(children: list[bool], value: [PythonLibraryManifests, None]) -> bool:
-    if value:
-        if value.default_resources and len(value.default_resources[1]) > 0:
-            return True
-    return any(children)
+def _has_hidden_resources_for(field_name: str) -> typing.Callable[[list[bool], [PythonLibraryManifests, None]], bool]:
+    def _impl(children: list[bool], value: [PythonLibraryManifests, None]) -> bool:
+        if value:
+            resources = getattr(value, field_name)
+            if resources and len(resources[1]) > 0:
+                return True
+        return any(children)
 
-def _resource_manifests(value: PythonLibraryManifests) -> list[None] | Artifact:
-    if value.default_resources == None:
-        return []
-    return value.default_resources[0].manifest
+    return _impl
 
-def _resource_artifacts(value: PythonLibraryManifests) -> list[ArgLike]:
-    if value.default_resources == None:
-        return []
-    return [a for a, _ in value.default_resources[0].artifacts]
+def _resource_manifests_for(field_name: str) -> typing.Callable[[PythonLibraryManifests], list[None] | Artifact]:
+    return lambda value: [] if getattr(value, field_name) == None else getattr(value, field_name)[0].manifest
 
-def _standalone_hidden_resources(value: PythonLibraryManifests) -> list[ArgLike]:
-    if value.standalone_resources == None:
-        return []
-    return value.standalone_resources[1]
-
-def _standalone_has_hidden_resources(children: list[bool], value: [PythonLibraryManifests, None]) -> bool:
-    if value:
-        if value.standalone_resources and len(value.standalone_resources[1]) > 0:
-            return True
-    return any(children)
-
-def _standalone_resource_manifests(value: PythonLibraryManifests) -> list[None] | Artifact:
-    if value.standalone_resources == None:
-        return []
-    return value.standalone_resources[0].manifest
-
-def _standalone_resource_artifacts(value: PythonLibraryManifests) -> list[ArgLike]:
-    if value.standalone_resources == None:
-        return []
-    return [a for a, _ in value.standalone_resources[0].artifacts]
+def _resource_artifacts_for(field_name: str) -> typing.Callable[[PythonLibraryManifests], list[ArgLike]]:
+    return lambda value: [] if getattr(value, field_name) == None else [a for a, _ in getattr(value, field_name)[0].artifacts]
 
 def _source_manifests(value: PythonLibraryManifests) -> list[None] | Artifact:
     if value.srcs == None:
@@ -107,18 +84,30 @@ _BYTECODE_PROJ_PREFIX = {
     PycInvalidationMode("unchecked_hash"): "bytecode",
 }
 
+# Mode strings mirror PackageStyle.value
+_RESOURCE_MODES = {
+    "inplace": ("", "default_resources"),
+    "standalone": ("standalone_", "standalone_resources"),
+}
+
 args_projections = {
-    "hidden_resources": _hidden_resources,
-    "resource_artifacts": _resource_artifacts,
-    "resource_manifests": _resource_manifests,
     "source_artifacts": _source_artifacts,
     "source_manifests": _source_manifests,
     "source_type_artifacts": _source_type_artifacts,
     "source_type_manifests": _source_type_manifests,
-    "standalone_hidden_resources": _standalone_hidden_resources,
-    "standalone_resource_artifacts": _standalone_resource_artifacts,
-    "standalone_resource_manifests": _standalone_resource_manifests,
 }
+args_projections.update({
+    "{}hidden_resources".format(prefix): _hidden_resources_for(field_name)
+    for prefix, field_name in _RESOURCE_MODES.values()
+})
+args_projections.update({
+    "{}resource_manifests".format(prefix): _resource_manifests_for(field_name)
+    for prefix, field_name in _RESOURCE_MODES.values()
+})
+args_projections.update({
+    "{}resource_artifacts".format(prefix): _resource_artifacts_for(field_name)
+    for prefix, field_name in _RESOURCE_MODES.values()
+})
 args_projections.update({
     "{}_artifacts".format(prefix): _bytecode_artifacts(mode)
     for mode, prefix in _BYTECODE_PROJ_PREFIX.items()
@@ -131,8 +120,8 @@ args_projections.update({
 PythonLibraryManifestsTSet = transitive_set(
     args_projections = args_projections,
     reductions = {
-        "has_hidden_resources": _has_hidden_resources,
-        "standalone_has_hidden_resources": _standalone_has_hidden_resources,
+        "{}has_hidden_resources".format(prefix): _has_hidden_resources_for(field_name)
+        for prefix, field_name in _RESOURCE_MODES.values()
     },
 )
 
@@ -154,40 +143,16 @@ PythonLibraryInfo = provider(fields = {
     "shared_libraries": provider_field(SharedLibraryInfo),
 })
 
-def _get_resource_manifests(standalone: bool, manifests: PythonLibraryManifestsTSet) -> list[ArgLike]:
-    if standalone:
-        return [manifests.project_as_args("standalone_resource_manifests")]
-    else:
-        return [manifests.project_as_args("resource_manifests")]
-
-def _get_resource_artifacts(standalone: bool, manifests: PythonLibraryManifestsTSet) -> list[ArgLike]:
-    if standalone:
-        return [manifests.project_as_args("standalone_resource_artifacts")]
-    else:
-        return [manifests.project_as_args("resource_artifacts")]
-
-def _get_hidden_resources(standalone: bool, manifests: PythonLibraryManifestsTSet) -> list[ArgLike]:
-    if standalone:
-        return [manifests.project_as_args("standalone_hidden_resources")]
-    else:
-        return [manifests.project_as_args("hidden_resources")]
-
-def _get_has_hidden_resources(standalone: bool, manifests: PythonLibraryManifestsTSet) -> bool:
-    if standalone:
-        return manifests.reduce("standalone_has_hidden_resources")
-    else:
-        return manifests.reduce("has_hidden_resources")
-
 def manifests_to_interface(manifests: PythonLibraryManifestsTSet) -> PythonLibraryManifestsInterface:
     return PythonLibraryManifestsInterface(
         src_manifests = lambda: [manifests.project_as_args("source_manifests")],
         src_artifacts = lambda: [manifests.project_as_args("source_artifacts")],
         bytecode_manifests = lambda mode: [manifests.project_as_args("{}_manifests".format(_BYTECODE_PROJ_PREFIX[mode]))],
         bytecode_artifacts = lambda mode: [manifests.project_as_args("{}_artifacts".format(_BYTECODE_PROJ_PREFIX[mode]))],
-        resource_manifests = lambda standalone = False: _get_resource_manifests(standalone, manifests),
-        resource_artifacts = lambda standalone = False: _get_resource_artifacts(standalone, manifests),
-        has_hidden_resources = lambda standalone = False: _get_has_hidden_resources(standalone, manifests),
-        hidden_resources = lambda standalone = False: _get_hidden_resources(standalone, manifests),
+        resource_manifests = lambda mode = "inplace": [manifests.project_as_args("{}resource_manifests".format(_RESOURCE_MODES[mode][0]))],
+        resource_artifacts = lambda mode = "inplace": [manifests.project_as_args("{}resource_artifacts".format(_RESOURCE_MODES[mode][0]))],
+        has_hidden_resources = lambda mode = "inplace": manifests.reduce("{}has_hidden_resources".format(_RESOURCE_MODES[mode][0])),
+        hidden_resources = lambda mode = "inplace": [manifests.project_as_args("{}hidden_resources".format(_RESOURCE_MODES[mode][0]))],
     )
 
 # The exported dependencies, and the default deps (if selected)

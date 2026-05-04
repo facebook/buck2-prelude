@@ -495,15 +495,15 @@ def _make_py_package_impl(
         err = _check_hidden_resources(ctx, pex_modules, package_style, output_suffix)
         if err:
             return _fail(ctx, python_internal_tools, output_suffix, err)
-    elif pex_modules.manifests.has_hidden_resources(False):
-        hidden_resources = pex_modules.manifests.hidden_resources(False)
+    elif pex_modules.manifests.has_hidden_resources():
+        hidden_resources = pex_modules.manifests.hidden_resources()
 
     pyc_mode = PycInvalidationMode("checked_hash") if inplace else PycInvalidationMode("unchecked_hash")
 
     # Accumulate all of the artifacts required by the build
     runtime_artifacts = []
     runtime_artifacts.extend(dep_artifacts)
-    runtime_artifacts.extend(pex_modules.manifests.resource_artifacts(standalone))
+    runtime_artifacts.extend(pex_modules.manifests.resource_artifacts("standalone" if standalone else "inplace"))
     if pex_modules.compile:
         runtime_artifacts.extend(pex_modules.manifests.bytecode_artifacts(pyc_mode))
     if manifest_module:
@@ -727,9 +727,9 @@ def _make_py_package_live(
     runtime_files.extend(pex_modules.manifests.src_artifacts())
 
     # Gather inplace binary resources
-    resources = pex_modules.manifests.resource_manifests(False)
+    resources = pex_modules.manifests.resource_manifests()
     if resources:
-        resource_artifacts = pex_modules.manifests.resource_artifacts(False)
+        resource_artifacts = pex_modules.manifests.resource_artifacts()
         resource_manifests_path = ctx.actions.write(
             "__resource_manifests{}.txt".format(output_suffix),
             resources,
@@ -839,7 +839,7 @@ def _make_py_package_live(
         )
 
     runtime_files.append(symlink_tree_path)
-    hidden_resources = pex_modules.manifests.hidden_resources(False)
+    hidden_resources = pex_modules.manifests.hidden_resources()
     sub_targets["link-tree"] = [DefaultInfo(
         default_output = symlink_tree_path,
         other_outputs = runtime_files + hidden_resources,
@@ -1131,7 +1131,7 @@ def _pex_modules_args(
     hidden.extend([s for _, s in debug_artifacts])
 
     standalone = package_style == PackageStyle("standalone")
-    resources = pex_modules.manifests.resource_manifests(standalone)
+    resources = pex_modules.manifests.resource_manifests("standalone" if standalone else "inplace")
     if resources:
         resource_manifests_path = ctx.actions.write(
             "__resource_manifests{}.txt".format(output_suffix),
@@ -1153,7 +1153,8 @@ def _check_hidden_resources(
     and outplace can't package), else None. Only call for unsupported styles.
     """
     standalone = package_style == PackageStyle("standalone")
-    if not pex_modules.manifests.has_hidden_resources(standalone):
+    mode = "standalone" if standalone else "inplace"
+    if not pex_modules.manifests.has_hidden_resources(mode):
         return None
 
     # constructing the full error message is expensive, only do it when we abort analysis
@@ -1161,7 +1162,7 @@ def _check_hidden_resources(
         return "{} builds don't support hidden resources".format(package_style.value)
     return _hidden_resources_error_message(
         ctx.label,
-        pex_modules.manifests.hidden_resources(standalone),
+        pex_modules.manifests.hidden_resources(mode),
         package_style.value,
     )
 
