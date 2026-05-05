@@ -448,7 +448,7 @@ def _make_py_package_wrapper(
             python_toolchain,
             python_internal_tools,
             output_suffix,
-            package_style == PackageStyle("outplace"),
+            package_style,
         )
     return _make_py_package_impl(
         ctx,
@@ -495,15 +495,15 @@ def _make_py_package_impl(
         err = _check_hidden_resources(ctx, pex_modules, package_style, output_suffix)
         if err:
             return _fail(ctx, python_internal_tools, output_suffix, err)
-    elif pex_modules.manifests.has_hidden_resources():
-        hidden_resources = pex_modules.manifests.hidden_resources()
+    elif pex_modules.manifests.has_hidden_resources(mode = package_style.value):
+        hidden_resources = pex_modules.manifests.hidden_resources(mode = package_style.value)
 
     pyc_mode = PycInvalidationMode("checked_hash") if inplace else PycInvalidationMode("unchecked_hash")
 
     # Accumulate all of the artifacts required by the build
     runtime_artifacts = []
     runtime_artifacts.extend(dep_artifacts)
-    runtime_artifacts.extend(pex_modules.manifests.resource_artifacts("standalone" if standalone else "inplace"))
+    runtime_artifacts.extend(pex_modules.manifests.resource_artifacts(mode = package_style.value))
     if pex_modules.compile:
         runtime_artifacts.extend(pex_modules.manifests.bytecode_artifacts(pyc_mode))
     if manifest_module:
@@ -642,7 +642,7 @@ def _make_py_package_live(
         python_toolchain: PythonToolchainInfo,
         python_internal_tools: PythonInternalToolsInfo,
         output_suffix: str,
-        copy: bool) -> PexProviders:
+        package_style: PackageStyle) -> PexProviders:
     """
     Bundle contents of par into symlink dir
     * generated_files
@@ -674,6 +674,11 @@ def _make_py_package_live(
       * EXCLUDED: dwp files - we do not package dwp files in inplace pars
       * EXCLUDED: debuginfo - we do not package debug-info for inplace pars
     """
+    is_outplace = package_style == PackageStyle("outplace")
+    if is_outplace:
+        err = _check_hidden_resources(ctx, pex_modules, package_style, output_suffix)
+        if err:
+            return _fail(ctx, python_internal_tools, output_suffix, err)
     sub_targets = {}
     name = "{}{}".format(ctx.attrs.name, output_suffix)
 
@@ -726,10 +731,10 @@ def _make_py_package_live(
     cmd.add(cmd_args(source_manifests_path, format = "--sources={}", hidden = sources))
     runtime_files.extend(pex_modules.manifests.src_artifacts())
 
-    # Gather inplace binary resources
-    resources = pex_modules.manifests.resource_manifests()
+    # Gather binary resources
+    resources = pex_modules.manifests.resource_manifests(mode = package_style.value)
     if resources:
-        resource_artifacts = pex_modules.manifests.resource_artifacts()
+        resource_artifacts = pex_modules.manifests.resource_artifacts(mode = package_style.value)
         resource_manifests_path = ctx.actions.write(
             "__resource_manifests{}.txt".format(output_suffix),
             resources,
@@ -811,7 +816,7 @@ def _make_py_package_live(
     if ctx.attrs._exec_os_type[OsLookup].os == Os("windows"):
         allow_cache_upload = False
 
-    if copy:
+    if is_outplace:
         cmd.add(cmd_args("--copy", hidden = runtime_files))
         ctx.actions.run(
             cmd,
@@ -839,10 +844,24 @@ def _make_py_package_live(
         )
 
     runtime_files.append(symlink_tree_path)
-    hidden_resources = pex_modules.manifests.hidden_resources()
+
+    # For outplace, every runtime file is copied into the link-tree directory,
+    # so the link-tree itself is the only output that needs to be materialized
+    # by consumers. For inplace, the link-tree contains symlinks pointing into
+    # buck-out, so the runtime files (and any hidden resources) must be
+    # materialized alongside it.
+    if is_outplace:
+        hidden_resources = []
+        link_tree_other_outputs = []
+        pex_other_outputs = [symlink_tree_path]
+    else:
+        hidden_resources = pex_modules.manifests.hidden_resources(mode = package_style.value)
+        link_tree_other_outputs = runtime_files + hidden_resources
+        pex_other_outputs = runtime_files
+
     sub_targets["link-tree"] = [DefaultInfo(
         default_output = symlink_tree_path,
-        other_outputs = runtime_files + hidden_resources,
+        other_outputs = link_tree_other_outputs,
         sub_targets = {},
     )]
 
@@ -853,7 +872,7 @@ def _make_py_package_live(
 
     return PexProviders(
         default_output = output,
-        other_outputs = runtime_files,
+        other_outputs = pex_other_outputs,
         other_outputs_prefix = symlink_tree_path.short_path,
         hidden_resources = hidden_resources,
         sub_targets = sub_targets,
@@ -1130,8 +1149,7 @@ def _pex_modules_args(
 
     hidden.extend([s for _, s in debug_artifacts])
 
-    standalone = package_style == PackageStyle("standalone")
-    resources = pex_modules.manifests.resource_manifests("standalone" if standalone else "inplace")
+    resources = pex_modules.manifests.resource_manifests(mode = package_style.value)
     if resources:
         resource_manifests_path = ctx.actions.write(
             "__resource_manifests{}.txt".format(output_suffix),
@@ -1152,9 +1170,7 @@ def _check_hidden_resources(
     Return an error message if pex_modules has hidden resources (which standalone
     and outplace can't package), else None. Only call for unsupported styles.
     """
-    standalone = package_style == PackageStyle("standalone")
-    mode = "standalone" if standalone else "inplace"
-    if not pex_modules.manifests.has_hidden_resources(mode):
+    if not pex_modules.manifests.has_hidden_resources(mode = package_style.value):
         return None
 
     # constructing the full error message is expensive, only do it when we abort analysis
@@ -1162,7 +1178,7 @@ def _check_hidden_resources(
         return "{} builds don't support hidden resources".format(package_style.value)
     return _hidden_resources_error_message(
         ctx.label,
-        pex_modules.manifests.hidden_resources(mode),
+        pex_modules.manifests.hidden_resources(mode = package_style.value),
         package_style.value,
     )
 
