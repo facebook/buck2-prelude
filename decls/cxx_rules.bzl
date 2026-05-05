@@ -1336,6 +1336,8 @@ transformation_spec = prelude_rule(
         `transformation_spec()` via a `transformation_spec` attribute to
         decide, on a per-dependency basis, which transformation should be
         applied when building that dependency.
+        Exact `debug` and `optimized` meaning depends on
+        flags configured in toolchain for each flavor.
     """,
     examples = None,
     further = None,
