@@ -361,13 +361,11 @@ start_test_node(
     ],
 
     %% start the node
-    ?LOG_DEBUG(
-        io_lib:format("Launching ~tp ~tp ~n with env variables ~tp ~n", [
-            Executable,
-            LaunchArgs,
-            LaunchEnv
-        ])
-    ),
+    ?LOG_DEBUG("Launching ~tp ~tp ~n with env variables ~tp ~n", [
+        Executable,
+        LaunchArgs,
+        LaunchEnv
+    ]),
 
     erlang:open_port({spawn_executable, Executable}, LaunchSettings).
 
