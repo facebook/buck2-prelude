@@ -221,7 +221,13 @@ def _fail_at_build_time(
         other_outputs = [],
         other_outputs_prefix = None,
         hidden_resources = [],
-        sub_targets = {},
+        # Stub `link-tree` so e.g. `target[outplace][link-tree]` resolves and
+        # surfaces the build-time failure message. Without this, sub-target
+        # lookup fails at analysis time with "no such sub-target" and the user
+        # never sees the underlying error.
+        sub_targets = {
+            "link-tree": [DefaultInfo(default_output = dummy_output)],
+        },
         run_cmd = cmd_args(),
     )
 
