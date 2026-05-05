@@ -125,6 +125,7 @@ def python_executable(
         srcs: dict[str, Artifact],
         default_resources: dict[str, ArtifactOutputs],
         standalone_resources: dict[str, ArtifactOutputs] | None,
+        outplace_resources: dict[str, ArtifactOutputs] | None,
         compile: bool,
         allow_cache_upload: bool,
         executable_type: ExecutableType) -> list[Provider] | Promise:
@@ -165,17 +166,21 @@ def python_executable(
 
     all_default_resources = {}
     all_standalone_resources = {}
+    all_outplace_resources = {}
     cxx_extra_resources = {}
     for cxx_resources in gather_resources(ctx.label, deps = raw_deps).values():
         for name, resource in cxx_resources.items():
             cxx_extra_resources[paths.join("__cxx_resources__", name)] = resource
     all_default_resources.update(cxx_extra_resources)
     all_standalone_resources.update(cxx_extra_resources)
+    all_outplace_resources.update(cxx_extra_resources)
 
     if default_resources:
         all_default_resources.update(default_resources)
     if standalone_resources:
         all_standalone_resources.update(standalone_resources)
+    if outplace_resources:
+        all_outplace_resources.update(outplace_resources)
 
     library_info = create_python_library_info(
         ctx.actions,
@@ -184,6 +189,7 @@ def python_executable(
         src_types = src_manifest,
         default_resources = py_resources(ctx, all_default_resources) if all_default_resources else None,
         standalone_resources = py_resources(ctx, all_standalone_resources, "_standalone") if all_standalone_resources else None,
+        outplace_resources = py_resources(ctx, all_outplace_resources, "_outplace") if all_outplace_resources else None,
         bytecode = bytecode_manifest,
         deps = python_deps,
         shared_libraries = shared_deps,
@@ -622,8 +628,9 @@ def python_binary_impl(ctx: AnalysisContext) -> list[Provider] | Promise:
     if ctx.attrs.main != None:
         srcs[ctx.attrs.main.short_path] = ctx.attrs.main
     srcs = qualify_srcs(ctx.label, ctx.attrs.base_module, srcs)
-    default_resources_map, standalone_resources_map = py_attr_resources(ctx)
+    default_resources_map, standalone_resources_map, outplace_resources_map = py_attr_resources(ctx)
     standalone_resources = qualify_srcs(ctx.label, ctx.attrs.base_module, standalone_resources_map)
+    outplace_resources = qualify_srcs(ctx.label, ctx.attrs.base_module, outplace_resources_map)
     default_resources = qualify_srcs(ctx.label, ctx.attrs.base_module, default_resources_map)
 
     cxx_toolchain_info = get_opt_cxx_toolchain_info(ctx)
@@ -635,6 +642,7 @@ def python_binary_impl(ctx: AnalysisContext) -> list[Provider] | Promise:
         srcs,
         default_resources,
         standalone_resources,
+        outplace_resources,
         compile = value_or(ctx.attrs.compile, False),
         allow_cache_upload = cxx_attrs_get_allow_cache_upload(ctx.attrs, toolchain_allow_cache_upload),
         executable_type = ExecutableType("binary"),

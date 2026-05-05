@@ -49,8 +49,9 @@ def python_test_executable(ctx: AnalysisContext) -> list[Provider] | Promise:
     # Add in default test runner.
     srcs["__test_main__.py"] = ctx.attrs._test_main
 
-    resources_map, standalone_resources_map = py_attr_resources(ctx)
+    resources_map, standalone_resources_map, outplace_resources_map = py_attr_resources(ctx)
     standalone_resources = qualify_srcs(ctx.label, ctx.attrs.base_module, standalone_resources_map)
+    outplace_resources = qualify_srcs(ctx.label, ctx.attrs.base_module, outplace_resources_map)
     resources = qualify_srcs(ctx.label, ctx.attrs.base_module, resources_map)
 
     return python_executable(
@@ -59,6 +60,7 @@ def python_test_executable(ctx: AnalysisContext) -> list[Provider] | Promise:
         srcs,
         resources,
         standalone_resources,
+        outplace_resources,
         compile = value_or(ctx.attrs.compile, False),
         allow_cache_upload = False,
         executable_type = ExecutableType("test"),

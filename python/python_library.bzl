@@ -125,6 +125,7 @@ def create_python_library_info(
         bytecode: [dict[PycInvalidationMode, ManifestInfo], None] = None,
         default_resources: [(ManifestInfo, list[ArgLike]), None] = None,
         standalone_resources: [(ManifestInfo, list[ArgLike]), None] = None,
+        outplace_resources: [(ManifestInfo, list[ArgLike]), None] = None,
         extensions: [dict[str, LinkedObject], None] = None,
         deps: list[PythonLibraryInfo] = [],
         shared_libraries: list[SharedLibraryInfo] = [],
@@ -153,6 +154,7 @@ def create_python_library_info(
         src_types = src_types,
         default_resources = default_resources,
         standalone_resources = standalone_resources,
+        outplace_resources = outplace_resources,
         bytecode = bytecode,
         extensions = extensions,
     )
@@ -226,23 +228,40 @@ def _attr_srcs(ctx: AnalysisContext) -> dict[str, Artifact]:
 def _attr_resources(ctx: AnalysisContext) -> dict[str, Artifact | Dependency]:
     return dict(from_named_set(ctx.attrs.resources))
 
-def py_attr_resources(ctx: AnalysisContext) -> (dict[str, ArtifactOutputs], dict[str, ArtifactOutputs]):
+def py_attr_resources(ctx: AnalysisContext) -> (dict[str, ArtifactOutputs], dict[str, ArtifactOutputs], dict[str, ArtifactOutputs]):
     """
-    Return the resources provided by this rule, as a map of resource name to
-    a tuple of the resource artifact and any "other" outputs exposed by it.
+    Return the resources provided by this rule as three maps from resource name
+    to ArtifactOutputs: one for the default (inplace) build, one for standalone,
+    and one for outplace.
+
+    For python_binary resources, standalone substitutes the dep with its `.par`
+    artifact, while outplace substitutes with the `[outplace]` subtarget so the
+    full link-tree directory is materialized alongside the bash script.
     """
     resources = _attr_resources(ctx)
     standalone_artifacts = {}
+    outplace_overrides = {}
     for key, value in resources.items():
-        resource = value
+        s_resource = value
         if not isinstance(value, Artifact) and DefaultInfo in value:
-            if "standalone" in value[DefaultInfo].sub_targets:
-                resource = value[DefaultInfo].sub_targets["standalone"][DefaultInfo].default_outputs[0]
-        standalone_artifacts[key] = resource
-    standalone_resources = unpack_artifact_map(standalone_artifacts)
-    default_resources = unpack_artifact_map(resources)
+            sub_targets = value[DefaultInfo].sub_targets
+            if "standalone" in sub_targets:
+                s_resource = sub_targets["standalone"][DefaultInfo].default_outputs[0]
+            if "outplace" in sub_targets:
+                outplace_di = sub_targets["outplace"][DefaultInfo]
+                outplace_overrides[key] = ArtifactOutputs(
+                    default_output = outplace_di.default_outputs[0],
+                    nondebug_runtime_files = outplace_di.other_outputs,
+                    other_outputs = outplace_di.other_outputs,
+                )
+        standalone_artifacts[key] = s_resource
 
-    return default_resources, standalone_resources
+    default_resources = unpack_artifact_map(resources)
+    standalone_resources = unpack_artifact_map(standalone_artifacts)
+    outplace_resources = dict(default_resources)
+    outplace_resources.update(outplace_overrides)
+
+    return default_resources, standalone_resources, outplace_resources
 
 def py_resources(
         ctx: AnalysisContext,
@@ -309,8 +328,9 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
 
     srcs = _attr_srcs(ctx)
     qualified_srcs = qualify_srcs(ctx.label, ctx.attrs.base_module, srcs)
-    default_resources_map, standalone_resources_map = py_attr_resources(ctx)
+    default_resources_map, standalone_resources_map, outplace_resources_map = py_attr_resources(ctx)
     standalone_resources = qualify_srcs(ctx.label, ctx.attrs.base_module, standalone_resources_map)
+    outplace_resources = qualify_srcs(ctx.label, ctx.attrs.base_module, outplace_resources_map)
     default_resources = qualify_srcs(ctx.label, ctx.attrs.base_module, default_resources_map)
     type_stubs = qualify_srcs(ctx.label, ctx.attrs.base_module, from_named_set(ctx.attrs.type_stubs))
     src_types = _src_types(qualified_srcs, type_stubs)
@@ -331,6 +351,7 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
     raw_deps = ctx.attrs.deps
     default_resource_manifest = py_resources(ctx, default_resources) if default_resources else None
     standalone_resource_manifest = py_resources(ctx, standalone_resources, "_standalone") if standalone_resources else None
+    outplace_resource_manifest = py_resources(ctx, outplace_resources, "_outplace") if outplace_resources else None
     deps, shared_libraries = gather_dep_libraries(raw_deps, resolve_versioned_deps = False)
     providers.append(gather_versioned_dependencies(raw_deps))
 
@@ -343,6 +364,7 @@ def python_library_impl(ctx: AnalysisContext) -> list[Provider]:
         src_types = src_type_manifest,
         default_resources = default_resource_manifest,
         standalone_resources = standalone_resource_manifest,
+        outplace_resources = outplace_resource_manifest,
         bytecode = bytecode,
         deps = deps,
         shared_libraries = shared_libraries,

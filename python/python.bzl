@@ -26,6 +26,7 @@ PythonLibraryManifests = record(
     src_types = field([ManifestInfo, None], None),
     default_resources = field([(ManifestInfo, list[ArgLike]), None]),
     standalone_resources = field([(ManifestInfo, list[ArgLike]), None]),
+    outplace_resources = field([(ManifestInfo, list[ArgLike]), None]),
     bytecode = field([dict[PycInvalidationMode, ManifestInfo], None]),
     extensions = field([dict[str, LinkedObject], None]),
 )
@@ -87,6 +88,7 @@ _BYTECODE_PROJ_PREFIX = {
 # Mode strings mirror PackageStyle.value
 _RESOURCE_MODES = {
     "inplace": ("", "default_resources"),
+    "outplace": ("outplace_", "outplace_resources"),
     "standalone": ("standalone_", "standalone_resources"),
 }
 
