@@ -44,14 +44,14 @@ def _hidden_resources_for(field_name: str) -> typing.Callable[[PythonLibraryMani
     return lambda value: [] if getattr(value, field_name) == None else getattr(value, field_name)[1]
 
 def _has_hidden_resources_for(field_name: str) -> typing.Callable[[list[bool], [PythonLibraryManifests, None]], bool]:
-    def _impl(children: list[bool], value: [PythonLibraryManifests, None]) -> bool:
+    def impl(children: list[bool], value: [PythonLibraryManifests, None]) -> bool:
         if value:
             resources = getattr(value, field_name)
             if resources and len(resources[1]) > 0:
                 return True
         return any(children)
 
-    return _impl
+    return impl
 
 def _resource_manifests_for(field_name: str) -> typing.Callable[[PythonLibraryManifests], list[None] | Artifact]:
     return lambda value: [] if getattr(value, field_name) == None else getattr(value, field_name)[0].manifest
