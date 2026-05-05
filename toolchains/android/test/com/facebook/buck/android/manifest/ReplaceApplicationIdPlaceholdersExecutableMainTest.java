@@ -15,6 +15,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -24,46 +25,8 @@ public class ReplaceApplicationIdPlaceholdersExecutableMainTest {
 
   @Rule public TemporaryFolder tempFolder = new TemporaryFolder();
 
-  private static class SystemExitException extends SecurityException {
-    private final int exitCode;
-
-    SystemExitException(int exitCode) {
-      super("System.exit(" + exitCode + ") intercepted");
-      this.exitCode = exitCode;
-    }
-
-    int getExitCode() {
-      return exitCode;
-    }
-  }
-
-  @SuppressWarnings("deprecation")
-  private static class NoExitSecurityManager extends SecurityManager {
-    @Override
-    public void checkExit(int status) {
-      throw new SystemExitException(status);
-    }
-
-    @Override
-    public void checkPermission(java.security.Permission perm) {
-      // Allow everything else
-    }
-  }
-
-  @SuppressWarnings("deprecation")
-  private int callMain(String... args) {
-    SecurityManager originalSecurityManager = System.getSecurityManager();
-    System.setSecurityManager(new NoExitSecurityManager());
-    try {
-      ReplaceApplicationIdPlaceholdersExecutableMain.main(args);
-      return -1;
-    } catch (SystemExitException e) {
-      return e.getExitCode();
-    } catch (Exception e) {
-      throw new RuntimeException("Unexpected exception from main", e);
-    } finally {
-      System.setSecurityManager(originalSecurityManager);
-    }
+  private int callMain(String... args) throws Exception {
+    return ReplaceApplicationIdPlaceholdersExecutableMain.runMain(args);
   }
 
   @Test
@@ -186,7 +149,7 @@ public class ReplaceApplicationIdPlaceholdersExecutableMainTest {
   }
 
   @Test
-  public void shouldExitWithErrorWhenRequiredArgsAreMissing() {
+  public void shouldExitWithErrorWhenRequiredArgsAreMissing() throws Exception {
     int exitCode = callMain();
 
     assertEquals(1, exitCode);
@@ -245,5 +208,51 @@ public class ReplaceApplicationIdPlaceholdersExecutableMainTest {
     assertTrue(Files.exists(outputFile));
     String result = Files.readString(outputFile);
     assertEquals(manifestContent, result);
+  }
+
+  @Test
+  public void mainShouldExitWithZeroOnSuccess() throws Exception {
+    String manifestContent =
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+            + "<manifest\n"
+            + "   xmlns:android=\"http://schemas.android.com/apk/res/android\"\n"
+            + "   package=\"com.example.app\">\n"
+            + "   <permission android:name=\"${applicationId}.permission.C2D_MESSAGE\" />\n"
+            + "</manifest>";
+
+    Path manifestFile = tempFolder.newFile("AndroidManifest.xml").toPath();
+    Files.writeString(manifestFile, manifestContent);
+
+    Path outputFile = tempFolder.getRoot().toPath().resolve("main_output.xml");
+
+    ProcessBuilder pb =
+        new ProcessBuilder(
+            ProcessHandle.current().info().command().orElse("java"),
+            "-cp",
+            System.getProperty("java.class.path"),
+            "com.facebook.buck.android.manifest.ReplaceApplicationIdPlaceholdersExecutableMain",
+            "--manifest",
+            manifestFile.toString(),
+            "--output",
+            outputFile.toString());
+    pb.redirectErrorStream(true);
+    Process process = pb.start();
+    assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+    assertEquals(0, process.exitValue());
+    assertTrue(Files.exists(outputFile));
+  }
+
+  @Test
+  public void mainShouldExitWithOneOnMissingArgs() throws Exception {
+    ProcessBuilder pb =
+        new ProcessBuilder(
+            ProcessHandle.current().info().command().orElse("java"),
+            "-cp",
+            System.getProperty("java.class.path"),
+            "com.facebook.buck.android.manifest.ReplaceApplicationIdPlaceholdersExecutableMain");
+    pb.redirectErrorStream(true);
+    Process process = pb.start();
+    assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+    assertEquals(1, process.exitValue());
   }
 }
