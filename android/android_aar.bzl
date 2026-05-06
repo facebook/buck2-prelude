@@ -18,7 +18,6 @@ load("@prelude//android:util.bzl", "create_enhancement_context")
 load("@prelude//java:java_providers.bzl", "create_java_packaging_dep", "get_all_java_packaging_deps", "get_all_java_packaging_deps_from_packaging_infos")
 load("@prelude//java:java_toolchain.bzl", "JavaToolchainInfo")
 load("@prelude//utils:argfile.bzl", "argfile")
-load("@prelude//utils:set.bzl", "set")
 
 def android_aar_impl(ctx: AnalysisContext) -> list[Provider]:
     deps_by_platform = get_deps_by_platform(ctx)
@@ -27,12 +26,12 @@ def android_aar_impl(ctx: AnalysisContext) -> list[Provider]:
 
     excluded_java_packaging_deps = get_all_java_packaging_deps(ctx, ctx.attrs.excluded_java_deps)
     excluded_java_packaging_deps_targets = set([excluded_dep.label.raw_target() for excluded_dep in excluded_java_packaging_deps])
-    java_packaging_deps = [packaging_dep for packaging_dep in get_all_java_packaging_deps(ctx, deps) if not excluded_java_packaging_deps_targets.contains(packaging_dep.label.raw_target())]
+    java_packaging_deps = [packaging_dep for packaging_dep in get_all_java_packaging_deps(ctx, deps) if packaging_dep.label.raw_target() not in excluded_java_packaging_deps_targets]
     android_packageable_info = merge_android_packageable_info(ctx.label, ctx.actions, deps)
 
     excluded_android_packageable_targets = set(get_all_android_packageable_targets(ctx.attrs.excluded_java_deps))
     manifest_infos = android_packageable_info.manifests.traverse(ordering = "topological") if android_packageable_info.manifests else []
-    manifests = [manifest_info.manifest for manifest_info in manifest_infos if not excluded_android_packageable_targets.contains(manifest_info.target_label)]
+    manifests = [manifest_info.manifest for manifest_info in manifest_infos if manifest_info.target_label not in excluded_android_packageable_targets]
     android_manifest = get_manifest(ctx, manifests, ctx.attrs.manifest_entries, should_replace_application_id_placeholders = False)
 
     if ctx.attrs.include_build_config_class:
@@ -47,6 +46,8 @@ def android_aar_impl(ctx: AnalysisContext) -> list[Provider]:
         enhancement_ctx,
         android_packageable_info,
         deps_by_platform,
+        prebuilt_native_library_dirs_to_exclude = excluded_android_packageable_targets,
+        shared_libraries_to_exclude = excluded_android_packageable_targets,
         native_library_merge_glue = getattr(ctx.attrs, "native_library_merge_glue", None),
         native_library_merge_sequence = getattr(ctx.attrs, "native_library_merge_sequence", None),
         native_library_merge_map = getattr(ctx.attrs, "native_library_merge_map", None),
@@ -111,7 +112,7 @@ def android_aar_impl(ctx: AnalysisContext) -> list[Provider]:
     entries = [android_manifest, classes_jar]
 
     all_resource_infos = list(android_packageable_info.resource_infos.traverse()) if android_packageable_info.resource_infos else []
-    resource_infos = [resource_info for resource_info in all_resource_infos if not excluded_android_packageable_targets.contains(resource_info.raw_target)]
+    resource_infos = [resource_info for resource_info in all_resource_infos if resource_info.raw_target not in excluded_android_packageable_targets]
 
     android_toolchain = ctx.attrs._android_toolchain[AndroidToolchainInfo]
     if resource_infos:
