@@ -9,7 +9,6 @@
 load("@prelude//:paths.bzl", "paths")
 load("@prelude//apple:apple_provisioning_profile_sources.bzl", "AppleProvisioningProfileSourcesInfo")
 load("@prelude//apple/swift:swift_toolchain_types.bzl", "SwiftToolchainInfo")
-load("@prelude//utils:expect.bzl", "expect")
 load("@prelude//utils:utils.bzl", "value_or")
 load(":apple_bundle_destination.bzl", "AppleBundleDestination", "bundle_relative_path_for_destination")
 load(":apple_bundle_types.bzl", "AppleBundleCodesignManifestTree", "AppleBundleManifest", "AppleBundleManifestInfo", "AppleBundleManifestLogFiles", "AppleBundleSigningContextTree")
@@ -161,26 +160,17 @@ def assemble_bundle(
 
         profile_selection_required = _should_embed_provisioning_profile(ctx, codesign_type)
         if profile_selection_required:
-            if ctx.attrs._provisioning_profile_sources_enabled:
-                sources_info = ctx.attrs._provisioning_profile_sources[AppleProvisioningProfileSourcesInfo]
-                for i, source in enumerate(sources_info.sources):
-                    if source.profiles:
-                        profiles_dir = ctx.actions.symlinked_dir(
-                            "provisioning_profile_source_{}".format(i),
-                            {profile.short_path: profile for profile in source.profiles},
-                            has_content_based_path = False,
-                        )
-                        codesign_args.extend(["--profiles-dir", profiles_dir])
-                    elif source.directory:
-                        codesign_args.extend(["--profiles-dir", source.directory])
-            else:
-                provisioning_profiles = ctx.attrs._provisioning_profiles[DefaultInfo]
-                expect(
-                    len(provisioning_profiles.default_outputs) == 1,
-                    "expected exactly one default output from provisioning profile",
-                )
-                provisioning_profiles_args = ["--profiles-dir"] + provisioning_profiles.default_outputs
-                codesign_args.extend(provisioning_profiles_args)
+            sources_info = ctx.attrs._provisioning_profile_sources[AppleProvisioningProfileSourcesInfo]
+            for i, source in enumerate(sources_info.sources):
+                if source.profiles:
+                    profiles_dir = ctx.actions.symlinked_dir(
+                        "provisioning_profile_source_{}".format(i),
+                        {profile.short_path: profile for profile in source.profiles},
+                        has_content_based_path = False,
+                    )
+                    codesign_args.extend(["--profiles-dir", profiles_dir])
+                elif source.directory:
+                    codesign_args.extend(["--profiles-dir", source.directory])
 
             identities_command = ctx.attrs._apple_toolchain[AppleToolchainInfo].codesign_identities_command
             if ctx.attrs._codesign_identities_command_override:
