@@ -110,7 +110,8 @@ def android_aar_impl(ctx: AnalysisContext) -> list[Provider]:
 
     entries = [android_manifest, classes_jar]
 
-    resource_infos = list(android_packageable_info.resource_infos.traverse()) if android_packageable_info.resource_infos else []
+    all_resource_infos = list(android_packageable_info.resource_infos.traverse()) if android_packageable_info.resource_infos else []
+    resource_infos = [resource_info for resource_info in all_resource_infos if not excluded_android_packageable_targets.contains(resource_info.raw_target)]
 
     android_toolchain = ctx.attrs._android_toolchain[AndroidToolchainInfo]
     if resource_infos:
