@@ -139,6 +139,9 @@ PythonLibraryInfo = provider(fields = {
     "manifests": provider_field(PythonLibraryManifestsTSet),
     # Native deps
     "native_deps": provider_field(NativeDepsInfoTSet),
+    # Package style for python binaries (None for libraries). One of
+    # "inplace", "standalone", "outplace". Mirrors PackageStyle from toolchain.bzl.
+    "package_style": provider_field(str | None, default = None),
     # PAR style for python binaries (None for libraries)
     "par_style": provider_field(str | None, default = None),
     # Shared libraries coming from python_library and others

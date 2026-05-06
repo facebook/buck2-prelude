@@ -196,6 +196,7 @@ def python_executable(
         native_deps = merge_native_deps(ctx, raw_deps),
         is_native_dep = False,
         par_style = ctx.attrs.par_style,
+        package_style = get_package_style(ctx).value,
     )
 
     source_db_no_deps = create_source_db_no_deps(ctx, srcs)
