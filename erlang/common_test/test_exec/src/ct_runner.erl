@@ -215,7 +215,7 @@ run_test(
 
     Args = build_run_args(OutputDir, ServerPort, Providers, Suite, TestSpecFile, CommonAppEnv1),
 
-    {ok, ProjectRoot} = file:get_cwd(),
+    {ok, ProjectRoot} = prim_file:get_cwd(),
 
     start_test_node(
         ErlCmd,
@@ -261,15 +261,11 @@ build_run_args(OutputDir, ServerPort, Providers, Suite, TestSpecFile, CommonAppE
             generate_arg_tuple(server_port, ServerPort),
             generate_arg_tuple(providers, Providers),
             generate_arg_tuple(suite, Suite),
+            generate_arg_tuple(common_app_env, CommonAppEnv),
             [~"ct_args"],
-            generate_arg_tuple(spec, TestSpecFile),
-            common_app_env_args(CommonAppEnv)
+            generate_arg_tuple(spec, TestSpecFile)
         ]
     ).
-
--spec common_app_env_args(Env :: #{binary() => binary()}) -> [binary()].
-common_app_env_args(Env) ->
-    lists:append([[~"-common", Key, Value] || Key := Value <- Env]).
 
 -spec start_test_node(
     Erl :: [binary()],
@@ -436,7 +432,7 @@ cookie() ->
 
 -spec project_root() -> file:filename().
 project_root() ->
-    {ok, CWD} = file:get_cwd(),
+    {ok, CWD} = prim_file:get_cwd(),
     Command = "buck2 root --kind=project",
     Dir = string:trim(os:cmd(Command)),
     ?LOG_INFO(#{command => Command, result => Dir, cwd => CWD}),
@@ -444,7 +440,7 @@ project_root() ->
         true ->
             Dir;
         false ->
-            {ok, FileInfo} = file:read_file_info(Dir),
+            {ok, FileInfo} = prim_file:read_file_info(Dir),
             ?LOG_ERROR(#{directory => Dir, stat => FileInfo}),
             error({project_root_not_found, Dir})
     end.

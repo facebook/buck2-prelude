@@ -15,9 +15,6 @@
 
 -import(common_util, [unicode_characters_to_binary/1]).
 
-%% Fallback oncall
--define(FALLBACK_ONCALL, <<"fallback_oncall">>).
-
 -type ct_groupname() :: ct_suite:ct_groupname().
 -type ct_testname() :: ct_suite:ct_testname().
 -type suite() :: module().
@@ -242,57 +239,7 @@ test_case_info(Suite, Groups, Test) ->
     Hooks :: [module()].
 list_test_spec(Suite, Hooks) ->
     ok = load_hooks(Hooks),
-    _Contacts = get_contacts(Suite),
+    {module, Suite} = code:ensure_loaded(Suite),
     GroupsDef = suite_groups(Suite, Hooks),
     AllResult = suite_all(Suite, Hooks, GroupsDef),
     lists:reverse(list_test(AllResult, [], GroupsDef, Suite)).
-
--spec get_contacts(suite()) -> [binary()].
-get_contacts(Suite) ->
-    try
-        SuiteSource = proplists:get_value(source, Suite:module_info(compile)),
-        {ok, Forms} = epp_dodger:parse_file(SuiteSource),
-        Oncalls = extract_attribute(oncall, Forms),
-        Authors = extract_attribute(author, Forms),
-        case lists:append(Oncalls, Authors) of
-            [] -> [?FALLBACK_ONCALL];
-            Contacts -> Contacts
-        end
-    catch
-        % the suite module is for some reason not accessible
-        _:_:_ -> [?FALLBACK_ONCALL]
-    end.
-
--spec extract_attribute(atom(), erl_syntax:forms()) -> [binary()].
-extract_attribute(_, []) ->
-    [];
-extract_attribute(Attribute, [Form | Forms]) ->
-    case erl_syntax:type(Form) of
-        attribute ->
-            AttrName = erl_syntax:attribute_name(Form),
-            FoundHere =
-                case erl_syntax:is_atom(AttrName, Attribute) of
-                    false ->
-                        [];
-                    true ->
-                        case erl_syntax:attribute_arguments(Form) of
-                            [AttrArg] ->
-                                case erl_syntax:type(AttrArg) of
-                                    string ->
-                                        [unicode_characters_to_binary(erl_syntax:string_value(AttrArg))];
-                                    list ->
-                                        [
-                                            unicode_characters_to_binary(erl_syntax:string_value(S))
-                                         || S <- erl_syntax:list_elements(AttrArg), erl_syntax:type(S) =:= string
-                                        ];
-                                    _ ->
-                                        []
-                                end;
-                            _ ->
-                                []
-                        end
-                end,
-            FoundHere ++ extract_attribute(Attribute, Forms);
-        _ ->
-            extract_attribute(Attribute, Forms)
-    end.
