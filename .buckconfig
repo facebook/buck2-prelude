@@ -9,10 +9,6 @@ prelude = .
 [not_repository_aliases] # @oss-enable
 config = ovr_config
 
-[buildfile]
-[not_buildfile] # @oss-enable
-name_v2 = TARGETS,BUCK
-
 # Some sort of defaults to make ovrsource macros stop complaining.
 [ovrsource]
 
