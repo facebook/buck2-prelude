@@ -20,6 +20,7 @@ load(
     "CxxObjectFormat",
     "DepTrackingMode",
     "HipCompilerInfo",
+    "IncrementalLinkingMode",
     "LinkerInfo",
     "LinkerType",
     "ObjcCompilerInfo",
@@ -185,6 +186,7 @@ def cxx_toolchain_impl(ctx):
         thin_lto_double_codegen_enabled = ctx.attrs.thin_lto_double_codegen_enabled,
         type = linker_type,
         use_archiver_flags = ctx.attrs.use_archiver_flags,
+        incremental_linking = ctx.attrs.incremental_linking,
         supports_content_based_paths_for_archiving = ctx.attrs.supports_content_based_paths_for_archiving,
         supports_shared_libraries = ctx.attrs.supports_shared_libraries,
     )
@@ -286,6 +288,7 @@ def cxx_toolchain_extra_attributes(is_toolchain_rule):
         "generate_gc_sections": attrs.bool(default = False),
         "generate_linker_maps": attrs.bool(default = False),
         "hip_compiler": attrs.option(dep_type(providers = [RunInfo]), default = None),
+        "incremental_linking": attrs.enum(IncrementalLinkingMode.values(), default = "disabled"),
         "internal_tools": dep_type(providers = [CxxInternalTools], default = "prelude//cxx/tools:internal_tools"),
         "libclang": attrs.option(dep_type(providers = [SharedLibraryInfo]), default = None),
         "link_ordering": attrs.enum(LinkOrdering.values(), default = "preorder"),

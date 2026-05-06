@@ -11,6 +11,8 @@ load("@prelude//cxx:debug.bzl", "SplitDebugMode")
 
 LinkerType = enum("gnu", "darwin", "windows", "wasm")
 
+IncrementalLinkingMode = enum("disabled", "supported", "enabled")
+
 ShlibInterfacesMode = enum(
     "disabled",
     "defined_only",  # Generate a "stub" shared library by only linking object files passed to the link, ignoring static libraries or dynamic libraries linked against.
@@ -86,6 +88,7 @@ LinkerInfo = provider(
         # Flags to use to "sandbox" exported library linker flags.
         "push_pop_state_flags": provider_field(typing.Any, default = None),
         "supports_content_based_paths_for_archiving": provider_field(bool, default = False),
+        "incremental_linking": provider_field(str, default = "disabled"),
         "supports_shared_libraries": provider_field(bool, default = True),
     },
 )

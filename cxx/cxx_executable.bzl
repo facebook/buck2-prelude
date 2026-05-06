@@ -33,6 +33,7 @@ load(
 )
 load(
     "@prelude//cxx:cxx_toolchain_types.bzl",
+    "IncrementalLinkingMode",
     "PicBehavior",
     "RuntimeDependencyHandling",
 )
@@ -155,6 +156,7 @@ load(
 load(
     ":cxx_types.bzl",
     "CxxRuleConstructorParams",  # @unused Used as a type
+    "LinkPreference",
 )
 load(":diagnostics.bzl", "check_sub_target")
 load(":gcno.bzl", "GcnoFilesInfo")
@@ -722,6 +724,14 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
             LinkArgs(flags = cmd_args(hidden = impl_params.extra_hidden)),
         )
 
+    incremental_linking_mode = IncrementalLinkingMode(linker_info.incremental_linking)
+    if impl_params.link_preference == LinkPreference("incremental"):
+        incremental_link = incremental_linking_mode != IncrementalLinkingMode("disabled")
+    elif impl_params.link_preference == LinkPreference("full"):
+        incremental_link = False
+    else:
+        incremental_link = incremental_linking_mode == IncrementalLinkingMode("enabled")
+
     link_result = _link_into_executable(
         ctx,
         # If shlib lib tree generation is enabled, pass in the shared libs (which
@@ -743,6 +753,7 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
             extra_linker_outputs_factory = impl_params.extra_linker_outputs_factory,
             extra_linker_outputs_flags_factory = impl_params.extra_linker_outputs_flags_factory,
             extra_distributed_thin_lto_opt_outputs_merger = impl_params.extra_distributed_thin_lto_opt_outputs_merger,
+            incremental_link = incremental_link,
         ),
     )
     binary = link_result.exe
@@ -902,6 +913,9 @@ def cxx_executable(ctx: AnalysisContext, impl_params: CxxRuleConstructorParams, 
     if binary.pdb:
         # A `pdb` sub-target which generates the `.pdb` file for this binary.
         sub_targets[PDB_SUB_TARGET] = get_pdb_providers(pdb = binary.pdb, binary = binary.output)
+
+    if binary.ilk:
+        sub_targets["ilk"] = [DefaultInfo(default_output = binary.ilk)]
 
     if toolchain_info.dumpbin_toolchain_path:
         sub_targets[DUMPBIN_SUB_TARGET] = get_dumpbin_providers(ctx, binary.output, toolchain_info.dumpbin_toolchain_path)

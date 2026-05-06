@@ -64,6 +64,8 @@ load(
     "cxx_populate_xcode_attributes",
 )
 
+LinkPreference = enum("default", "full", "incremental")
+
 CxxLibraryInfo = provider(
     fields = dict(
         target = provider_field(Label),
@@ -294,6 +296,7 @@ CxxRuleConstructorParams = record(
     separate_debug_info = field(bool, False),
     # Cuda compile stype
     cuda_compile_style = field(CudaCompileStyle | None, None),
+    link_preference = field(LinkPreference, LinkPreference("default")),
     supports_stripping = field(bool, True),
     # Whether to set expect_eligible_for_dedupe on compile actions.
     expect_eligible_for_dedupe = field(bool, False),

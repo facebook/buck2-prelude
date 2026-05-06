@@ -51,6 +51,7 @@ LinkOptions = record(
     extra_linker_outputs_flags_factory = field(typing.Callable | None, None),
     extra_distributed_thin_lto_opt_outputs_merger = field(typing.Callable | None, None),
     produce_shared_library_interface = field(bool, False),
+    incremental_link = field(bool, False),
 )
 
 def link_options(
@@ -70,7 +71,8 @@ def link_options(
         extra_linker_outputs_factory: typing.Callable | None = None,
         extra_linker_outputs_flags_factory: typing.Callable | None = None,
         extra_distributed_thin_lto_opt_outputs_merger: typing.Callable | None = None,
-        produce_shared_library_interface: bool = False) -> LinkOptions:
+        produce_shared_library_interface: bool = False,
+        incremental_link: bool = False) -> LinkOptions:
     """
     A type-checked constructor for LinkOptions because by default record
     constructors aren't typed.
@@ -94,6 +96,7 @@ def link_options(
         extra_linker_outputs_flags_factory = extra_linker_outputs_flags_factory,
         extra_distributed_thin_lto_opt_outputs_merger = extra_distributed_thin_lto_opt_outputs_merger,
         produce_shared_library_interface = produce_shared_library_interface,
+        incremental_link = incremental_link,
     )
 
 # A marker instance to differentiate explicitly-passed None and a field that
@@ -114,7 +117,8 @@ def merge_link_options(
         strip_args_factory = _NOT_PROVIDED,
         import_library: [Artifact, None, _NotProvided] = _NOT_PROVIDED,
         allow_cache_upload: [bool, _NotProvided] = _NOT_PROVIDED,
-        cxx_toolchain: [CxxToolchainInfo, _NotProvided] = _NOT_PROVIDED) -> LinkOptions:
+        cxx_toolchain: [CxxToolchainInfo, _NotProvided] = _NOT_PROVIDED,
+        incremental_link: [bool, _NotProvided] = _NOT_PROVIDED) -> LinkOptions:
     """
     Also something we would ideally auto-generate as LinkOptions.merge in
     Starlark.
@@ -139,4 +143,5 @@ def merge_link_options(
         extra_linker_outputs_flags_factory = base.extra_linker_outputs_flags_factory,
         extra_distributed_thin_lto_opt_outputs_merger = base.extra_distributed_thin_lto_opt_outputs_merger,
         produce_shared_library_interface = base.produce_shared_library_interface,
+        incremental_link = base.incremental_link if incremental_link == _NOT_PROVIDED else incremental_link,
     )

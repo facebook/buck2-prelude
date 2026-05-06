@@ -12,6 +12,7 @@ load(
     "make_artifact_tset",
     "project_artifacts",
 )
+load("@prelude//:paths.bzl", "paths")
 # @oss-disable[end= ]: load("@prelude//apple/meta_only:shared_library_interfaces.bzl", "get_shared_library_interface_generation_linker_flags")
 load(
     "@prelude//cxx:cxx_bolt.bzl",
@@ -148,6 +149,7 @@ def cxx_link_into(
         opts: LinkOptions) -> CxxLinkResult:
     cxx_toolchain_info = opts.cxx_toolchain or get_cxx_toolchain_info(ctx)
     linker_info = cxx_toolchain_info.linker_info
+    is_incremental_link = opts.incremental_link
 
     dwp_tool_available = dwp_available(cxx_toolchain_info)
     is_result_executable = result_type.value == "executable"
@@ -173,6 +175,13 @@ def cxx_link_into(
         gc_sections_data = None
 
     shared_library_interface = ctx.actions.declare_output(output.short_path + ".tbd", has_content_based_path = False) if opts.produce_shared_library_interface else None
+
+    if is_incremental_link:
+        ilk_filename = paths.replace_extension(output.short_path, ".ilk")
+        ilk_artifact = ctx.actions.declare_output(ilk_filename, has_content_based_path = False)
+    else:
+        ilk_artifact = None
+
     if linker_info.supports_distributed_thinlto and opts.enable_distributed_thinlto:
         if not linker_info.lto_mode == LtoMode("thin"):
             fail("Cannot use distributed thinlto if the cxx toolchain doesn't use thin-lto lto_mode")
@@ -243,6 +252,10 @@ def cxx_link_into(
         all_link_args = cmd_args(link_cmd_parts.linker_flags)
         if add_linker_outputs:
             all_link_args.add(get_output_flags(linker_info.type, output))
+            if is_incremental_link:
+                all_link_args.add("/INCREMENTAL")
+            elif linker_info.type == LinkerType("windows"):
+                all_link_args.add("/INCREMENTAL:NO")
 
         if add_linker_outputs:
             # Add the linker args required for any extra linker outputs requested
@@ -374,7 +387,7 @@ def cxx_link_into(
         hidden = [
             link_unit_generation_link_args.link_args,
             link_unit_generation_link_args.hidden,
-        ],
+        ] + ([ilk_artifact.as_output()] if ilk_artifact else []),
     )
 
     category = "cxx_link"
@@ -404,15 +417,16 @@ def cxx_link_into(
 
     ctx.actions.run(
         command,
-        prefer_local = action_execution_properties.prefer_local,
-        prefer_remote = action_execution_properties.prefer_remote,
-        local_only = action_execution_properties.local_only,
+        prefer_local = action_execution_properties.prefer_local and not is_incremental_link,
+        prefer_remote = action_execution_properties.prefer_remote and not is_incremental_link,
+        local_only = action_execution_properties.local_only or is_incremental_link,
         weight = opts.link_weight,
         category = category,
         identifier = opts.identifier,
         force_full_hybrid_if_capable = action_execution_properties.full_hybrid,
-        allow_cache_upload = opts.allow_cache_upload or enable_late_build_info_stamping,
+        allow_cache_upload = (opts.allow_cache_upload or enable_late_build_info_stamping) and not is_incremental_link,
         error_handler = opts.error_handler,
+        no_outputs_cleanup = is_incremental_link,
         eager_materialization_enabled = True,
     )
 
@@ -473,6 +487,7 @@ def cxx_link_into(
         linker_command = command,
         import_library = opts.import_library,
         pdb = link_unit_generation_link_args.pdb_artifact,
+        ilk = ilk_artifact,
         split_debug_output = split_debug_output,
     )
 

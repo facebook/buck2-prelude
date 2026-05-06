@@ -8,6 +8,11 @@
 
 load("@prelude//:paths.bzl", "paths")
 load(
+    "@prelude//:resources.bzl",
+    "ResourceInfo",
+    "gather_resources",
+)
+load(
     "@prelude//android:android_providers.bzl",
     "merge_android_packageable_info",
 )
@@ -129,6 +134,7 @@ load(
     "CxxRuleConstructorParams",
     "CxxRuleProviderParams",
     "CxxRuleSubTargetParams",
+    "LinkPreference",
 )
 load(":gcno.bzl", "GcnoFilesInfo")
 load(
@@ -337,6 +343,7 @@ def cxx_binary_impl(ctx: AnalysisContext) -> list[Provider]:
         coverage_profile_list = ctx.attrs.coverage_profile_list[DefaultInfo].default_outputs[0] if ctx.attrs.coverage_profile_list else None,
         separate_debug_info = ctx.attrs.separate_debug_info,
         cuda_compile_style = CudaCompileStyle(ctx.attrs.cuda_compile_style),
+        link_preference = LinkPreference(ctx.attrs.link_preference),
     )
     output = cxx_executable(ctx, params)
 
@@ -944,6 +951,11 @@ def prebuilt_cxx_library_impl(ctx: AnalysisContext) -> list[Provider]:
         sub_targets = sub_targets,
     ))
 
+    providers.append(ResourceInfo(resources = gather_resources(
+        label = ctx.label,
+        deps = first_order_deps + exported_first_order_deps,
+    )))
+
     return providers
 
 def cxx_precompiled_header_impl(ctx: AnalysisContext) -> list[Provider]:
@@ -995,6 +1007,7 @@ def cxx_test_impl(ctx: AnalysisContext) -> list[Provider]:
         coverage_profile_list = ctx.attrs.coverage_profile_list[DefaultInfo].default_outputs[0] if ctx.attrs.coverage_profile_list else None,
         separate_debug_info = ctx.attrs.separate_debug_info,
         cuda_compile_style = CudaCompileStyle(ctx.attrs.cuda_compile_style),
+        link_preference = LinkPreference(ctx.attrs.link_preference),
     )
     output = cxx_executable(ctx, params, is_cxx_test = True)
 
