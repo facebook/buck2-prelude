@@ -165,6 +165,12 @@ public class KotlincStep implements IsolatedStep {
 
       Instant compilationEnd = Instant.now();
       Duration compilationDuration = Duration.between(compilationStart, compilationEnd);
+      LOG.info(
+          "KOTLINCD_STEP_DURATION|%s|%s|%d|%d",
+          invokingRule.getFullyQualifiedName(),
+          this.getClass().getSimpleName(),
+          compilationDuration.toMillis(),
+          sourceFilePaths.size());
       loggingContext.addExtras(
           this.getClass().getSimpleName(),
           "Kotlinc step duration: " + compilationDuration.toMillis() + " ms");
