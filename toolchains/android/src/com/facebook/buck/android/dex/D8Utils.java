@@ -36,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -149,10 +150,7 @@ public class D8Utils {
     com.android.tools.r8.D8.run(d8Command);
 
     if (outputToDex) {
-      File[] outputs = output.toFile().listFiles();
-      if (outputs != null && (outputs.length > 0)) {
-        Files.move(outputs[0].toPath(), outputDexFile, StandardCopyOption.REPLACE_EXISTING);
-      }
+      moveSingleDexOutput(output, outputDexFile, options);
     }
 
     // NULLSAFE_FIXME[Unvetted Third Party In Nullsafe]
@@ -255,6 +253,38 @@ public class D8Utils {
     } else {
       return String.format("assets/%s", module);
     }
+  }
+
+  /**
+   * Moves a single DEX file from a D8 output directory to the final destination. When {@link
+   * D8Options#FAIL_ON_MULTIPLE_DEX} is present in the options set, throws {@link
+   * IllegalStateException} if D8 produced multiple DEX files. Otherwise, silently moves the first
+   * file (sorted lexicographically).
+   *
+   * <p>This is package-visible for testing.
+   */
+  static void moveSingleDexOutput(Path d8OutputDir, Path outputDexFile, Set<D8Options> options)
+      throws IOException {
+    File[] outputs = d8OutputDir.toFile().listFiles();
+    if (outputs == null || outputs.length == 0) {
+      return;
+    }
+    if (outputs.length > 1 && options.contains(D8Options.FAIL_ON_MULTIPLE_DEX)) {
+      StringBuilder fileList = new StringBuilder();
+      for (File f : outputs) {
+        fileList.append("\n  ").append(f.getName());
+      }
+      throw new IllegalStateException(
+          "D8 produced "
+              + outputs.length
+              + " DEX files but only a single output was expected:"
+              + fileList
+              + "\nThe combined input likely exceeds DEX reference limits."
+              + " Enable split_dex (use_split_dex = True) for this target.");
+    }
+    // File.listFiles() returns undefined order — sort for determinism.
+    Arrays.sort(outputs);
+    Files.move(outputs[0].toPath(), outputDexFile, StandardCopyOption.REPLACE_EXISTING);
   }
 
   public static class D8DiagnosticsHandler implements DiagnosticsHandler {

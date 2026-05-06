@@ -32,5 +32,8 @@ public enum D8Options {
 
   /** Fill up the primary dex as much as possible */
   MAXIMIZE_PRIMARY_DEX,
+
+  /** Fail if D8 produces multiple DEX files when a single output is expected */
+  FAIL_ON_MULTIPLE_DEX,
   ;
 }

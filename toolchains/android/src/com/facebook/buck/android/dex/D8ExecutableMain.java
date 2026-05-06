@@ -460,6 +460,11 @@ public class D8ExecutableMain {
     ImmutableSet.Builder<D8Options> d8OptionsBuilder = ImmutableSet.builder();
     if (intermediate) {
       d8OptionsBuilder.add(D8Options.INTERMEDIATE);
+    } else {
+      // Non-intermediate (merge) mode expects a single DEX output.
+      // Fail loudly if D8 produces multiple files instead of silently
+      // discarding extras, which would produce a broken APK.
+      d8OptionsBuilder.add(D8Options.FAIL_ON_MULTIPLE_DEX);
     }
     if (noOptimize) {
       d8OptionsBuilder.add(D8Options.NO_OPTIMIZE);
