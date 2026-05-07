@@ -110,7 +110,7 @@ class AndroidDeviceImplTest {
         )
         .thenReturn("Android\nDownload\nPictures")
 
-    val result = androidDevice.installApexOnDevice(apexFile, false, true, true)
+    val result = androidDevice.installApexOnDevice(apexFile, false, true, true, true)
 
     verify(mockAdbUtils)
         .executeAdbCommand(
@@ -131,13 +131,41 @@ class AndroidDeviceImplTest {
   }
 
   @Test
+  fun testInstallApexOnDeviceWithRestartWithoutWaitingForPackageManagerReady() {
+    val apexFile = mock<File>()
+    whenever(apexFile.absolutePath).thenReturn("/path/to/test.apex")
+    whenever(apexFile.name).thenReturn("test.apex")
+    whenever(apexFile.length()).thenReturn(1024L)
+
+    val result = androidDevice.installApexOnDevice(apexFile, false, true, true, false)
+
+    verify(mockAdbUtils)
+        .executeAdbCommand(
+            "install --apex --force-non-staged ${apexFile.absolutePath}",
+            serialNumber,
+        )
+    verify(mockAdbUtils).executeAdbShellCommand("stop", serialNumber)
+    verify(mockAdbUtils).executeAdbShellCommand("start", serialNumber)
+    verify(mockAdbUtils, never())
+        .executeAdbShellCommand("getprop sys.boot_completed", serialNumber, true)
+    verify(mockAdbUtils, never()).executeAdbShellCommand("pm", serialNumber, true)
+    verify(mockAdbUtils, never())
+        .executeAdbShellCommand(
+            "ls /storage/emulated/0 2>&1 || echo STORAGE_NOT_READY",
+            serialNumber,
+            true,
+        )
+    assertTrue(result)
+  }
+
+  @Test
   fun testInstallApexOnDeviceWithoutRestart() {
     val apexFile = mock<File>()
     whenever(apexFile.absolutePath).thenReturn("/path/to/test.apex")
     whenever(apexFile.name).thenReturn("test.apex")
     whenever(apexFile.length()).thenReturn(1024L)
 
-    val result = androidDevice.installApexOnDevice(apexFile, false, false, true)
+    val result = androidDevice.installApexOnDevice(apexFile, false, false, true, false)
 
     verify(mockAdbUtils)
         .executeAdbCommand(
@@ -287,7 +315,7 @@ class AndroidDeviceImplTest {
     whenever(mockAdbUtils.executeAdbShellCommand("getprop sys.boot_completed", serialNumber, true))
         .thenReturn("1")
 
-    val result = androidDevice.installApexOnDevice(apexFile, false, false, true)
+    val result = androidDevice.installApexOnDevice(apexFile, false, false, true, false)
     assertTrue(result)
 
     val inOrder = inOrder(mockAdbUtils)
@@ -349,7 +377,7 @@ class AndroidDeviceImplTest {
     whenever(mockAdbUtils.executeAdbShellCommand("getprop sys.boot_completed", serialNumber, true))
         .thenReturn("1")
 
-    val result = androidDevice.installApexOnDevice(apexFile, false, false, true)
+    val result = androidDevice.installApexOnDevice(apexFile, false, false, true, false)
     assertTrue(result)
 
     val inOrder = inOrder(mockAdbUtils)
@@ -416,7 +444,7 @@ class AndroidDeviceImplTest {
         .executeAdbCommand(eq("push /path/to/test.apex /system_ext/apex/"), eq(serialNumber), any())
 
     try {
-      androidDevice.installApexOnDevice(apexFile, false, false, true)
+      androidDevice.installApexOnDevice(apexFile, false, false, true, false)
       fail("Expected AndroidInstallException")
     } catch (e: AndroidInstallException) {
       assertTrue(e.message!!.contains("fallback remount+push"))

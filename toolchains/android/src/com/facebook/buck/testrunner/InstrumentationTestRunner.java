@@ -814,7 +814,8 @@ public class InstrumentationTestRunner extends DeviceRunner {
         System.err.println(
             String.format(
                 "Installing APEX %d/%d: %s...", i + 1, this.apexesToInstall.size(), apexPath));
-        androidDevice.installApexOnDevice(new File(apexPath), false, isLast, softRebootAvailable);
+        androidDevice.installApexOnDevice(
+            new File(apexPath), false, isLast, softRebootAvailable, true);
       }
 
       System.err.println(

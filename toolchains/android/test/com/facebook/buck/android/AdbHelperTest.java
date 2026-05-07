@@ -473,6 +473,7 @@ public class AdbHelperTest {
         stagedInstallMode,
         ignoreMissingDevices,
         false,
-        "no");
+        "no",
+        false);
   }
 }

@@ -62,12 +62,21 @@ public interface AndroidDevice {
   }
 
   default boolean installApexOnDevice(File apex, boolean quiet, boolean restart) {
+    return installApexOnDevice(apex, quiet, restart, false);
+  }
+
+  default boolean installApexOnDevice(
+      File apex, boolean quiet, boolean restart, boolean waitForDeviceReady) {
     boolean softRebootAvailable = prepareForApexInstallation();
-    return installApexOnDevice(apex, quiet, restart, softRebootAvailable);
+    return installApexOnDevice(apex, quiet, restart, softRebootAvailable, waitForDeviceReady);
   }
 
   boolean installApexOnDevice(
-      File apex, boolean quiet, boolean restart, boolean softRebootAvailable);
+      File apex,
+      boolean quiet,
+      boolean restart,
+      boolean softRebootAvailable,
+      boolean waitForDeviceReady);
 
   boolean prepareForApexInstallation();
 

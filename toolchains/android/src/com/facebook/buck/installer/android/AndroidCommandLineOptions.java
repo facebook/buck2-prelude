@@ -184,6 +184,11 @@ class AndroidCommandLineOptions {
   @Option(name = "--restart", usage = "Restart the device after installing APEX files.")
   public RestartMode restartMode = RestartMode.auto;
 
+  @Option(
+      name = "--wait-for-device-ready",
+      usage = "Wait for the device to be ready after installation.")
+  public boolean waitForDeviceReady = false;
+
   public AndroidCommandLineOptions() {}
 
   public int getTcpPort() {

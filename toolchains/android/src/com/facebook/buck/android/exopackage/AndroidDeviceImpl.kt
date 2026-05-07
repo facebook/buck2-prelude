@@ -110,6 +110,7 @@ class AndroidDeviceImpl(val serial: String, val adbUtils: AdbUtils) : AndroidDev
       quiet: Boolean,
       restart: Boolean,
       softRebootAvailable: Boolean,
+      waitForDeviceReady: Boolean,
   ): Boolean {
     val elapsed = measureTimeMillis {
       try {
@@ -202,10 +203,12 @@ class AndroidDeviceImpl(val serial: String, val adbUtils: AdbUtils) : AndroidDev
           executeAdbShellCommand("stop")
           executeAdbShellCommand("start")
 
-          // Wait for device to be fully ready after soft reboot
-          waitForBootComplete()
-          waitForPackageManagerReady()
-          waitForStorageReady()
+          if (waitForDeviceReady) {
+            // Wait for device to be fully ready after soft reboot
+            waitForBootComplete()
+            waitUntilPackageManagerReady()
+            waitForStorageReady()
+          }
         } catch (e: AdbCommandFailedException) {
           throw AndroidInstallException.rebootRequired(
               "Failed to stop+start shell; ${apex.name} was installed successfully but device will be in an unknown state until you run 'adb reboot'"
@@ -228,7 +231,7 @@ class AndroidDeviceImpl(val serial: String, val adbUtils: AdbUtils) : AndroidDev
     )
   }
 
-  private fun waitForPackageManagerReady() {
+  private fun waitUntilPackageManagerReady() {
     waitForCondition(
         command = "pm",
         condition = { output -> output.isNotEmpty() && !output.contains("Can't find service") },

@@ -38,7 +38,11 @@ public class TestAndroidDevice implements AndroidDevice {
 
   @Override
   public boolean installApexOnDevice(
-      File apex, boolean quiet, boolean restart, boolean softRebootAvailable) {
+      File apex,
+      boolean quiet,
+      boolean restart,
+      boolean softRebootAvailable,
+      boolean waitForDeviceReady) {
     throw new UnsupportedOperationException();
   }
 
